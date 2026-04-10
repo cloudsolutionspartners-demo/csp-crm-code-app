@@ -1,0 +1,2515 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ==========================================================================
+   CSPCRMApp Design System
+   A comprehensive CSS design system replicating shadcn/ui defaults.
+   All classes prefixed with `csp-`. Flat-dash naming only.
+   ========================================================================== */
+
+/* ==========================================================================
+   1. CSS CUSTOM PROPERTIES (Design Tokens)
+   ========================================================================== */
+
+:root {
+  /* --- Core palette (HSL channel values) — matches reference exactly --- */
+  --background: 0 0% 98%;
+  --foreground: 220 40% 13%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 220 40% 13%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 40% 13%;
+
+  --primary: 220 60% 24%;
+  --primary-foreground: 210 40% 98%;
+
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 220 40% 13%;
+
+  --muted: 210 30% 95%;
+  --muted-foreground: 215 16% 47%;
+
+  --accent: 207 63% 44%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 220 60% 24%;
+
+  --radius: 0.5rem;
+
+  --success: 142 76% 36%;
+  --warning: 38 92% 50%;
+
+  /* --- Sidebar — dark navy from reference --- */
+  --sidebar-width: 240px;
+  --sidebar-width-collapsed: 64px;
+  --sidebar-background: 220 60% 16%;
+  --sidebar-foreground: 210 30% 85%;
+  --sidebar-primary: 207 63% 55%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 50% 22%;
+  --sidebar-accent-foreground: 210 30% 90%;
+  --sidebar-border: 220 40% 25%;
+  --sidebar-ring: 207 63% 55%;
+
+  /* --- Chart colors --- */
+  --chart-1: 221 83% 53%;
+  --chart-2: 142 71% 45%;
+  --chart-3: 38 92% 50%;
+  --chart-4: 0 84% 60%;
+  --chart-5: 262 83% 58%;
+
+  /* --- Status colors --- */
+  --green: 142 71% 45%;
+  --green-bg: 142 76% 95%;
+  --green-fg: 142 71% 29%;
+  --blue: 221 83% 53%;
+  --blue-bg: 214 95% 93%;
+  --blue-fg: 221 83% 40%;
+  --amber: 38 92% 50%;
+  --amber-bg: 48 96% 89%;
+  --amber-fg: 32 95% 30%;
+  --red: 0 84% 60%;
+  --red-bg: 0 86% 95%;
+  --red-fg: 0 74% 42%;
+  --red-light-bg: 0 86% 97%;
+  --red-light-fg: 0 74% 50%;
+  --slate: 215 16% 47%;
+  --slate-bg: 210 40% 96%;
+  --slate-fg: 215 25% 27%;
+  --slate-dim-bg: 220 13% 91%;
+  --slate-dim-fg: 215 16% 47%;
+  --slate-dark-bg: 215 25% 27%;
+  --slate-dark-fg: 210 40% 98%;
+  --purple: 262 83% 58%;
+  --purple-bg: 263 70% 95%;
+  --purple-fg: 262 83% 40%;
+  --indigo: 239 84% 67%;
+  --indigo-bg: 239 84% 95%;
+  --indigo-fg: 239 84% 40%;
+
+  /* --- Sheet --- */
+  --sheet-width: 672px;
+}
+
+/* ==========================================================================
+   2. BASE RESET
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==========================================================================
+   3. APP LAYOUT
+   ========================================================================== */
+
+.csp-app-root {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.csp-main-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.csp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background-color: hsl(var(--background));
+  flex-shrink: 0;
+}
+
+.csp-main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+/* ==========================================================================
+   4. SIDEBAR
+   ========================================================================== */
+
+.csp-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+  height: 100%;
+  background-color: hsl(var(--sidebar-background));
+  border-right: 1px solid hsl(var(--sidebar-border));
+  transition: width 0.2s ease, min-width 0.2s ease;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.csp-sidebar *::-webkit-scrollbar {
+  display: none;
+}
+
+.csp-sidebar * {
+  scrollbar-width: none;
+}
+
+.csp-sidebar-collapsed {
+  width: var(--sidebar-width-collapsed);
+  min-width: var(--sidebar-width-collapsed);
+}
+
+.csp-sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1rem;
+  height: 56px;
+  border-bottom: 1px solid hsl(var(--sidebar-border));
+  flex-shrink: 0;
+}
+
+.csp-logo-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 0.375rem;
+  background-color: hsl(var(--sidebar-primary));
+  color: hsl(var(--sidebar-primary-foreground));
+  font-weight: 700;
+  font-size: 0.6875rem;
+}
+
+.csp-logo-text {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: hsl(var(--sidebar-primary-foreground));
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.csp-sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.5rem 0;
+  scrollbar-width: none;
+}
+
+.csp-sidebar-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.csp-nav-group {
+  margin-bottom: 0.25rem;
+}
+
+.csp-nav-group-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 1rem 0.75rem 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: hsl(var(--sidebar-foreground) / 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  border: none;
+  background: none;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.csp-nav-group-label:hover {
+  color: hsl(var(--sidebar-foreground) / 0.7);
+}
+
+.csp-nav-group-label-static {
+  display: flex;
+  align-items: center;
+  padding: 1rem 0.75rem 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: hsl(var(--sidebar-foreground) / 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.csp-nav-group-chevron {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.csp-rotated-neg90 {
+  transform: rotate(-90deg);
+}
+
+.csp-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: calc(100% - 1rem);
+  margin: 1px 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  border: none;
+  background: none;
+  color: hsl(var(--sidebar-foreground));
+  text-decoration: none;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-align: left;
+}
+
+.csp-nav-item:hover {
+  background-color: hsl(var(--sidebar-accent));
+  color: hsl(var(--sidebar-accent-foreground));
+}
+
+.csp-nav-item-active {
+  background-color: hsl(var(--sidebar-accent));
+  color: hsl(var(--sidebar-primary));
+  font-weight: 500;
+}
+
+.csp-nav-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.csp-nav-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.csp-sidebar-footer {
+  padding: 0.75rem;
+  border-top: 1px solid hsl(var(--sidebar-border));
+  flex-shrink: 0;
+}
+
+.csp-sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.5rem;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: hsl(var(--sidebar-foreground));
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.csp-sidebar-toggle:hover {
+  background-color: hsl(var(--sidebar-accent));
+  color: hsl(var(--sidebar-accent-foreground));
+}
+
+/* ==========================================================================
+   5. BUTTONS
+   ========================================================================== */
+
+.csp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  border-radius: var(--radius);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  height: 2.5rem;
+  padding: 0 1rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  text-decoration: none;
+  line-height: 1;
+  outline: none;
+}
+
+.csp-btn:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.csp-btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.csp-btn-primary {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+}
+
+.csp-btn-primary:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+
+.csp-btn-outline {
+  background-color: transparent;
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+}
+
+.csp-btn-outline:hover {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.csp-btn-ghost {
+  background-color: transparent;
+  color: hsl(var(--foreground));
+  border-color: transparent;
+}
+
+.csp-btn-ghost:hover {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.csp-btn-destructive {
+  background-color: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+  border-color: hsl(var(--destructive));
+}
+
+.csp-btn-destructive:hover {
+  background-color: hsl(var(--destructive) / 0.9);
+}
+
+.csp-btn-sm {
+  height: 2rem;
+  padding: 0 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.csp-btn-xs {
+  height: 1.625rem;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+}
+
+.csp-btn-icon-sm {
+  height: 2rem;
+  width: 2rem;
+  padding: 0;
+}
+
+/* ==========================================================================
+   6. CARDS
+   ========================================================================== */
+
+.csp-card {
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.csp-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+}
+
+.csp-card-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.csp-card-content {
+  padding: 0.75rem 1rem;
+}
+
+.csp-card-body {
+  padding: 1rem 1.5rem;
+}
+
+.csp-card-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.csp-card-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.csp-card-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+/* ==========================================================================
+   7. TABLES
+   ========================================================================== */
+
+/* --- Table wrapper: bordered card with rounded corners --- */
+.csp-table-wrapper {
+  border: 1px solid hsl(214 32% 91%);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.csp-table-wrap {
+  overflow-x: auto;
+}
+
+.csp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.csp-table-compact th,
+.csp-table-compact td {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.csp-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  flex-wrap: wrap;
+}
+
+/* --- Table header cells: element selector + class selector --- */
+.csp-table thead tr {
+  border-bottom: 1px solid hsl(214 32% 91%);
+}
+
+.csp-table th,
+.csp-th {
+  padding: 0 1rem;
+  text-align: left;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: hsl(215 16% 47%);
+  white-space: nowrap;
+  height: 3rem;
+  background: transparent;
+  vertical-align: middle;
+}
+
+.csp-table th.csp-th-checkbox,
+.csp-th-checkbox,
+.csp-th-check {
+  width: 2.5rem;
+  padding: 0 0.5rem;
+}
+
+.csp-th-content {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.csp-th-right,
+.csp-table th.csp-th-right {
+  text-align: right;
+}
+
+/* --- Table body rows: border-bottom on each row --- */
+.csp-table tbody tr {
+  border-bottom: 1px solid hsl(214 32% 91%);
+  transition: background-color 0.1s ease;
+}
+
+.csp-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+/* --- Table body cells: p-4 (16px), 14px, middle-aligned --- */
+.csp-table td,
+.csp-td {
+  padding: 1rem;
+  color: hsl(var(--foreground));
+  vertical-align: middle;
+  font-size: 0.875rem;
+}
+
+/* --- Name column: font-medium (500) --- */
+.csp-td-bold {
+  font-weight: 500;
+}
+
+.csp-td-mono {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+  font-size: 0.75rem;
+}
+
+.csp-td-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.csp-td-right {
+  text-align: right;
+}
+
+.csp-td-check {
+  width: 2.5rem;
+  padding: 1rem 0.5rem;
+}
+
+.csp-td-link {
+  color: hsl(var(--primary));
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.csp-td-link:hover {
+  text-decoration: underline;
+}
+
+.csp-td-primary {
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.csp-td-truncate {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Row hover: subtle muted background --- */
+.csp-table tbody tr:hover,
+.csp-tr-clickable:hover {
+  background-color: hsl(210 30% 95% / 0.5);
+}
+
+.csp-tr-clickable {
+  cursor: pointer;
+}
+
+.csp-tr-selected {
+  background-color: hsl(var(--muted));
+}
+
+.csp-subtable-wrap {
+  padding: 0 1rem 1rem;
+}
+
+.csp-subtable-header {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.5rem 0;
+  color: hsl(var(--foreground));
+}
+
+/* ==========================================================================
+   8. STATUS BADGES
+   ========================================================================== */
+
+/* --- Status badges: rounded-full, px-2 py-0.5, text-xs, font-medium --- */
+.csp-badge,
+.csp-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* Active/Paid/Approved/Fit/Available: emerald-100 / emerald-800 */
+.csp-badge-green {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+/* Sent/Submitted/Scheduled: blue-100 / blue-800 */
+.csp-badge-blue {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+/* Draft/Applied: slate-100 / slate-700 */
+.csp-badge-slate {
+  background-color: #f1f5f9;
+  color: #334155;
+}
+
+/* Cancelled/Inactive/Expired: slate-100 / slate-500 */
+.csp-badge-slate-dim {
+  background-color: #f1f5f9;
+  color: #64748b;
+}
+
+/* Completed: slate-200 / slate-700 */
+.csp-badge-slate-dark {
+  background-color: #e2e8f0;
+  color: #334155;
+}
+
+/* Pending/On Hold/Fully Booked: amber-100 / amber-800 */
+.csp-badge-amber {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+/* Overdue/Rejected/Not Fit: red-100 / red-800 */
+.csp-badge-red {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+/* Terminated: red-50 / red-600 */
+.csp-badge-red-light {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+/* Prospect: purple-100 / purple-800 */
+.csp-badge-purple {
+  background-color: #f3e8ff;
+  color: #6b21a8;
+}
+
+/* Credit Note: indigo-100 / indigo-800 */
+.csp-badge-indigo {
+  background-color: #e0e7ff;
+  color: #3730a3;
+}
+
+.csp-badge-inline {
+  display: inline;
+  padding: 0.0625rem 0.375rem;
+  font-size: 0.6875rem;
+}
+
+/* ==========================================================================
+   9. SHEET (Slide-over Panel)
+   ========================================================================== */
+
+.csp-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgb(0 0 0 / 0.5);
+  z-index: 50;
+  animation: csp-fade-in 0.2s ease;
+}
+
+.csp-sheet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: var(--sheet-width);
+  background-color: hsl(var(--background));
+  box-shadow: -4px 0 24px rgb(0 0 0 / 0.12);
+  z-index: 51;
+  display: flex;
+  flex-direction: column;
+  animation: csp-slide-in-right 0.25s ease;
+}
+
+.csp-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+  flex-shrink: 0;
+}
+
+.csp-sheet-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.csp-sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.csp-sheet-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid hsl(var(--border));
+  flex-shrink: 0;
+}
+
+.csp-sheet-footer-right {
+  justify-content: flex-end;
+}
+
+@keyframes csp-slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes csp-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ==========================================================================
+   10. DIALOG (Modal)
+   ========================================================================== */
+
+.csp-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgb(0 0 0 / 0.5);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: csp-fade-in 0.15s ease;
+}
+
+.csp-dialog {
+  background-color: hsl(var(--background));
+  border-radius: var(--radius);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.15);
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  animation: csp-scale-in 0.15s ease;
+  z-index: 51;
+}
+
+.csp-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+  flex-shrink: 0;
+}
+
+.csp-dialog-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.csp-dialog-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.csp-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid hsl(var(--border));
+  flex-shrink: 0;
+}
+
+.csp-dialog-details {
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.6;
+}
+
+@keyframes csp-scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* ==========================================================================
+   11. TABS
+   ========================================================================== */
+
+.csp-tabs {
+  display: flex;
+  flex-direction: column;
+}
+
+.csp-tabs-list {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid hsl(var(--border));
+  gap: 0;
+}
+
+.csp-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+  margin-bottom: -1px;
+}
+
+.csp-tab:hover {
+  color: hsl(var(--foreground));
+}
+
+.csp-tab-active {
+  color: hsl(var(--foreground));
+  border-bottom-color: hsl(var(--primary));
+}
+
+.csp-tab-content {
+  padding: 1rem 0;
+}
+
+/* ==========================================================================
+   12. TOGGLE GROUPS
+   ========================================================================== */
+
+/* --- ToggleGroup: border 1px border-color, radius 6px, padding 2px, gap 4px --- */
+.csp-toggle-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid hsl(214 32% 91%);
+  border-radius: 0.375rem;
+  padding: 0.125rem;
+}
+
+/* --- Each pill: h-7 (28px), px-3 (12px), text-xs (12px), rounded-sm (2px) --- */
+.csp-toggle-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0 0.75rem;
+  height: 1.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  background: transparent;
+  border: none;
+  border-radius: 0.125rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.csp-toggle-item:hover {
+  background-color: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
+/* --- Active pill: bg primary (dark navy), text white --- */
+.csp-toggle-item-active {
+  background-color: hsl(220 60% 24%);
+  color: hsl(210 40% 98%);
+  font-weight: 500;
+}
+
+.csp-toggle-item-active:hover {
+  background-color: hsl(220 60% 24%);
+  color: hsl(210 40% 98%);
+}
+
+/* --- Count badge inside active pill --- */
+.csp-toggle-item-active .csp-toggle-count {
+  background-color: hsl(210 40% 98% / 0.2);
+  color: hsl(210 40% 98%);
+}
+
+/* --- Count badge: ml-1 (4px), bg muted/60%, px-1 (4px), text-[10px], font-semibold, rounded --- */
+.csp-toggle-count {
+  font-size: 0.625rem;
+  font-weight: 600;
+  background-color: hsl(210 30% 95% / 0.6);
+  color: hsl(215 16% 47%);
+  padding: 0 0.25rem;
+  border-radius: 0.25rem;
+  margin-left: 0.25rem;
+}
+
+/* ==========================================================================
+   13. FORM INPUTS
+   ========================================================================== */
+
+.csp-input {
+  display: block;
+  width: 100%;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+  border: 1px solid hsl(var(--input));
+  border-radius: var(--radius);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+}
+
+.csp-input:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+.csp-input::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.csp-input-error {
+  border-color: hsl(var(--destructive));
+}
+
+.csp-input-error:focus {
+  border-color: hsl(var(--destructive));
+  box-shadow: 0 0 0 2px hsl(var(--destructive) / 0.2);
+}
+
+.csp-input-readonly {
+  background-color: hsl(var(--muted));
+  cursor: default;
+}
+
+.csp-input-sm {
+  height: 2rem;
+  padding: 0 0.625rem;
+  font-size: 0.8125rem;
+}
+
+.csp-input-xs {
+  height: 1.625rem;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+}
+
+.csp-select {
+  display: block;
+  width: 100%;
+  height: 2.25rem;
+  padding: 0 2rem 0 0.75rem;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  border: 1px solid hsl(var(--input));
+  border-radius: var(--radius);
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.csp-select:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+.csp-select-sm {
+  height: 2rem;
+  font-size: 0.8125rem;
+  padding: 0 1.75rem 0 0.625rem;
+}
+
+.csp-textarea {
+  display: block;
+  width: 100%;
+  min-height: 5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+  border: 1px solid hsl(var(--input));
+  border-radius: var(--radius);
+  resize: vertical;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.csp-textarea:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+.csp-date-input {
+  display: block;
+  width: 100%;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+  border: 1px solid hsl(var(--input));
+  border-radius: var(--radius);
+  outline: none;
+  font-family: inherit;
+}
+
+.csp-date-input:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+.csp-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.csp-field-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.csp-field-error {
+  font-size: 0.75rem;
+  color: hsl(var(--destructive));
+}
+
+.csp-required {
+  color: hsl(var(--destructive));
+  margin-left: 0.125rem;
+}
+
+.csp-form-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.csp-form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.csp-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 1rem;
+}
+
+.csp-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.csp-form-section:last-child {
+  border-bottom: none;
+}
+
+.csp-col-span-2 {
+  grid-column: span 2;
+}
+
+/* ==========================================================================
+   14. CHECKBOX
+   ========================================================================== */
+
+/* --- Checkbox: 16x16, rounded-sm (2px), border = primary color --- */
+.csp-checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid hsl(220 60% 24%);
+  border-radius: 0.125rem;
+  background-color: transparent;
+  color: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.csp-checkbox:hover {
+  border-color: hsl(220 60% 35%);
+}
+
+.csp-checkbox-checked {
+  background-color: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.csp-checkbox-sm {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* ==========================================================================
+   15. SWITCH
+   ========================================================================== */
+
+.csp-switch-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.csp-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 2.5rem;
+  height: 1.375rem;
+  border-radius: 9999px;
+  background-color: hsl(var(--input));
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border: none;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.csp-switch-on {
+  background-color: hsl(var(--primary));
+}
+
+.csp-switch-thumb {
+  display: block;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  background-color: white;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+  transition: transform 0.2s ease;
+  transform: translateX(0);
+}
+
+.csp-switch-on .csp-switch-thumb {
+  transform: translateX(1.125rem);
+}
+
+/* ==========================================================================
+   16. LOOKUP FIELD
+   ========================================================================== */
+
+.csp-lookup-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.csp-lookup-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+  border: 1px solid hsl(var(--input));
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.csp-lookup-trigger:focus,
+.csp-lookup-trigger:focus-within {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+.csp-lookup-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--foreground));
+}
+
+.csp-lookup-chevron {
+  width: 16px;
+  height: 16px;
+  color: hsl(var(--muted-foreground));
+  flex-shrink: 0;
+}
+
+.csp-lookup-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background-color: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+  z-index: 50;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.csp-lookup-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.csp-lookup-search-icon {
+  width: 16px;
+  height: 16px;
+  color: hsl(var(--muted-foreground));
+  flex-shrink: 0;
+}
+
+.csp-lookup-search {
+  border: none;
+  outline: none;
+  flex: 1;
+  font-size: 0.875rem;
+  background: transparent;
+  color: hsl(var(--foreground));
+}
+
+.csp-lookup-options {
+  overflow-y: auto;
+  max-height: 220px;
+  padding: 0.25rem;
+}
+
+.csp-lookup-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.375rem 0.5rem;
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background-color 0.1s ease;
+}
+
+.csp-lookup-option:hover {
+  background-color: hsl(var(--accent));
+}
+
+.csp-lookup-option-selected {
+  background-color: hsl(var(--accent));
+  font-weight: 500;
+}
+
+.csp-lookup-option-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.csp-lookup-check {
+  width: 16px;
+  height: 16px;
+  color: hsl(var(--primary));
+  flex-shrink: 0;
+}
+
+.csp-lookup-empty {
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ==========================================================================
+   17. FILTER SYSTEM
+   ========================================================================== */
+
+.csp-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.csp-filter-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.csp-filter-bar-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+}
+
+.csp-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* --- Filter label: text-xs (12px), font-medium (500), uppercase, tracking-wider, muted-foreground --- */
+.csp-filter-group-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: hsl(215 16% 47%);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  min-width: fit-content;
+}
+
+.csp-filter-popover-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+/* --- Column filter icon: h-5 w-5 (20px), ml-1, inline-flex, 50% opacity --- */
+.csp-filter-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-left: 0.25rem;
+  padding: 0;
+  color: hsl(215 16% 47% / 0.5);
+  background: transparent;
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  vertical-align: middle;
+}
+
+.csp-filter-icon-btn:hover {
+  color: hsl(215 16% 47%);
+  background-color: hsl(var(--accent));
+}
+
+/* --- Active filter: primary color --- */
+.csp-filter-icon-active {
+  color: hsl(220 60% 24%);
+  border-color: hsl(var(--primary));
+}
+
+.csp-filter-icon-active:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+
+.csp-filter-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 240px;
+  background-color: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+  z-index: 40;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.csp-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.csp-filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.csp-filter-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.csp-filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.csp-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.375rem;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.csp-filter-option:hover {
+  background-color: hsl(var(--accent));
+}
+
+.csp-filter-range {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.csp-filter-date-range {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.csp-filter-sublabel {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ==========================================================================
+   18. TOAST
+   ========================================================================== */
+
+.csp-toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.csp-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background-color: hsl(var(--foreground));
+  color: hsl(var(--background));
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+  pointer-events: auto;
+  animation: csp-slide-up 0.3s ease;
+}
+
+.csp-toast-success {
+  background-color: hsl(142 71% 35%);
+  color: white;
+}
+
+.csp-toast-error {
+  background-color: hsl(var(--destructive));
+  color: white;
+}
+
+@keyframes csp-slide-up {
+  from { transform: translateY(1rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ==========================================================================
+   19. SELECTION BAR
+   ========================================================================== */
+
+.csp-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  animation: csp-slide-up 0.2s ease;
+}
+
+.csp-selection-count {
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   20. PAGE HEADER
+   ========================================================================== */
+
+.csp-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.csp-page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  line-height: 1.2;
+}
+
+.csp-page-subtitle {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.25rem;
+}
+
+/* ==========================================================================
+   21. KPI CARDS
+   ========================================================================== */
+
+.csp-kpi-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.csp-kpi-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.csp-kpi-grid-7 {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.csp-kpi-card {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.csp-kpi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.csp-kpi-title {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+
+.csp-kpi-value {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  line-height: 1.3;
+  margin-top: 0.125rem;
+}
+
+.csp-kpi-footer {
+  font-size: 0.6875rem;
+  color: hsl(var(--muted-foreground));
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.125rem;
+}
+
+.csp-kpi-icon {
+  width: 16px;
+  height: 16px;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ==========================================================================
+   22. EMPTY STATE
+   ========================================================================== */
+
+.csp-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.csp-empty-icon {
+  width: 48px;
+  height: 48px;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 1rem;
+}
+
+.csp-empty-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.375rem;
+}
+
+.csp-empty-description {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  max-width: 320px;
+  margin-bottom: 1rem;
+}
+
+.csp-empty-action {
+  margin-top: 0.5rem;
+}
+
+/* ==========================================================================
+   23. CHARTS
+   ========================================================================== */
+
+.csp-chart-container {
+  width: 100%;
+  position: relative;
+}
+
+.csp-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.125rem;
+  height: calc(100% - 2.5rem);
+  padding: 0;
+}
+
+.csp-chart-bar-group {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+  padding-bottom: 1.5rem;
+}
+
+.csp-chart-bar {
+  flex: 1;
+  max-width: 28px;
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  transition: opacity 0.15s ease;
+}
+
+.csp-chart-bar:hover {
+  opacity: 0.8;
+  cursor: default;
+}
+
+.csp-chart-bar-label {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.6875rem;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
+  white-space: nowrap;
+}
+
+.csp-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 0;
+}
+
+.csp-chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.csp-chart-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.csp-chart-x-labels {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 0.5rem;
+  font-size: 0.6875rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.csp-line-chart-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  display: block;
+}
+
+/* Donut chart */
+.csp-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.csp-donut-svg {
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+}
+
+.csp-donut-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Horizontal bar chart */
+.csp-hbar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.csp-hbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.csp-hbar-label {
+  font-size: 0.8125rem;
+  color: hsl(var(--foreground));
+  min-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.csp-hbar-track {
+  flex: 1;
+  height: 20px;
+  background-color: hsl(var(--muted));
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.csp-hbar-fill {
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background-color: hsl(var(--accent));
+  transition: width 0.3s ease;
+}
+
+/* Bar chart (alternate layout) */
+.csp-bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  height: 200px;
+}
+
+.csp-bar-chart-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.csp-bar-chart-bar-wrapper {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  width: 100%;
+  justify-content: center;
+}
+
+.csp-bar-chart-bar {
+  width: 100%;
+  max-width: 24px;
+  border-radius: 4px 4px 0 0;
+  background-color: hsl(var(--chart-1));
+}
+
+.csp-bar-chart-bar-cost {
+  background-color: hsl(var(--chart-4));
+}
+
+.csp-bar-chart-bar-revenue {
+  background-color: hsl(var(--chart-2));
+}
+
+.csp-bar-chart-label {
+  font-size: 0.6875rem;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Legend row (alternate) */
+.csp-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.csp-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.csp-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-color: hsl(var(--chart-1));
+}
+
+.csp-legend-dot-cost {
+  background-color: hsl(var(--chart-4));
+}
+
+.csp-legend-dot-revenue {
+  background-color: hsl(var(--chart-2));
+}
+
+/* ==========================================================================
+   24. DASHBOARD
+   ========================================================================== */
+
+.csp-dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.csp-dashboard-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.csp-alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.csp-alert-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  background-color: hsl(var(--card));
+}
+
+/* ==========================================================================
+   25. BANK RECONCILIATION
+   ========================================================================== */
+
+.csp-bank-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1rem;
+  height: calc(100vh - 200px);
+}
+
+.csp-bank-statements {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  overflow-y: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 0.5rem;
+  background-color: hsl(var(--card));
+}
+
+.csp-bank-transactions {
+  overflow-y: auto;
+}
+
+.csp-statement-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  font-size: 0.8125rem;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  width: 100%;
+  text-align: left;
+}
+
+.csp-statement-btn:hover {
+  background-color: hsl(var(--accent));
+}
+
+.csp-statement-btn-active {
+  background-color: hsl(var(--accent));
+  font-weight: 500;
+  color: hsl(var(--accent-foreground));
+}
+
+/* ==========================================================================
+   26. ONBOARDING / CANDIDATES
+   ========================================================================== */
+
+.csp-confirmed-slot-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background-color: hsl(var(--card));
+  overflow: hidden;
+}
+
+.csp-confirmed-slot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background-color: hsl(var(--muted));
+  border-bottom: 1px solid hsl(var(--border));
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.csp-slot-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+}
+
+.csp-slot-group {
+  margin-bottom: 1rem;
+}
+
+.csp-slot-group-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.375rem 0;
+}
+
+.csp-slot-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  margin-bottom: 0.375rem;
+  background-color: hsl(var(--card));
+  transition: background-color 0.1s ease;
+}
+
+.csp-slot-item:hover {
+  background-color: hsl(var(--muted) / 0.5);
+}
+
+.csp-slot-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.csp-slot-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.csp-slot-item-confirmed {
+  border-color: hsl(var(--green));
+  background-color: hsl(var(--green-bg));
+}
+
+.csp-slot-details {
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.csp-cv-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background-color: hsl(var(--muted));
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.csp-cv-preview:hover {
+  background-color: hsl(var(--accent));
+}
+
+.csp-cv-preview-icon {
+  width: 24px;
+  height: 24px;
+  color: hsl(var(--muted-foreground));
+  flex-shrink: 0;
+}
+
+.csp-confirm-content {
+  padding: 1rem;
+}
+
+.csp-confirm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.csp-review-tab {
+  padding: 1rem 0;
+}
+
+.csp-scheduling-tab {
+  padding: 1rem 0;
+}
+
+.csp-records-tab {
+  padding: 1rem 0;
+}
+
+.csp-row-amber {
+  background-color: hsl(var(--amber-bg));
+}
+
+.csp-row-green {
+  background-color: hsl(var(--green-bg));
+}
+
+.csp-row-red {
+  background-color: hsl(var(--red-bg));
+}
+
+.csp-skill-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.csp-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-color: hsl(var(--muted-foreground));
+}
+
+.csp-dot-green {
+  background-color: hsl(var(--green));
+}
+
+.csp-dot-red {
+  background-color: hsl(var(--red));
+}
+
+.csp-dot-amber {
+  background-color: hsl(var(--amber));
+}
+
+.csp-dot-gray {
+  background-color: hsl(var(--muted-foreground));
+}
+
+/* ==========================================================================
+   27. INTERVIEWERS / AVAILABILITY
+   ========================================================================== */
+
+.csp-interviewer-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background-color: hsl(var(--card));
+  overflow: hidden;
+}
+
+.csp-interviewer-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.csp-interviewer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.csp-interviewer-candidate {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+}
+
+.csp-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  font-size: 0.8125rem;
+}
+
+.csp-detail-label {
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.csp-detail-value {
+  color: hsl(var(--foreground));
+}
+
+/* ==========================================================================
+   28. SUMMARY CARDS
+   ========================================================================== */
+
+.csp-summary-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background-color: hsl(var(--card));
+  padding: 1rem 1.25rem;
+}
+
+.csp-summary-card-header {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 0.375rem;
+}
+
+.csp-summary-card-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.csp-summary-card-detail {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.25rem;
+}
+
+.csp-summary-card-green {
+  border-left: 3px solid hsl(var(--green));
+}
+
+.csp-summary-card-red {
+  border-left: 3px solid hsl(var(--red));
+}
+
+/* ==========================================================================
+   29. SECTION HEADERS
+   ========================================================================== */
+
+.csp-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  margin-bottom: 0.5rem;
+}
+
+.csp-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+/* ==========================================================================
+   30. ICON SIZES
+   ========================================================================== */
+
+.csp-icon-xs {
+  width: 12px;
+  height: 12px;
+}
+
+.csp-icon-sm {
+  width: 16px;
+  height: 16px;
+}
+
+.csp-icon-xl {
+  width: 32px;
+  height: 32px;
+}
+
+.csp-icon-inline {
+  display: inline-block;
+  vertical-align: middle;
+  width: 16px;
+  height: 16px;
+}
+
+/* ==========================================================================
+   31. UTILITY CLASSES
+   ========================================================================== */
+
+/* Flexbox */
+.csp-flex-1 {
+  flex: 1;
+}
+
+.csp-flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.csp-flex-gap-1 {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.csp-flex-gap-2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Typography */
+.csp-text-muted {
+  color: hsl(var(--muted-foreground));
+}
+
+.csp-text-sm {
+  font-size: 0.8125rem;
+}
+
+.csp-text-xs {
+  font-size: 0.75rem;
+}
+
+.csp-text-xl {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.csp-text-bold {
+  font-weight: 600;
+}
+
+.csp-text-mono {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+}
+
+.csp-text-green {
+  color: hsl(var(--green));
+}
+
+.csp-text-red {
+  color: hsl(var(--destructive));
+}
+
+.csp-text-right {
+  text-align: right;
+}
+
+.csp-text-center {
+  text-align: center;
+}
+
+.csp-text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Spacing */
+.csp-mb-4 {
+  margin-bottom: 1rem;
+}
+
+.csp-mb-6 {
+  margin-bottom: 1.5rem;
+}
+
+.csp-mt-2 {
+  margin-top: 0.5rem;
+}
+
+.csp-mt-4 {
+  margin-top: 1rem;
+}
+
+.csp-pt-4 {
+  padding-top: 1rem;
+}
+
+.csp-p-4 {
+  padding: 1rem;
+}
+
+/* Border */
+.csp-border-t {
+  border-top: 1px solid hsl(var(--border));
+}
+
+/* Grids */
+.csp-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.csp-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+/* Visibility */
+.csp-visible {
+  visibility: visible;
+}
+
+.csp-invisible {
+  visibility: hidden;
+}
+
+/* Link */
+.csp-link {
+  color: hsl(var(--primary));
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.csp-link:hover {
+  text-decoration: underline;
+}
+
+/* Trend indicators */
+.csp-trend-positive {
+  color: hsl(var(--green));
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.csp-trend-negative {
+  color: hsl(var(--destructive));
+  font-size: 0.75rem;
+  font-weight: 500;
+}

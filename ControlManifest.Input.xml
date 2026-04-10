@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest>
+  <control namespace="CSP" constructor="CSPCRMApp" version="1.0.0" display-name-key="CSP CRM App" description-key="CSP CRM Application" control-type="virtual" >
+    <property name="sampleProperty" display-name-key="Sample Property" description-key="Sample property for the control" of-type="SingleLine.Text" usage="bound" required="false" />
+    <external-service-usage enabled="false">
+    </external-service-usage>
+    <resources>
+      <code path="index.ts" order="1"/>
+      <css path="CSPCRMApp.css" order="1" />
+    </resources>
+  </control>
+</manifest>

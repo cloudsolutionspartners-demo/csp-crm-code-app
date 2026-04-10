@@ -1,0 +1,15 @@
+node_modules/
+dist/
+out/
+.power/schemas/commondataserviceforapps/
+*.pcfproj
+*.pcfproj.user
+*.cdsproj
+*.sln
+obj/
+bin/
+*.nupkg
+.vs/
+.vscode/
+*.log
+power.config.dev.json
