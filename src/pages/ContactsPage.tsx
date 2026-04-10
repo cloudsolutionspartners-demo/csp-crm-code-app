@@ -90,7 +90,7 @@ export default function ContactsPage() {
       if (emailCol && !c.email.toLowerCase().includes(emailCol.toLowerCase())) return false;
       return true;
     });
-  }, [contacts, typeFilter, colFilters]);
+  }, [typeFilter, colFilters]);
 
   const filteredIds = filtered.map(c => c.id);
   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));

@@ -44,16 +44,9 @@ function mapFromDataverse(r: any): Account {
     invoiceComments: r.csp_invoicecomments || '',
     invoicingEmail: r.csp_invoicingemail || '',
     address: r.address1_composite || '',
-    addressStreet: r.address1_line1 || '',
-    addressCity: r.address1_city || '',
-    addressState: r.address1_stateorprovince || '',
-    addressPostalCode: r.address1_postalcode || '',
-    addressCountry: r.address1_country || '',
     phone: r.telephone1 || '',
     email: r.emailaddress1 || '',
     website: r.websiteurl || '',
-    invoiceFooter: r.csp_invoicefooter || '',
-    paymentDetails: r.csp_paymentdetails || '',
     status: STATUS_REVERSE[r.statecode] || 'Active',
     activeContracts: 0,
   };
@@ -63,27 +56,22 @@ function mapToDataverse(data: Record<string, any>): any {
   const record: any = {};
   if (data.name !== undefined) record.name = data.name;
   if (data.accountType !== undefined) record.csp_accounttype = ACCOUNT_TYPE_FORWARD[data.accountType] ?? null;
+  if (data.country !== undefined) record.address1_country = data.country;
   if (data.vatNumber !== undefined) record.csp_vatnumber = data.vatNumber;
   if (data.registrationNumber !== undefined) record.csp_registrationnumber = data.registrationNumber;
   if (data.paymentTerms !== undefined) record.paymenttermscode = PAYMENT_TERMS_FORWARD[data.paymentTerms] ?? null;
   if (data.email !== undefined) record.emailaddress1 = data.email;
   if (data.invoicingEmail !== undefined) record.csp_invoicingemail = data.invoicingEmail;
   if (data.phone !== undefined) record.telephone1 = data.phone;
+  if (data.address !== undefined) record.address1_composite = data.address;
   if (data.website !== undefined) record.websiteurl = data.website;
   if (data.invoiceComments !== undefined) record.csp_invoicecomments = data.invoiceComments;
-  if (data.addressStreet !== undefined) record.address1_line1 = data.addressStreet;
-  if (data.addressCity !== undefined) record.address1_city = data.addressCity;
-  if (data.addressState !== undefined) record.address1_stateorprovince = data.addressState;
-  if (data.addressPostalCode !== undefined) record.address1_postalcode = data.addressPostalCode;
-  if (data.addressCountry !== undefined) record.address1_country = data.addressCountry;
-  if (data.invoiceFooter !== undefined) record.csp_invoicefooter = data.invoiceFooter;
-  if (data.paymentDetails !== undefined) record.csp_paymentdetails = data.paymentDetails;
   return record;
 }
 
 // ===== Public API =====
 
-const SELECT = 'accountid,name,statecode,statuscode,csp_accounttype,address1_country,paymenttermscode,emailaddress1,telephone1,websiteurl,csp_vatnumber,csp_registrationnumber,csp_invoicingemail,csp_invoicecomments,address1_composite,_owningbusinessunit_value,address1_line1,address1_city,address1_stateorprovince,address1_postalcode,csp_invoicefooter,csp_paymentdetails';
+const SELECT = 'accountid,name,statecode,statuscode,csp_accounttype,address1_country,paymenttermscode,emailaddress1,telephone1,websiteurl,csp_vatnumber,csp_registrationnumber,csp_invoicingemail,csp_invoicecomments,address1_composite,_owningbusinessunit_value';
 
 export async function fetchAccounts(): Promise<Account[]> {
   const records = await listRecords('accounts', SELECT, undefined, 'name asc');

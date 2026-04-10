@@ -49,16 +49,9 @@ export interface Account {
   invoiceComments?: string;
   invoicingEmail?: string;
   address?: string;
-  addressStreet?: string;
-  addressCity?: string;
-  addressState?: string;
-  addressPostalCode?: string;
-  addressCountry?: string;
   phone?: string;
   email?: string;
   website?: string;
-  invoiceFooter?: string;
-  paymentDetails?: string;
   status: AccountStatus;
   activeContracts: number;
 }
