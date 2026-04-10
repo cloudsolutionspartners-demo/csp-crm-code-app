@@ -1,0 +1,15 @@
+# Pulse Fix-Issues Progress Log
+Started: 2026-04-10
+Branch: pulse/fix-issues-2026-04-10
+Mode: fix-issues (manual GitHub issues)
+---
+
+## Codebase Patterns
+- Power Apps Code App (Vite + React 19 + TypeScript)
+- Dataverse connected via @microsoft/power-apps SDK (MicrosoftDataverseService)
+- ListRecordsWithOrganization with ListRecords fallback
+- Picklist reverse maps use 770400xxx prefix
+- CSS uses custom csp-* classes (no Tailwind)
+- All CRUD pages follow same pattern: useDataverse hook + service layer
+
+---

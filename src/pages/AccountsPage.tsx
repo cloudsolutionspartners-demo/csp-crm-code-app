@@ -10,7 +10,6 @@ import {
   getTextFilter, getMultiFilter, getNumberFilter, setTextFilter, setMultiFilter, setNumberFilter,
 } from '../components/ColumnFilters';
 import { accounts as mockAccounts, entities, contracts, invoices, contacts as mockContacts, getEntityById } from '../data/mock-data';
-import { countries } from '../data/countries';
 import { fetchAccounts, saveAccount } from '../services/accountService';
 import { useDataverse } from '../services/useDataverse';
 import type { Account, AccountStatus, AccountType, ContactType } from '../types/crm';
@@ -49,8 +48,13 @@ export default function AccountsPage() {
       name: account.name, accountType: account.accountType, entityId: account.entityId,
       country: account.country, vatNumber: account.vatNumber || '', registrationNumber: account.registrationNumber || '',
       paymentTerms: account.paymentTerms, email: account.email || '', invoicingEmail: account.invoicingEmail || '',
-      phone: account.phone || '', address: account.address || '', website: account.website || '',
-      invoiceComments: account.invoiceComments || '', status: account.status, primaryContactId: '',
+      phone: account.phone || '', website: account.website || '',
+      addressStreet: account.addressStreet || '', addressCity: account.addressCity || '',
+      addressState: account.addressState || '', addressPostalCode: account.addressPostalCode || '',
+      addressCountry: account.addressCountry || '',
+      invoiceComments: account.invoiceComments || '',
+      invoiceFooter: account.invoiceFooter || '', paymentDetails: account.paymentDetails || '',
+      status: account.status, primaryContactId: '',
     });
   };
 
@@ -62,7 +66,10 @@ export default function AccountsPage() {
       name: '', accountType: 'Direct Customer', entityId: entities[0]?.id || '',
       country: entities[0]?.country || '', vatNumber: '', registrationNumber: '',
       paymentTerms: '30 Days', email: '', invoicingEmail: '', phone: '',
-      address: '', website: '', invoiceComments: '', status: 'Active', primaryContactId: '',
+      website: '', addressStreet: '', addressCity: '', addressState: '',
+      addressPostalCode: '', addressCountry: '',
+      invoiceComments: '', invoiceFooter: '', paymentDetails: '',
+      status: 'Active', primaryContactId: '',
     });
   };
 
@@ -118,7 +125,7 @@ export default function AccountsPage() {
       if (contractsNum.max && a.activeContracts > Number(contractsNum.max)) return false;
       return true;
     });
-  }, [statusFilter, typeFilter, countryFilter, colFilters]);
+  }, [accounts, statusFilter, typeFilter, countryFilter, colFilters]);
 
   const filteredIds = filtered.map(a => a.id);
   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
@@ -215,7 +222,6 @@ export default function AccountsPage() {
                   <TextField label="Name" value={formData.name} onChange={v => updateField('name', v)} required />
                   <SelectField label="Type" value={formData.accountType} onChange={v => updateField('accountType', v)} required options={accountTypes.map(t => ({ value: t, label: t }))} />
                   <LookupField label="Country" value={formData.entityId} onChange={v => updateField('entityId', v)} required options={entities.map(e => ({ value: e.id, label: e.country }))} />
-                  <LookupField label="Account Country" value={formData.country} onChange={v => updateField('country', v)} required options={countries.map(c => ({ value: c, label: c }))} />
                   <SelectField label="Status" value={formData.status} onChange={v => updateField('status', v)} required options={accountStatuses.map(s => ({ value: s, label: s }))} />
                   <LookupField label="Primary Contact" value={formData.primaryContactId} onChange={v => updateField('primaryContactId', v)} options={contactLookupOptions} />
                   <TextField label="VAT Number" value={formData.vatNumber} onChange={v => updateField('vatNumber', v)} />
@@ -225,8 +231,14 @@ export default function AccountsPage() {
                   <EmailField label="Invoicing Email" value={formData.invoicingEmail} onChange={v => updateField('invoicingEmail', v)} />
                   <TextField label="Phone" value={formData.phone} onChange={v => updateField('phone', v)} />
                   <WebsiteField label="Website" value={formData.website} onChange={v => updateField('website', v)} />
-                  <TextField label="Address" value={formData.address} onChange={v => updateField('address', v)} className="csp-col-span-2" />
+                  <TextField label="Street" value={formData.addressStreet} onChange={v => updateField('addressStreet', v)} className="csp-col-span-2" />
+                  <TextField label="City" value={formData.addressCity} onChange={v => updateField('addressCity', v)} />
+                  <TextField label="State/Province" value={formData.addressState} onChange={v => updateField('addressState', v)} />
+                  <TextField label="Postal Code" value={formData.addressPostalCode} onChange={v => updateField('addressPostalCode', v)} />
+                  <TextField label="Country" value={formData.addressCountry} onChange={v => updateField('addressCountry', v)} />
                   <TextAreaField label="Invoice Comments" value={formData.invoiceComments} onChange={v => updateField('invoiceComments', v)} className="csp-col-span-2" />
+                  <TextAreaField label="Invoice Footer" value={formData.invoiceFooter} onChange={v => updateField('invoiceFooter', v)} className="csp-col-span-2" />
+                  <TextField label="Payment Details" value={formData.paymentDetails} onChange={v => updateField('paymentDetails', v)} className="csp-col-span-2" />
                 </div>
               )}
               {activeTab === 'contacts' && (
@@ -236,7 +248,18 @@ export default function AccountsPage() {
                       <LookupField label="Add Existing Contact" value={assignContactId} onChange={setAssignContactId}
                         options={contactLookupOptions.filter(o => !accountContacts.some(ac => ac.id === o.value))} />
                     </div>
-                    <button className="csp-btn csp-btn-primary csp-btn-sm" disabled={!assignContactId} onClick={() => { toast.success('Contact assigned to account'); setAssignContactId(''); }}>Assign</button>
+                    <button className="csp-btn csp-btn-primary csp-btn-sm" disabled={!assignContactId} onClick={async () => {
+                      try {
+                        const { saveContact } = await import('../services/contactService');
+                        await saveContact({ accountId: selectedAccount!.id }, assignContactId);
+                        toast.success('Contact assigned to account');
+                        setAssignContactId('');
+                        refetch();
+                      } catch (err) {
+                        console.error('Assign failed:', err);
+                        toast.error('Failed to assign contact');
+                      }
+                    }}>Assign</button>
                     <button className="csp-btn csp-btn-outline csp-btn-sm" onClick={openNewContactDialog}><Plus className="csp-icon-inline" />New Contact</button>
                   </div>
                   <table className="csp-table">
