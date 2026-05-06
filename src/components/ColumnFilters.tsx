@@ -53,13 +53,16 @@ export function countActiveFilters(filters: ColumnFilters): number {
   }).length;
 }
 
-export function matchDateRange(dateStr: string, from: string, to: string): boolean {
+export function matchDateRange(dateStr: string, from?: string | Date, to?: string | Date): boolean {
   if (!from && !to) return true;
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return true;
-  if (from && d < new Date(from)) return false;
+  if (from) {
+    const fromD = from instanceof Date ? from : new Date(from);
+    if (d < fromD) return false;
+  }
   if (to) {
-    const toEnd = new Date(to);
+    const toEnd = to instanceof Date ? new Date(to.getTime()) : new Date(to);
     toEnd.setHours(23, 59, 59, 999);
     if (d > toEnd) return false;
   }

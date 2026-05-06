@@ -12,6 +12,8 @@ const statusColorMap: Record<string, string> = {
   Approved: 'csp-badge-green',
   Fit: 'csp-badge-green',
   Available: 'csp-badge-green',
+  Booked: 'csp-badge-blue',
+  New: 'csp-badge-slate',
   Sent: 'csp-badge-blue',
   Submitted: 'csp-badge-blue',
   Scheduled: 'csp-badge-blue',
@@ -31,6 +33,19 @@ const statusColorMap: Record<string, string> = {
   Terminated: 'csp-badge-red-light',
   Prospect: 'csp-badge-purple',
   'Credit Note': 'csp-badge-indigo',
+  // Prospect statuses
+  Contacted: 'csp-badge-blue',
+  Discussing: 'csp-badge-amber',
+  Proposal: 'csp-badge-purple',
+  Won: 'csp-badge-green',
+  Lost: 'csp-badge-red',
+  // Document types
+  Contract: 'csp-badge-blue',
+  Certificate: 'csp-badge-green',
+  Invoice: 'csp-badge-amber',
+  Policy: 'csp-badge-purple',
+  Report: 'csp-badge-slate',
+  Other: 'csp-badge-slate-dim',
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
@@ -81,7 +96,7 @@ export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
   return (
     <div className="csp-page-header">
       <div>
-        <h1 className="csp-page-title">{title}</h1>
+        <h1 className="csp-page-title" style={{ userSelect: 'none' }}>{title}</h1>
         {subtitle && <p className="csp-page-subtitle">{subtitle}</p>}
       </div>
       {action}
@@ -103,6 +118,30 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
       <h3 className="csp-empty-title">{title}</h3>
       <p className="csp-empty-description">{description}</p>
       {action && <div className="csp-empty-action">{action}</div>}
+    </div>
+  );
+}
+
+// Spinner
+interface SpinnerProps {
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}
+
+export function Spinner({ size = 'md', className }: SpinnerProps) {
+  return <span className={cn('csp-spinner', `csp-spinner-${size}`, className)} />;
+}
+
+// Page loading state
+interface PageLoadingProps {
+  message?: string;
+}
+
+export function PageLoading({ message = 'Loading...' }: PageLoadingProps) {
+  return (
+    <div className="csp-page-loading">
+      <Spinner size="lg" />
+      <span>{message}</span>
     </div>
   );
 }

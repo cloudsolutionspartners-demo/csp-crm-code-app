@@ -1,0 +1,38 @@
+{
+    "appDisplayName":  "CSP CRM",
+    "description":  "CSP CRM Application",
+    "environmentId":  "7026ca2c-0785-ea98-810d-1c2bce33ea48",
+    "buildPath":  "dist",
+    "buildEntryPoint":  "index.html",
+    "logoPath":  "Default",
+    "localAppUrl":  "http://localhost:5173/",
+    "region":  "prod",
+    "connectionReferences":  {
+                                 "fc63a9e41b924bef902cbc3effefb554":  {
+                                                                          "id":  "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                                                                          "displayName":  "Microsoft Dataverse",
+                                                                          "dataSources":  [
+                                                                                              "commondataserviceforapps"
+                                                                                          ],
+                                                                          "authenticationType":  "Oauth",
+                                                                          "dataSets":  {
+
+                                                                                       }
+                                                                      },
+                                 "5363fb9c-8fb2-4550-89e3-1273397f9aa1":  {
+                                                                              "id":  "/providers/Microsoft.PowerApps/apis/shared_office365",
+                                                                              "displayName":  "Office 365 Outlook",
+                                                                              "dataSources":  [
+                                                                                                  "office365"
+                                                                                              ],
+                                                                              "dataSets":  {
+
+                                                                                           }
+                                                                          }
+                             },
+    "databaseReferences":  {
+
+                           },
+    "version":  "1.0",
+    "appId":  "2924133c-dcdf-4c56-9e7e-bb7901a8d0fc"
+}

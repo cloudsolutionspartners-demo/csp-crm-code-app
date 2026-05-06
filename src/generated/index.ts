@@ -4,7 +4,16 @@
  */
 
 // Models
+export * as CommonModels from './models/CommonModels';
+export * as Csp_expensesModel from './models/Csp_expensesModel';
+export * as Csp_invoicesModel from './models/Csp_invoicesModel';
+export * as MedialibraryModel from './models/MedialibraryModel';
 export * as MicrosoftDataverseModel from './models/MicrosoftDataverseModel';
+export * as Office365OutlookModel from './models/Office365OutlookModel';
 
 // Services
+export * from './services/Csp_expensesService';
+export * from './services/Csp_invoicesService';
+export * from './services/MedialibraryService';
 export * from './services/MicrosoftDataverseService';
+export * from './services/Office365OutlookService';

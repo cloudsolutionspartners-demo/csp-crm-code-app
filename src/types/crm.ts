@@ -2,7 +2,7 @@
 export type Country = 'Romania' | 'Bulgaria' | 'US' | 'UK';
 export type CurrencyCode = 'USD' | 'EUR' | 'RON' | 'GBP';
 export type AccountType = 'Direct Customer' | 'Recruiter Client' | 'Recruiter Agency' | 'Partner B2B' | 'Contractor' | 'Supplier' | 'Legal Taxes';
-export type AccountStatus = 'Active' | 'Inactive' | 'Prospect';
+export type AccountStatus = 'Active' | 'Inactive';
 export type PaymentTerms = '15 Days' | '30 Days' | '45 Days' | '60 Days';
 export type ContactType = 'Consultant' | 'Client Contact' | 'Middleman Contact' | 'Finance Contact' | 'Permanent Employee';
 export type ContractType = 'Standard Contracting' | 'Permanent Employee' | 'Fixed Price';
@@ -28,10 +28,24 @@ export interface BusinessEntity {
   vatNumber: string;
   registrationNumber: string;
   address: string;
+  phone?: string;
+  email?: string;
+  accountantEmail?: string;
   bankName: string;
   iban: string;
   swift: string;
   intermediaryBic?: string;
+  // Bulgaria UK Bank Details
+  ukBankName?: string;
+  ukAccountNumber?: string;
+  ukSortCode?: string;
+  ukIban?: string;
+  ukSwift?: string;
+  ukIntermediaryBic?: string;
+  // US Banking Details
+  usAccountNumber?: string;
+  usAchRoutingNumber?: string;
+  usWireRoutingNumber?: string;
   invoicePrefix: string;
   invoiceFooter: string;
 }
@@ -47,11 +61,20 @@ export interface Account {
   registrationNumber?: string;
   paymentTerms: PaymentTerms;
   invoiceComments?: string;
+  invoiceFooter?: string;
   invoicingEmail?: string;
   address?: string;
+  street1?: string;
+  street2?: string;
+  street3?: string;
+  city?: string;
+  stateProvince?: string;
+  postalCode?: string;
   phone?: string;
   email?: string;
   website?: string;
+  primaryContactId?: string;
+  parentAccountId?: string;
   status: AccountStatus;
   activeContracts: number;
 }
@@ -71,9 +94,11 @@ export interface Contact {
   jobRole?: string;
   summary?: string;
   available?: boolean;
+  availableForWork?: boolean;
   isInterviewer?: boolean;
   lastIncreaseDate?: string;
   lastIncreaseAmount?: number;
+  status?: 'Active' | 'Inactive';
 }
 
 export interface Contract {
@@ -107,6 +132,10 @@ export interface Contract {
   hasMilestones: boolean;
   calendarType?: string;
   status: ContractStatus;
+  // Display names from Dataverse FormattedValues (for dropdowns)
+  parentAccountName?: string;
+  childAccountName?: string;
+  assignedToName?: string;
 }
 
 export interface Invoice {
@@ -114,6 +143,7 @@ export interface Invoice {
   invoiceNumber: string;
   entityId: string;
   accountId: string;
+  parentAccountId?: string;
   contractId?: string;
   currencyCode: CurrencyCode;
   invoiceDate: string;
@@ -130,11 +160,15 @@ export interface Invoice {
   periodMonth: number;
   periodYear: number;
   lines: InvoiceLine[];
+  // Display names from Dataverse FormattedValues
+  accountName?: string;
+  parentAccountName?: string;
 }
 
 export interface InvoiceLine {
   id: string;
   invoiceId: string;
+  name?: string;
   contactId?: string;
   description: string;
   quantity: number;
@@ -186,6 +220,7 @@ export interface TimesheetEntry {
 
 export interface LeaveRequest {
   id: string;
+  name: string;
   contactId: string;
   leaveType: LeaveType;
   startDate: string;
@@ -193,10 +228,12 @@ export interface LeaveRequest {
   totalDays: number;
   status: LeaveStatus;
   reason?: string;
+  clientNotified: boolean;
 }
 
 export interface Dividend {
   id: string;
+  name?: string;
   entityId: string;
   accountId?: string;
   contactId?: string;
@@ -205,6 +242,7 @@ export interface Dividend {
   paymentDate: string;
   taxWithheld: number;
   netAmount: number;
+  fileName?: string;
 }
 
 export interface BankStatement {
@@ -327,6 +365,93 @@ export interface ContractMilestone {
   startDate: string;
   endDate: string;
   status: MilestoneStatus;
+}
+
+// ===== JD SKILLS & PLATFORMS =====
+export interface JDSkill {
+  id: string;
+  name: string;
+  description?: string;
+  definedByAI: boolean;
+}
+
+export interface JDPlatform {
+  id: string;
+  name: string;
+  description: string;
+  definedByAI: boolean;
+}
+
+// ===== COMPANY DOCUMENTS =====
+export type DocumentType = 'Contract' | 'Certificate' | 'Invoice' | 'Policy' | 'Report' | 'Other';
+
+export interface CompanyDocument {
+  id: string;
+  documentName: string;
+  documentType: DocumentType;
+  relatedAccountId?: string;
+  issuedDate?: string;
+  expirationDate?: string;
+  description?: string;
+  instructions?: string;
+  fileName?: string;
+}
+
+// ===== PROSPECTS =====
+export type ProspectStatus = 'New' | 'Contacted' | 'Discussing' | 'Proposal' | 'Won' | 'Lost';
+export type ProspectSource = 'Phone' | 'LinkedIn' | 'Email' | 'Internal Referral';
+export type InteractionType = 'Call' | 'Email' | 'Meeting' | 'LinkedIn';
+
+export interface Prospect {
+  id: string;
+  prospectNumber: string;
+  companyName: string;
+  country: string;
+  industry?: string;
+  website?: string;
+  companySize?: string;
+  ownerContactId: string;
+  source: ProspectSource;
+  referredByContactId?: string;
+  primaryContactName: string;
+  primaryContactEmail: string;
+  primaryContactPhone?: string;
+  primaryContactRole?: string;
+  needDescription?: string;
+  servicesDiscussed?: string;
+  estimatedValue?: number;
+  currencyCode?: CurrencyCode;
+  expectedCloseDate?: string;
+  status: ProspectStatus;
+  firstContactDate: string;
+  lastActivityDate?: string;
+  lostReason?: string;
+  convertedAccountId?: string;
+  convertedContactId?: string;
+  convertedDate?: string;
+  kind?: ProspectKind;
+  existingAccountId?: string;
+  prospectingContactId?: string;
+}
+
+export type ProspectKind = 'New Business' | 'Existing Account';
+
+export interface ProspectInteraction {
+  id: string;
+  prospectId: string;
+  type: InteractionType;
+  date: string;
+  summary: string;
+  durationMinutes?: number;
+  createdBy: string;
+}
+
+export interface ProspectMaterial {
+  id: string;
+  prospectId: string;
+  fileName: string;
+  sharedDate: string;
+  description?: string;
 }
 
 // ===== CURRENCY MAP =====

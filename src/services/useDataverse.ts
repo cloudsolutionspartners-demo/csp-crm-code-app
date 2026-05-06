@@ -9,7 +9,7 @@ export function useDataverse<T>(
   mockData: T[],
   deps: any[] = [],
   useMockFallback: boolean = false
-): { data: T[]; loading: boolean; refetch: () => void; isLive: boolean } {
+): { data: T[]; loading: boolean; refetch: () => Promise<void>; isLive: boolean } {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);

@@ -15,9 +15,19 @@ const CONTACT_TYPE_FORWARD: Record<string, number> = {
   'Finance Contact': 770400003, 'Permanent Employee': 770400004,
 };
 
+function norm(val: any): string {
+  if (!val) return '';
+  return String(val).replace(/[{}]/g, '').toLowerCase();
+}
+
+function toBool(val: any): boolean {
+  if (val === true || val === 1 || val === '1' || val === 'true') return true;
+  return false;
+}
+
 function mapFromDataverse(r: any): Contact {
   return {
-    id: r.contactid,
+    id: norm(r.contactid),
     firstName: r.firstname || '',
     lastName: r.lastname || '',
     email: r.emailaddress1 || '',
@@ -25,13 +35,15 @@ function mapFromDataverse(r: any): Contact {
     contactType: CONTACT_TYPE_REVERSE[r.csp_contacttype] || 'Consultant',
     nationality: r.csp_nationality || '',
     country: r.address1_country || '',
-    accountId: r._parentcustomerid_value || '',
+    accountId: norm(r._parentcustomerid_value),
     company: r['_parentcustomerid_value@OData.Community.Display.V1.FormattedValue'] || '',
-    available: r.csp_currentavailability === true,
-    isInterviewer: false, // UI-only, not in Dataverse
+    isInterviewer: toBool(r.csp_interviewer),
+    available: toBool(r.csp_assigned),
+    availableForWork: toBool(r.csp_currentavailability),
     jobRole: r.jobtitle || '',
-    skillset: [],          // UI-only, not in Dataverse
-    summary: '',           // UI-only, not in Dataverse
+    skillset: [],
+    summary: '',
+    status: r.statecode === 0 ? 'Active' : 'Inactive',
   };
 }
 
@@ -45,7 +57,10 @@ function mapToDataverse(data: Record<string, any>): any {
   if (data.jobRole !== undefined) record.jobtitle = data.jobRole || null;
   if (data.nationality !== undefined) record.csp_nationality = data.nationality || null;
   if (data.country !== undefined) record.address1_country = data.country || null;
-  if (data.available !== undefined) record.csp_currentavailability = data.available || false;
+  // Toggles — each has its own Dataverse column
+  if (data.isInterviewer !== undefined) record.csp_interviewer = !!data.isInterviewer;
+  if (data.available !== undefined) record.csp_assigned = !!data.available;
+  if (data.availableForWork !== undefined) record.csp_currentavailability = !!data.availableForWork;
   if (data.contactType && CONTACT_TYPE_FORWARD[data.contactType] !== undefined) {
     record.csp_contacttype = CONTACT_TYPE_FORWARD[data.contactType];
   }
@@ -53,10 +68,13 @@ function mapToDataverse(data: Record<string, any>): any {
   if (data.accountId && isGuid(data.accountId)) {
     record['parentcustomerid_account@odata.bind'] = `/accounts(${data.accountId})`;
   }
+  // Status
+  if (data.status === 'Active') { record.statecode = 0; record.statuscode = 1; }
+  else if (data.status === 'Inactive') { record.statecode = 1; record.statuscode = 2; }
   return record;
 }
 
-const SELECT = 'contactid,firstname,lastname,emailaddress1,telephone1,jobtitle,csp_contacttype,csp_nationality,csp_currentavailability,address1_country,_parentcustomerid_value,statecode,statuscode';
+const SELECT = 'contactid,firstname,lastname,emailaddress1,telephone1,jobtitle,csp_contacttype,csp_nationality,csp_interviewer,csp_assigned,csp_currentavailability,address1_country,_parentcustomerid_value,statecode,statuscode';
 
 export async function fetchContacts(): Promise<Contact[]> {
   const records = await listRecords('contacts', SELECT, undefined, 'lastname asc');
@@ -65,6 +83,9 @@ export async function fetchContacts(): Promise<Contact[]> {
 
 export async function saveContact(data: Record<string, any>, existingId?: string): Promise<string> {
   const mapped = mapToDataverse(data);
+  console.log('[Contact] === SAVE ===', existingId ? 'UPDATE ' + existingId : 'CREATE');
+  console.log('[Contact] Input data:', JSON.stringify({ isInterviewer: data.isInterviewer, available: data.available, availableForWork: data.availableForWork, jobRole: data.jobRole, contactType: data.contactType }));
+  console.log('[Contact] Payload:', JSON.stringify(mapped, null, 2));
   if (existingId && isGuid(existingId)) {
     await updateRecord('contacts', existingId, mapped);
     return existingId;

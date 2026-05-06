@@ -1,0 +1,24 @@
+{
+  "appDisplayName": "CSP CRM",
+  "description": "CSP CRM Application",
+  "environmentId": "971f1ff8-c4ff-ee21-9ef9-04cfb6802053",
+  "buildPath": "dist",
+  "buildEntryPoint": "index.html",
+  "logoPath": "Default",
+  "localAppUrl": "http://localhost:5173/",
+  "region": "prod",
+  "connectionReferences": {
+    "fc63a9e41b924bef902cbc3effefb554": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+      "displayName": "Microsoft Dataverse",
+      "dataSources": [
+        "commondataserviceforapps"
+      ],
+      "authenticationType": "Oauth",
+      "dataSets": {}
+    }
+  },
+  "databaseReferences": {},
+  "version": "1.0",
+  "appId": "dce9be21-8f83-49bc-b0d5-0e84963d94a4"
+}

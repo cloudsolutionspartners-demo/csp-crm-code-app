@@ -1,0 +1,93 @@
+﻿diff --git a/src/pages/TimesheetsPage.tsx b/src/pages/TimesheetsPage.tsx
+index f098781..43aed79 100644
+--- a/src/pages/TimesheetsPage.tsx
++++ b/src/pages/TimesheetsPage.tsx
+@@ -14,7 +14,8 @@ import type { Timesheet, TimesheetStatus, TimesheetEntry, Contract } from '@/typ
+ import { toast } from 'sonner';
+ import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
+ import { TextField, LookupField, DateField } from '@/components/FormField';
+-import { Search, CheckCircle, RotateCcw, Loader2, Calendar, FileSpreadsheet, Check, Sparkles, SkipForward, ArrowRight, Table as TableIcon, Users, CalendarDays, Building2 } from 'lucide-react';
++import { Search, CheckCircle, RotateCcw, Loader2, Calendar, FileSpreadsheet, Check, Sparkles, SkipForward, ArrowRight, Table as TableIcon, Users, CalendarDays, Building2, Download, X } from 'lucide-react';
++import * as XLSX from 'xlsx';
+ import { GroupedByAccountView, MonthlyTimelineView, ByConsultantView } from '@/components/timesheet/TimesheetAlternativeViews';
+ import { SendTimesheetReportFlow } from '@/components/timesheet/SendTimesheetReportFlow';
+ import { Progress } from '@/components/ui/progress';
+@@ -74,6 +75,7 @@ export default function TimesheetsPage() {
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+   const [viewMode, setViewMode] = useState<'table' | 'account' | 'timeline' | 'consultant'>('table');
++  const [selectedContractIds, setSelectedContractIds] = useState<Set<string>>(new Set());
+   const [selected, setSelected] = useState<Timesheet | null>(null);
+   const [formEntries, setFormEntries] = useState<TimesheetEntry[]>([]);
+   const [returnDialog, setReturnDialog] = useState(false);
+@@ -402,6 +404,46 @@ export default function TimesheetsPage() {
+     }
+   };
+ 
++  // Reset contract selection when leaving consultant view
++  useEffect(() => {
++    if (viewMode !== 'consultant' && selectedContractIds.size > 0) {
++      setSelectedContractIds(new Set());
++    }
++  }, [viewMode]);
++
++  const handleDownloadSelectedContracts = () => {
++    const rows = filtered
++      .filter(t => selectedContractIds.has(t.contractId))
++      .map(t => {
++        const con = getContactById(t.contactId);
++        const ctr = getContractById(t.contractId);
++        const acc = ctr ? getAccountById(ctr.parentAccountId) : null;
++        return {
++          Consultant: con ? `${con.firstName} ${con.lastName}` : '',
++          Account: acc?.name ?? '',
++          Contract: ctr?.contractNumber ?? '',
++          'Timesheet ID': t.reference,
++          'Week Start': t.weekStart,
++          'Week End': getWeekEnd(t.weekStart),
++          Hours: t.totalHours,
++          Status: t.status,
++        };
++      })
++      .sort((a, b) => a.Consultant.localeCompare(b.Consultant) || a['Week Start'].localeCompare(b['Week Start']));
++
++    if (rows.length === 0) {
++      toast.error('No timesheets found for the selected contracts');
++      return;
++    }
++
++    const ws = XLSX.utils.json_to_sheet(rows);
++    const wb = XLSX.utils.book_new();
++    XLSX.utils.book_append_sheet(wb, ws, 'Timesheet Hours');
++    const today = new Date().toISOString().split('T')[0];
++    XLSX.writeFile(wb, `timesheet-hours-${today}.xlsx`);
++    toast.success(`Downloaded ${rows.length} timesheet${rows.length !== 1 ? 's' : ''}`);
++  };
++
+   return (
+     <div>
+       <HeaderSelectionBar count={selectedIds.length} onClearSelection={() => setSelectedIds([])} entityLabel="timesheets"
+@@ -477,7 +519,22 @@ export default function TimesheetsPage() {
+       )}
+       {viewMode === 'account' && <GroupedByAccountView timesheets={filtered} onOpen={openForm} />}
+       {viewMode === 'timeline' && <MonthlyTimelineView timesheets={filtered} onOpen={openForm} />}
+-      {viewMode === 'consultant' && <ByConsultantView timesheets={filtered} onOpen={openForm} />}
++      {viewMode === 'consultant' && <ByConsultantView timesheets={filtered} onOpen={openForm} selectedContractIds={selectedContractIds} onSelectionChange={setSelectedContractIds} />}
++
++      {/* Floating action bar for consultant-view contract selection */}
++      {viewMode === 'consultant' && selectedContractIds.size > 0 && (
++        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full border bg-card shadow-lg px-4 py-2">
++          <span className="text-sm font-medium">
++            {selectedContractIds.size} contract{selectedContractIds.size !== 1 ? 's' : ''} selected
++          </span>
++          <Button size="sm" onClick={handleDownloadSelectedContracts}>
++            <Download className="h-4 w-4 mr-1" /> Download
++          </Button>
++          <Button size="sm" variant="ghost" onClick={() => setSelectedContractIds(new Set())}>
++            <X className="h-4 w-4" />
++          </Button>
++        </div>
++      )}
+ 
+       {/* ===== TIMESHEET DETAIL SHEET ===== */}
+       <Sheet open={!!selected} onOpenChange={open => { if (!open) closeForm(); }}>

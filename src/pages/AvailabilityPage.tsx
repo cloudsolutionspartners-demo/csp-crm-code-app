@@ -1,329 +1,416 @@
 import * as React from 'react';
 import { useState, useMemo } from 'react';
-import { PageHeader, StatusBadge } from '../components/Shared';
-import { Sheet, Dialog, ToggleGroup, ToggleGroupItem, Checkbox, useToast, HeaderSelectionBar } from '../components/Layout';
-import { cn, formatDate } from '../lib/utils';
+import { PageHeader, StatusBadge, Spinner, PageLoading } from '../components/Shared';
+import { Sheet, ToggleGroup, ToggleGroupItem, Checkbox, useToast, HeaderSelectionBar } from '../components/Layout';
+import { TextField, LookupField, SelectField } from '../components/FormFields';
 import {
-  ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, DateRangeFilterPopover,
-  ClearColumnFiltersButton,
-  getTextFilter, getMultiFilter, getDateFilter,
-  setTextFilter, setMultiFilter, setDateFilter,
+  ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, ClearColumnFiltersButton,
+  getTextFilter, getMultiFilter, setTextFilter, setMultiFilter,
   matchDateRange,
 } from '../components/ColumnFilters';
-import { availabilitySlots, contacts, onboardingCandidates } from '../data/mock-data';
-import { FileText, User, Mail, Phone, Briefcase, MapPin, DollarSign, CalendarIcon } from '../components/Icons';
-import type { AvailabilitySlot, SlotStatus, Contact, OnboardingCandidate } from '../types/crm';
+import { SearchPill, SinglePill, FilterChip, DatePill, dateRangeFor, relativeDateLabel, type RelativeDateValue } from '../components/FilterPills';
+import { Plus } from '../components/Icons';
+import { cn, formatDateTime } from '../lib/utils';
+import { fetchSlots, saveSlot } from '../services/availabilitySlotService';
+import type { SlotRecord } from '../services/availabilitySlotService';
+import { fetchCandidates } from '../services/candidateService';
+import type { CandidateRecord } from '../services/candidateService';
+import { fetchContacts } from '../services/contactService';
+import { useDataverse } from '../services/useDataverse';
+import { availabilitySlots as mockSlots, contacts as mockContacts } from '../data/mock-data';
 
-const statusOptions: SlotStatus[] = ['Available', 'Fully Booked', 'Expired'];
-const dayOptions = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+/* -- Constants ----------------------------------------------------------- */
 
-function ordinalSuffix(n: number) {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+const statusOptions = ['Active', 'Inactive'] as const;
+
+/* -- Helper functions ---------------------------------------------------- */
+
+function getCandidateName(candidates: CandidateRecord[], candidateId: string): string {
+  if (!candidateId) return '\u2014';
+  const c = candidates.find(x => x.id === candidateId);
+  return c ? `${c.firstName} ${c.lastName}` : '\u2014';
 }
 
-function slotActualDate(weekStart: string, dayOfWeek: string): string {
-  const ws = new Date(weekStart);
-  if (isNaN(ws.getTime())) return '';
-  const dayIdx = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].indexOf(dayOfWeek);
-  if (dayIdx < 0) return '';
-  const d = new Date(ws);
-  d.setDate(d.getDate() + dayIdx);
-  return `${dayOfWeek}, ${ordinalSuffix(d.getDate())}`;
+function getInterviewerName(contacts: any[], interviewerId: string): string {
+  if (!interviewerId) return '\u2014';
+  const c = contacts.find((x: any) => x.id === interviewerId);
+  return c ? `${c.firstName} ${c.lastName}` : '\u2014';
 }
 
-function slotFullDate(weekStart: string, dayOfWeek: string): string {
-  const ws = new Date(weekStart);
-  if (isNaN(ws.getTime())) return '';
-  const dayIdx = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].indexOf(dayOfWeek);
-  if (dayIdx < 0) return '';
-  const d = new Date(ws);
-  d.setDate(d.getDate() + dayIdx);
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  return `${dayOfWeek}, ${ordinalSuffix(d.getDate())} ${months[d.getMonth()]} ${d.getFullYear()}`;
-}
+/* -- Page Component ------------------------------------------------------ */
 
-function DetailRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="csp-detail-row">
-      <span className="csp-text-muted">{icon}</span>
-      <div>
-        <span className="csp-filter-group-label">{label}</span>
-        <p className="csp-text-sm">{value}</p>
-      </div>
-    </div>
-  );
-}
+import { useConfirm } from '../components/ConfirmDialog';
 
 export default function AvailabilityPage() {
   const { toast } = useToast();
-  const [statusFilter, setStatusFilter] = useState<string>('Available');
-  const [dayFilter, setDayFilter] = useState<string>('');
+  const confirm = useConfirm();
+
+  /* -- Data fetching ----------------------------------------------------- */
+
+  const { data: slots, loading: slotsLoading, refetch, isLive } = useDataverse(fetchSlots, mockSlots as any[]);
+  const { data: candidates, loading: candidatesLoading } = useDataverse(fetchCandidates, []);
+  const { data: contacts, loading: contactsLoading } = useDataverse(fetchContacts, mockContacts as any[]);
+
+  /* -- Filter state ------------------------------------------------------ */
+
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter2] = useState<RelativeDateValue>({ type: 'all' });
   const [colFilters, setColFilters] = useState<ColumnFilters>({});
-  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
+
+  /* -- Selection state --------------------------------------------------- */
+
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [interviewerDialogData, setInterviewerDialogData] = useState<Contact | null>(null);
-  const [candidateDialogData, setCandidateDialogData] = useState<OnboardingCandidate | null>(null);
-  const [cvDialogOpen, setCvDialogOpen] = useState(false);
+
+  /* -- Sheet / form state ------------------------------------------------ */
+
+  const [selectedSlot, setSelectedSlot] = useState<SlotRecord | null>(null);
+  const [isNew, setIsNew] = useState(false);
+  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  /* -- Counts ------------------------------------------------------------ */
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    statusOptions.forEach(s => { counts[s] = availabilitySlots.filter(sl => sl.status === s).length; });
+    statusOptions.forEach(s => { counts[s] = slots.filter((sl: any) => sl.status === s).length; });
     return counts;
-  }, []);
+  }, [slots]);
 
-  const dayCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    dayOptions.forEach(d => { counts[d] = availabilitySlots.filter(sl => sl.dayOfWeek === d).length; });
-    return counts;
-  }, []);
-
-  const getInterviewerForSlot = (slot: AvailabilitySlot): Contact | undefined => {
-    if (!slot.interviewerId) return undefined;
-    return contacts.find(c => c.id === slot.interviewerId);
-  };
-
-  const getCandidateForSlot = (slot: AvailabilitySlot): OnboardingCandidate | undefined => {
-    return onboardingCandidates.find(c => c.confirmedSlotId === slot.id);
-  };
-
-  const getInterviewerCount = (slot: AvailabilitySlot): number => {
-    return slot.interviewerId ? 1 : 0;
-  };
+  /* -- Filtering --------------------------------------------------------- */
 
   const filtered = useMemo(() => {
-    return availabilitySlots.filter(s => {
+    return slots.filter((s: any) => {
       if (statusFilter && s.status !== statusFilter) return false;
-      if (dayFilter && s.dayOfWeek !== dayFilter) return false;
-      const dayCol = getMultiFilter(colFilters, 'day');
-      if (dayCol.length > 0 && !dayCol.includes(s.dayOfWeek)) return false;
-      const start = getTextFilter(colFilters, 'start');
-      if (start && !s.startTime.includes(start)) return false;
-      const end = getTextFilter(colFilters, 'end');
-      if (end && !s.endTime.includes(end)) return false;
-      const weekStart = getDateFilter(colFilters, 'weekStart');
-      if (!matchDateRange(s.weekStart, weekStart.from, weekStart.to)) return false;
-      const weekEnd = getDateFilter(colFilters, 'weekEnd');
-      if (!matchDateRange(s.weekEnd, weekEnd.from, weekEnd.to)) return false;
-      const teams = getTextFilter(colFilters, 'teams');
-      if (teams && !s.teamsLink.toLowerCase().includes(teams.toLowerCase())) return false;
+      if (searchTerm) {
+        const q = searchTerm.toLowerCase();
+        const cand = candidates.find((c: any) => c.id === s.candidateId);
+        const candName = cand ? `${(cand as any).firstName} ${(cand as any).lastName}`.toLowerCase() : '';
+        const interviewer = contacts.find((c: any) => c.id === s.interviewerId);
+        const intName = interviewer ? `${(interviewer as any).firstName} ${(interviewer as any).lastName}`.toLowerCase() : '';
+        if (!candName.includes(q) && !intName.includes(q)) return false;
+      }
+      if (dateFilter.type !== 'all') {
+        const r = dateRangeFor(dateFilter);
+        const d = (s.dateTime || s.date || '').slice(0, 10);
+        if (!matchDateRange(d, r.from, r.to)) return false;
+      }
+
+      const slotIdFilter = getTextFilter(colFilters, 'slotId');
+      if (slotIdFilter && !(s.slotId || '').toLowerCase().includes(slotIdFilter.toLowerCase())) return false;
+
+      const teamsFilter = getTextFilter(colFilters, 'teams');
+      if (teamsFilter && !(s.teamsLink || '').toLowerCase().includes(teamsFilter.toLowerCase())) return false;
+
       const statusCol = getMultiFilter(colFilters, 'status');
       if (statusCol.length > 0 && !statusCol.includes(s.status)) return false;
+
       return true;
     });
-  }, [statusFilter, dayFilter, colFilters]);
+  }, [slots, statusFilter, searchTerm, dateFilter, candidates, contacts, colFilters]);
 
-  const filteredIds = filtered.map(s => s.id);
+  const hasActiveFilters = !!searchTerm || !!statusFilter || dateFilter.type !== 'all';
+
+  /* -- Selection helpers ------------------------------------------------- */
+
+  const filteredIds = filtered.map((s: any) => s.id);
   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
   const toggleAll = (checked: boolean) => setSelectedIds(checked ? filteredIds : []);
-  const toggleOne = (id: string, checked: boolean) => setSelectedIds(checked ? [...selectedIds, id] : selectedIds.filter(x => x !== id));
+  const toggleOne = (id: string, checked: boolean) =>
+    setSelectedIds(checked ? [...selectedIds, id] : selectedIds.filter(x => x !== id));
 
-  const openSlot = (slot: AvailabilitySlot) => setSelectedSlot(slot);
-  const closeSlot = () => setSelectedSlot(null);
+  /* -- Lookup options for form ------------------------------------------- */
 
-  const slotInterviewers = useMemo(() => {
-    if (!selectedSlot) return [];
-    const interviewer = getInterviewerForSlot(selectedSlot);
-    if (!interviewer) return [];
-    const candidate = getCandidateForSlot(selectedSlot);
-    return [{ interviewer, candidate }];
-  }, [selectedSlot]);
+  const candidateLookupOptions = useMemo(
+    () => candidates.map((c: any) => ({ value: c.id, label: `${c.firstName} ${c.lastName}` })),
+    [candidates],
+  );
+
+  const interviewerLookupOptions = useMemo(
+    () => contacts
+      .filter((c: any) => c.isInterviewer === true)
+      .map((c: any) => ({ value: c.id, label: `${c.firstName} ${c.lastName}` })),
+    [contacts],
+  );
+
+  /* -- Form helpers ------------------------------------------------------ */
+
+  const openForm = (slot: any) => {
+    setIsNew(false);
+    setSelectedSlot(slot);
+    setFormData({
+      candidateId: slot.candidateId || '',
+      dateTime: slot.dateTime || '',
+      teamsLink: slot.teamsLink || '',
+      interviewerId: slot.interviewerId || '',
+      status: slot.status || 'Active',
+    });
+  };
+
+  const openNewForm = () => {
+    setIsNew(true);
+    setSelectedSlot({} as SlotRecord);
+    setFormData({
+      candidateId: '',
+      dateTime: '',
+      teamsLink: '',
+      interviewerId: '',
+      status: 'Active',
+    });
+  };
+
+  const closeForm = () => {
+    setSelectedSlot(null);
+    setIsNew(false);
+    setFormData({});
+    setValidationErrors([]);
+  };
+
+  const updateField = (key: string, value: any) =>
+    setFormData(prev => ({ ...prev, [key]: value }));
+
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  const saveForm = async () => {
+    if (isSaving) return;
+    // Bug #2: Validate required fields before save
+    const errors: string[] = [];
+    if (!formData.candidateId) errors.push('Candidate is required');
+    if (!formData.dateTime) errors.push('Day / Time is required');
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      toast.error(errors.join('. '));
+      return;
+    }
+    setValidationErrors([]);
+    setIsSaving(true);
+    try {
+      await saveSlot(formData, isNew ? undefined : selectedSlot?.id);
+      toast.success(isNew ? 'Slot created' : 'Slot saved');
+      closeForm();
+      await refetch();
+    } catch (err: any) {
+      console.error('Save failed:', err);
+      toast.error(err?.message || 'Save failed \u2014 check console for details');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /* -- Loading state ----------------------------------------------------- */
+
+  if (slotsLoading && slots.length === 0) {
+    return <PageLoading message="Loading availability slots..." />;
+  }
+
+  /* -- Render ------------------------------------------------------------ */
 
   return (
     <div>
-      <HeaderSelectionBar count={selectedIds.length} onClearSelection={() => setSelectedIds([])} entityLabel="slots" />
-      <PageHeader title="Availability Slots" subtitle={`${filtered.length} of ${availabilitySlots.length} slots`}
-        action={<ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />} />
+      <HeaderSelectionBar
+        count={selectedIds.length}
+        onClearSelection={() => setSelectedIds([])}
+        entityLabel="slots"
+        onDelete={async () => {
+          const count = selectedIds.length;
+          const ok = await confirm({ title: 'Delete slot(s)', description: `Are you sure you want to delete ${count} selected slot(s)? This action cannot be undone.` });
+          if (!ok) return;
+          try {
+            const { deleteRecord } = await import('../services/dataverseService');
+            for (const id of selectedIds) await deleteRecord('csp_availabilityslotses', id);
+            toast.success(`${count} slot(s) deleted`);
+            setSelectedIds([]);
+            await refetch();
+          } catch (err: any) { toast.error('Delete failed'); }
+        }}
+      />
 
-      <div className="csp-filter-bar">
-        <div className="csp-filter-group">
-          <span className="csp-filter-group-label">Status</span>
-          <ToggleGroup value={statusFilter} onChange={setStatusFilter}>
-            <ToggleGroupItem value="">All</ToggleGroupItem>
-            {statusOptions.map(s => (
-              <ToggleGroupItem key={s} value={s}>{s}<span className="csp-toggle-count">{statusCounts[s]}</span></ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+      <PageHeader
+        title="Availability Slots"
+        subtitle={`${filtered.length} of ${slots.length} slots`}
+        action={
+          <div className="csp-flex-gap-2">
+            <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
+            <button className="csp-btn csp-btn-primary" onClick={openNewForm}>
+              <Plus className="csp-icon-inline" />Add Slot
+            </button>
+          </div>
+        }
+      />
+
+      {/* -- Filter pills ------------------------------------------------- */}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search candidate or interviewer..." />
+          <SinglePill label="Status" value={statusFilter} onChange={setStatusFilter}
+            options={statusOptions.map(s => ({ value: s, label: s, count: statusCounts[s] || 0 }))} />
+          <DatePill label="Date" value={dateFilter} onChange={setDateFilter2} dates={slots.map((s: any) => (s.dateTime || s.date || '').slice(0, 10)).filter(Boolean) as string[]} />
         </div>
-        <div className="csp-filter-group">
-          <span className="csp-filter-group-label">Day</span>
-          <ToggleGroup value={dayFilter} onChange={setDayFilter}>
-            <ToggleGroupItem value="">All</ToggleGroupItem>
-            {dayOptions.map(d => (
-              <ToggleGroupItem key={d} value={d}>{d.slice(0, 3)}<span className="csp-toggle-count">{dayCounts[d]}</span></ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </div>
+        {hasActiveFilters && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11 }}>
+            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
+            {statusFilter && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} />}
+            {dateFilter.type !== 'all' && <FilterChip label={`Date: ${relativeDateLabel(dateFilter)}`} onRemove={() => setDateFilter2({ type: 'all' })} />}
+            <button className="csp-btn csp-btn-outline csp-btn-sm" onClick={() => { setSearchTerm(''); setStatusFilter(''); setDateFilter2({ type: 'all' }); }}>Clear all</button>
+          </div>
+        )}
       </div>
+
+      {/* -- Table -------------------------------------------------------- */}
 
       <div className="csp-table-wrapper">
         <table className="csp-table">
           <thead>
             <tr>
-              <th className="csp-th-checkbox"><Checkbox checked={allSelected} onChange={toggleAll} /></th>
-              <th>Day <MultiSelectFilterPopover label="Day" options={dayOptions} selected={getMultiFilter(colFilters, 'day')} onChange={v => setMultiFilter(setColFilters, 'day', v)} /></th>
-              <th>Start <TextFilterPopover label="Start" value={getTextFilter(colFilters, 'start')} onChange={v => setTextFilter(setColFilters, 'start', v)} /></th>
-              <th>End <TextFilterPopover label="End" value={getTextFilter(colFilters, 'end')} onChange={v => setTextFilter(setColFilters, 'end', v)} /></th>
-              <th>Week Start <DateRangeFilterPopover label="Week Start" from={getDateFilter(colFilters, 'weekStart').from} to={getDateFilter(colFilters, 'weekStart').to} onChange={(from, to) => setDateFilter(setColFilters, 'weekStart', from, to)} /></th>
-              <th>Week End <DateRangeFilterPopover label="Week End" from={getDateFilter(colFilters, 'weekEnd').from} to={getDateFilter(colFilters, 'weekEnd').to} onChange={(from, to) => setDateFilter(setColFilters, 'weekEnd', from, to)} /></th>
-              <th>Teams Link <TextFilterPopover label="Teams Link" value={getTextFilter(colFilters, 'teams')} onChange={v => setTextFilter(setColFilters, 'teams', v)} /></th>
-              <th>Status <MultiSelectFilterPopover label="Status" options={statusOptions} selected={getMultiFilter(colFilters, 'status')} onChange={v => setMultiFilter(setColFilters, 'status', v)} /></th>
-              <th>Interviewers</th>
+              <th className="csp-th-checkbox">
+                <Checkbox checked={allSelected} onChange={toggleAll} />
+              </th>
+              <th>
+                Slot ID{' '}
+                <TextFilterPopover
+                  label="Slot ID"
+                  value={getTextFilter(colFilters, 'slotId')}
+                  onChange={v => setTextFilter(setColFilters, 'slotId', v)}
+                />
+              </th>
+              <th>Candidate</th>
+              <th>Day / Time</th>
+              <th>
+                Teams Link{' '}
+                <TextFilterPopover
+                  label="Teams Link"
+                  value={getTextFilter(colFilters, 'teams')}
+                  onChange={v => setTextFilter(setColFilters, 'teams', v)}
+                />
+              </th>
+              <th>Interviewer</th>
+              <th>
+                Status{' '}
+                <MultiSelectFilterPopover
+                  label="Status"
+                  options={[...statusOptions]}
+                  selected={getMultiFilter(colFilters, 'status')}
+                  onChange={v => setMultiFilter(setColFilters, 'status', v)}
+                />
+              </th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={9} className="csp-td-empty">No slots match the current filters.</td></tr>
-            ) : filtered.map(slot => (
-              <tr key={slot.id} className="csp-tr-clickable" onClick={() => openSlot(slot)}>
-                <td onClick={e => e.stopPropagation()}><Checkbox checked={selectedIds.includes(slot.id)} onChange={c => toggleOne(slot.id, c)} /></td>
-                <td>{slotActualDate(slot.weekStart, slot.dayOfWeek)}</td>
-                <td>{slot.startTime}</td>
-                <td>{slot.endTime}</td>
-                <td>{formatDate(slot.weekStart)}</td>
-                <td>{formatDate(slot.weekEnd)}</td>
-                <td className="csp-td-truncate" title={slot.teamsLink}>{slot.teamsLink ? slot.teamsLink.substring(0, 35) + '...' : '\u2014'}</td>
-                <td><StatusBadge status={slot.status} /></td>
-                <td><span className="csp-badge">{getInterviewerCount(slot)}</span></td>
+              <tr>
+                <td colSpan={7} className="csp-td-empty">
+                  No slots match the current filters.
+                </td>
               </tr>
-            ))}
+            ) : (
+              filtered.map((slot: any) => (
+                <tr
+                  key={slot.id}
+                  className="csp-tr-clickable"
+                  onClick={() => openForm(slot)}
+                >
+                  <td className="csp-td-check" onClick={e => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selectedIds.includes(slot.id)}
+                      onChange={c => toggleOne(slot.id, c)}
+                    />
+                  </td>
+                  <td className="csp-td-mono">{slot.slotId || (slot.id ? `SLOT-${String(slot.id).substring(0, 8).toUpperCase()}` : null) ||'\u2014'}</td>
+                  <td>{(() => {
+                    const real = getCandidateName(candidates as CandidateRecord[], slot.candidateId);
+                    return real && real !== '—' ? real : (slot.candidateName || '—');
+                  })()}</td>
+                  <td>{slot.dateTime ? formatDateTime(slot.dateTime) : '\u2014'}</td>
+                  <td className="csp-td-truncate" title={slot.teamsLink}>
+                    {slot.teamsLink ? slot.teamsLink.substring(0, 35) + '...' : '\u2014'}
+                  </td>
+                  <td>{slot.interviewerName || getInterviewerName(contacts, slot.interviewerId)}</td>
+                  <td><StatusBadge status={slot.status} /></td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      <Sheet open={!!selectedSlot} onClose={closeSlot}>
+      {/* -- Sheet side panel --------------------------------------------- */}
+
+      <Sheet open={!!selectedSlot} onClose={closeForm}>
         {selectedSlot && (
           <>
             <div className="csp-sheet-header">
-              <div className="csp-sheet-title">Slot Details</div>
-              <StatusBadge status={selectedSlot.status} />
-            </div>
-            <div className="csp-slot-details">
-              <DetailRow icon={<CalendarIcon className="csp-icon-sm" />} label="Date" value={slotFullDate(selectedSlot.weekStart, selectedSlot.dayOfWeek)} />
-              <DetailRow icon={<CalendarIcon className="csp-icon-sm" />} label="Time" value={`${selectedSlot.startTime} - ${selectedSlot.endTime}`} />
-              <DetailRow icon={<CalendarIcon className="csp-icon-sm" />} label="Week Range" value={`${formatDate(selectedSlot.weekStart)} - ${formatDate(selectedSlot.weekEnd)}`} />
-              {selectedSlot.teamsLink && (
-                <div className="csp-detail-row">
-                  <span className="csp-text-muted"><Briefcase className="csp-icon-sm" /></span>
-                  <div>
-                    <span className="csp-filter-group-label">Teams Link</span>
-                    <p className="csp-text-sm"><a href={selectedSlot.teamsLink} target="_blank" rel="noopener noreferrer" className="csp-link">{selectedSlot.teamsLink}</a></p>
-                  </div>
-                </div>
-              )}
+              <div className="csp-sheet-title">
+                {isNew ? 'New Slot' : `Slot ${(selectedSlot as any).slotId || ''}`}
+                {!isNew && <StatusBadge status={formData.status} />}
+              </div>
             </div>
 
-            <div className="csp-mt-4">
-              <h3 className="csp-section-title">Assigned Interviewers</h3>
-              {slotInterviewers.length === 0 ? (
-                <p className="csp-text-muted csp-text-sm">No interviewers assigned to this slot.</p>
-              ) : (
-                <div className="csp-interviewer-list">
-                  {slotInterviewers.map(({ interviewer, candidate }) => (
-                    <div key={interviewer.id} className="csp-interviewer-card">
-                      <div className="csp-interviewer-card-header">
-                        <button className="csp-btn csp-btn-ghost csp-text-bold" onClick={() => setInterviewerDialogData(interviewer)}>
-                          <User className="csp-icon-inline" />{interviewer.firstName} {interviewer.lastName}
-                        </button>
-                        <span className="csp-text-muted csp-text-xs">{interviewer.jobRole || ''}</span>
-                      </div>
-                      {candidate ? (
-                        <div className="csp-interviewer-candidate">
-                          <span className="csp-text-xs csp-text-muted">Linked candidate:</span>
-                          <button className="csp-btn csp-btn-ghost csp-btn-sm" onClick={() => setCandidateDialogData(candidate)}>
-                            {candidate.firstName} {candidate.lastName}
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="csp-text-xs csp-text-muted">No candidate linked</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+            {validationErrors.length > 0 && (
+              <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 6, backgroundColor: 'hsl(0, 84%, 60%, 0.1)', border: '1px solid hsl(0, 84%, 60%, 0.3)', fontSize: '0.8125rem', color: 'hsl(0, 84%, 60%)' }}>
+                {validationErrors.map((e, i) => <div key={i}>{e}</div>)}
+              </div>
+            )}
+            <div className="csp-form-grid-2">
+              <LookupField
+                label="Candidate"
+                value={formData.candidateId}
+                onChange={v => { updateField('candidateId', v); setValidationErrors([]); }}
+                options={candidateLookupOptions}
+                placeholder="Select candidate"
+                required
+              />
+              <TextField
+                label="Day / Time"
+                value={formData.dateTime}
+                onChange={v => { updateField('dateTime', v); setValidationErrors([]); }}
+                type="datetime-local"
+                min="2020-01-01T00:00"
+                max="2099-12-31T23:59"
+                required
+              />
+              <TextField
+                label="Teams Link"
+                value={formData.teamsLink}
+                onChange={v => updateField('teamsLink', v)}
+                placeholder="https://teams.microsoft.com/..."
+              />
+              <LookupField
+                label="Interviewer"
+                value={formData.interviewerId}
+                onChange={v => updateField('interviewerId', v)}
+                options={interviewerLookupOptions}
+                placeholder="Select interviewer"
+              />
+              <TextField
+                label="Status"
+                value={formData.status}
+                onChange={() => {}}
+                readOnly
+              />
             </div>
 
             <div className="csp-form-footer">
-              <button className="csp-btn csp-btn-outline" onClick={closeSlot}>Close</button>
+              <button className="csp-btn csp-btn-outline" onClick={closeForm}>
+                Close
+              </button>
+              <button
+                className={cn('csp-btn csp-btn-primary', isSaving && 'csp-btn-saving')}
+                disabled={isSaving || (!formData.candidateId && !formData.dateTime)}
+                onClick={saveForm}
+              >
+                {isSaving ? (
+                  <>
+                    <Spinner size="sm" /> Saving...
+                  </>
+                ) : (
+                  'Save'
+                )}
+              </button>
             </div>
           </>
         )}
       </Sheet>
-
-      <Dialog open={!!interviewerDialogData} onClose={() => setInterviewerDialogData(null)} title="Interviewer Details" maxWidth="480px">
-        {interviewerDialogData && (
-          <div className="csp-dialog-details">
-            <DetailRow icon={<Briefcase className="csp-icon-sm" />} label="Role" value={interviewerDialogData.jobRole || '\u2014'} />
-            <DetailRow icon={<Mail className="csp-icon-sm" />} label="Email" value={interviewerDialogData.email} />
-            <DetailRow icon={<Phone className="csp-icon-sm" />} label="Phone" value={interviewerDialogData.phone || '\u2014'} />
-            <DetailRow icon={<User className="csp-icon-sm" />} label="Type" value={interviewerDialogData.contactType} />
-            <DetailRow icon={<MapPin className="csp-icon-sm" />} label="Country" value={interviewerDialogData.country || '\u2014'} />
-            {interviewerDialogData.skillset && interviewerDialogData.skillset.length > 0 && (
-              <div className="csp-detail-row">
-                <span className="csp-text-muted"><Briefcase className="csp-icon-sm" /></span>
-                <div>
-                  <span className="csp-filter-group-label">Skills</span>
-                  <div className="csp-skill-badges">
-                    {interviewerDialogData.skillset.map(skill => (
-                      <span key={skill} className="csp-badge">{skill}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        <div className="csp-dialog-footer">
-          <button className="csp-btn csp-btn-outline" onClick={() => setInterviewerDialogData(null)}>Close</button>
-        </div>
-      </Dialog>
-
-      <Dialog open={!!candidateDialogData && !cvDialogOpen} onClose={() => setCandidateDialogData(null)} title="Candidate Details" maxWidth="480px">
-        {candidateDialogData && (
-          <div className="csp-dialog-details">
-            <DetailRow icon={<Mail className="csp-icon-sm" />} label="Email" value={candidateDialogData.email} />
-            <DetailRow icon={<Phone className="csp-icon-sm" />} label="Phone" value={candidateDialogData.phone || '\u2014'} />
-            <DetailRow icon={<Briefcase className="csp-icon-sm" />} label="Path" value={candidateDialogData.path} />
-            <DetailRow icon={<DollarSign className="csp-icon-sm" />} label="Rate" value={`\u20AC${candidateDialogData.hourlyRateEur}/h`} />
-            <DetailRow icon={<MapPin className="csp-icon-sm" />} label="B2B Entity" value={candidateDialogData.b2bEntityName || '\u2014'} />
-            <div className="csp-detail-row">
-              <span className="csp-text-muted"><FileText className="csp-icon-sm" /></span>
-              <div>
-                <span className="csp-filter-group-label">CV</span>
-                <button className="csp-btn csp-btn-ghost csp-btn-sm" onClick={() => setCvDialogOpen(true)}>
-                  {candidateDialogData.cvFileName}
-                </button>
-              </div>
-            </div>
-            <DetailRow icon={<CalendarIcon className="csp-icon-sm" />} label="Applied Date" value={formatDate(candidateDialogData.appliedDate)} />
-            <div className="csp-detail-row">
-              <span className="csp-text-muted"><User className="csp-icon-sm" /></span>
-              <div>
-                <span className="csp-filter-group-label">Status</span>
-                <StatusBadge status={candidateDialogData.status} />
-              </div>
-            </div>
-            {candidateDialogData.reviewerNotes && (
-              <DetailRow icon={<FileText className="csp-icon-sm" />} label="Notes" value={candidateDialogData.reviewerNotes} />
-            )}
-          </div>
-        )}
-        <div className="csp-dialog-footer">
-          <button className="csp-btn csp-btn-outline" onClick={() => setCandidateDialogData(null)}>Close</button>
-        </div>
-      </Dialog>
-
-      <Dialog open={cvDialogOpen} onClose={() => setCvDialogOpen(false)} title="CV Preview" maxWidth="500px">
-        <div className="csp-cv-preview">
-          <FileText className="csp-cv-preview-icon" />
-          <p className="csp-text-bold">{candidateDialogData?.cvFileName || 'No file'}</p>
-          <p className="csp-text-muted csp-text-sm">Simulated CV preview. The actual document would be rendered here.</p>
-        </div>
-        <div className="csp-dialog-footer">
-          <button className="csp-btn csp-btn-outline" onClick={() => setCvDialogOpen(false)}>Close</button>
-        </div>
-      </Dialog>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 {
   "appDisplayName": "CSP CRM",
   "description": "CSP CRM Application",
-  "environmentId": "86b4b5e9-f876-ef52-920a-6212c9189404",
+  "environmentId": "971f1ff8-c4ff-ee21-9ef9-04cfb6802053",
   "buildPath": "dist",
   "buildEntryPoint": "index.html",
   "logoPath": "Default",
@@ -16,9 +16,47 @@
       ],
       "authenticationType": "Oauth",
       "dataSets": {}
+    },
+    "5363fb9c-8fb2-4550-89e3-1273397f9aa1": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_office365",
+      "displayName": "Office 365 Outlook",
+      "dataSources": [
+        "office365"
+      ],
+      "dataSets": {}
+    },
+    "0d317d56-2151-47c1-a2c6-6f3e4307796c": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+      "displayName": "SharePoint",
+      "dataSources": [
+        "medialibrary"
+      ],
+      "dataSets": {
+        "https://cloudsolutionspartners.sharepoint.com/sites/CSPCRMPROD": {
+          "dataSources": {
+            "medialibrary": {
+              "tableName": "Media library"
+            }
+          }
+        }
+      }
     }
   },
-  "databaseReferences": {},
+  "databaseReferences": {
+    "default.cds": {
+      "dataSources": {
+        "invoices": {
+          "entitySetName": "csp_invoices",
+          "logicalName": "csp_invoice"
+        },
+        "expenses": {
+          "entitySetName": "csp_expenses",
+          "logicalName": "csp_expense"
+        }
+      },
+      "environmentVariableName": ""
+    }
+  },
   "version": "1.0",
-  "appId": "88e238f2-b683-4ab1-b20f-7c728ebfeb84"
+  "appId": "dce9be21-8f83-49bc-b0d5-0e84963d94a4"
 }

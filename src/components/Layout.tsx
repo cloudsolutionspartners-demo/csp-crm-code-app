@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, createContext, useContext, useCallback, useEffect } from 'react';
 import { cn } from '../lib/utils';
-import { CheckSquare, Power, PowerOff, Trash2, Download } from './Icons';
+import { CheckSquare, Power, PowerOff, Trash2, Download, Loader2 } from './Icons';
 
 // ===== Toast System =====
 interface Toast {
@@ -75,6 +75,10 @@ export function useHeaderActions() {
 interface SelectionActionBarProps {
   count: number;
   onClearSelection: () => void;
+  onActivate?: () => void;
+  onDeactivate?: () => void;
+  onDelete?: () => void;
+  onDownload?: () => void;
   entityLabel?: string;
   showActivate?: boolean;
   showDeactivate?: boolean;
@@ -84,35 +88,85 @@ interface SelectionActionBarProps {
 }
 
 export function SelectionActionBar({
-  count, onClearSelection, entityLabel = 'records',
+  count, onClearSelection, onActivate, onDeactivate, onDelete, onDownload,
+  entityLabel = 'records',
   showActivate = true, showDeactivate = true, showDelete = true, showDownload = true,
   extraActions,
 }: SelectionActionBarProps) {
   const { toast } = useToast();
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
+
   if (count === 0) return null;
+
+  const runAction = async (name: string, callback?: () => void | Promise<void>, fallbackToast?: string) => {
+    if (loadingAction) return; // prevent double-click / concurrent actions
+    setLoadingAction(name);
+    try {
+      if (callback) {
+        await callback();
+      } else if (fallbackToast) {
+        toast.success(fallbackToast);
+        onClearSelection();
+      }
+    } finally {
+      // Keep spinner visible briefly so user sees feedback
+      setTimeout(() => setLoadingAction(null), 400);
+    }
+  };
+
+  const isLoading = !!loadingAction;
+
   return (
     <div className="csp-selection-bar">
       <span className="csp-selection-count">
         <CheckSquare className="csp-icon-inline" />{count} selected
       </span>
       {showActivate && (
-        <button className="csp-btn csp-btn-outline csp-btn-sm" onClick={() => { toast.success(`${count} ${entityLabel} activated`); onClearSelection(); }}>
-          <Power className="csp-icon-inline" />Activate
+        <button
+          className="csp-btn csp-btn-outline csp-btn-sm csp-btn-activate"
+          disabled={isLoading}
+          onClick={() => runAction('activate', onActivate, `${count} ${entityLabel} activated`)}
+        >
+          {loadingAction === 'activate'
+            ? <Loader2 className="csp-icon-inline csp-animate-spin" />
+            : <Power className="csp-icon-inline" />}
+          {loadingAction === 'activate' ? 'Activating...' : 'Activate'}
         </button>
       )}
       {showDeactivate && (
-        <button className="csp-btn csp-btn-outline csp-btn-sm" onClick={() => { toast.success(`${count} ${entityLabel} deactivated`); onClearSelection(); }}>
-          <PowerOff className="csp-icon-inline" />Deactivate
+        <button
+          className="csp-btn csp-btn-outline csp-btn-sm csp-btn-deactivate"
+          disabled={isLoading}
+          onClick={() => runAction('deactivate', onDeactivate, `${count} ${entityLabel} deactivated`)}
+        >
+          {loadingAction === 'deactivate'
+            ? <Loader2 className="csp-icon-inline csp-animate-spin" />
+            : <PowerOff className="csp-icon-inline" />}
+          {loadingAction === 'deactivate' ? 'Deactivating...' : 'Deactivate'}
         </button>
       )}
       {showDelete && (
-        <button className="csp-btn csp-btn-destructive csp-btn-sm" onClick={() => { toast.success(`${count} ${entityLabel} deleted`); onClearSelection(); }}>
-          <Trash2 className="csp-icon-inline" />Delete
+        <button
+          className="csp-btn csp-btn-destructive csp-btn-sm"
+          disabled={isLoading}
+          onClick={() => runAction('delete', onDelete, `${count} ${entityLabel} deleted`)}
+        >
+          {loadingAction === 'delete'
+            ? <Loader2 className="csp-icon-inline csp-animate-spin" />
+            : <Trash2 className="csp-icon-inline" />}
+          {loadingAction === 'delete' ? 'Deleting...' : 'Delete'}
         </button>
       )}
       {showDownload && (
-        <button className="csp-btn csp-btn-outline csp-btn-sm" onClick={() => toast.success(`Downloading ${count} ${entityLabel} to Excel`)}>
-          <Download className="csp-icon-inline" />Download
+        <button
+          className="csp-btn csp-btn-outline csp-btn-sm"
+          disabled={isLoading}
+          onClick={() => runAction('download', onDownload, `Downloading ${count} ${entityLabel}`)}
+        >
+          {loadingAction === 'download'
+            ? <Loader2 className="csp-icon-inline csp-animate-spin" />
+            : <Download className="csp-icon-inline" />}
+          {loadingAction === 'download' ? 'Exporting...' : 'Download'}
         </button>
       )}
       {extraActions}
@@ -124,6 +178,10 @@ export function SelectionActionBar({
 interface HeaderSelectionBarProps {
   count: number;
   onClearSelection: () => void;
+  onActivate?: () => void;
+  onDeactivate?: () => void;
+  onDelete?: () => void;
+  onDownload?: () => void;
   entityLabel?: string;
   showActivate?: boolean;
   showDeactivate?: boolean;
@@ -184,19 +242,53 @@ interface SheetProps {
 
 export function Sheet({ open, onClose, children, title, width }: SheetProps) {
   if (!open) return null;
+  const effectiveWidth = width || '560px';
   return (
-    <div className="csp-sheet-overlay" onClick={onClose}>
+    <div className="csp-sheet-overlay">
       <div
         className="csp-sheet"
-        style={width ? { maxWidth: width } : undefined}
-        onClick={e => e.stopPropagation()}
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 'auto',
+          width: effectiveWidth,
+          maxWidth: '100vw',
+          height: '100vh',
+          maxHeight: '100vh',
+          backgroundColor: 'hsl(var(--background))',
+          boxShadow: '-4px 0 20px rgba(0,0,0,0.15)',
+          zIndex: 50,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
       >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          style={{
+            position: 'absolute',
+            right: 16,
+            top: 16,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 20,
+            color: 'hsl(var(--muted-foreground))',
+            lineHeight: 1,
+            padding: 4,
+            borderRadius: 4,
+            zIndex: 10,
+          }}
+        >{'×'}</button>
         {title && (
-          <div className="csp-sheet-header">
+          <div className="csp-sheet-header" style={{ flexShrink: 0 }}>
             <div className="csp-sheet-title">{title}</div>
           </div>
         )}
-        <div className="csp-sheet-body">
+        <div className="csp-sheet-body" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           {children}
         </div>
       </div>
@@ -214,17 +306,24 @@ interface DialogProps {
 }
 
 export function Dialog({ open, onClose, children, title, maxWidth }: DialogProps) {
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
-    <div className="csp-dialog-overlay" onClick={onClose}>
+    <div className="csp-dialog-overlay">
       <div
         className="csp-dialog"
         style={maxWidth ? { maxWidth } : undefined}
-        onClick={e => e.stopPropagation()}
       >
         {title && (
           <div className="csp-dialog-header">
             <h2 className="csp-dialog-title">{title}</h2>
+            <button className="csp-dialog-close" onClick={onClose} aria-label="Close">&times;</button>
           </div>
         )}
         <div className="csp-dialog-body">
@@ -273,7 +372,10 @@ interface ToggleGroupProps {
 
 export function ToggleGroup({ value, onChange, children }: ToggleGroupProps) {
   return (
-    <div className="csp-toggle-group">
+    <div
+      className="csp-toggle-group"
+      style={{ display: 'flex', alignItems: 'center', gap: 8, border: 'none', background: 'transparent', padding: 0 }}
+    >
       {React.Children.map(children, child => {
         if (React.isValidElement(child)) {
           const childProps = child.props as any;
@@ -298,8 +400,21 @@ interface ToggleGroupItemProps {
 export function ToggleGroupItem({ value, children, active, onClick }: ToggleGroupItemProps) {
   return (
     <button
-      className={cn('csp-toggle-item', active && 'csp-toggle-item-active')}
+      type="button"
       onClick={onClick}
+      style={{
+        backgroundColor: active ? 'hsl(var(--muted))' : 'transparent',
+        color: active ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+        fontSize: 13,
+        fontWeight: active ? 600 : 400,
+        padding: '4px 10px',
+        borderRadius: 6,
+        border: 'none',
+        cursor: 'pointer',
+        display: 'inline-flex',
+        alignItems: 'baseline',
+        gap: 4,
+      }}
     >
       {children}
     </button>

@@ -1,0 +1,61 @@
+﻿diff --git a/src/components/FilterPills.tsx b/src/components/FilterPills.tsx
+index b5976c4..7614490 100644
+--- a/src/components/FilterPills.tsx
++++ b/src/components/FilterPills.tsx
+@@ -260,7 +260,7 @@ function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
+       </div>
+ 
+       <div className="relative pt-1 pb-6">
+-        <div className="flex items-end gap-[2px] h-16 px-0.5">
++        <div className="flex items-end gap-[2px] h-16 px-0.5 pointer-events-none">
+           {counts.map((c, i) => {
+             const h = (c / maxCount) * 100;
+             const center = (i + 0.5) * bucketDays;
+@@ -277,7 +277,7 @@ function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
+         </div>
+ 
+         <SliderPrimitive.Root
+-          className="relative flex w-full touch-none select-none items-center mt-1"
++          className="relative z-10 flex w-full touch-none select-none items-center mt-3"
+           min={0} max={WINDOW_DAYS} step={1} minStepsBetweenThumbs={7}
+           value={[sliderFrom, sliderTo]}
+           onValueChange={(vals) => {
+@@ -288,8 +288,8 @@ function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
+           <SliderPrimitive.Track className="relative h-[2px] w-full grow overflow-hidden rounded-full bg-muted">
+             <SliderPrimitive.Range className="absolute h-full bg-foreground" />
+           </SliderPrimitive.Track>
+-          <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border-2 border-foreground bg-background shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+-          <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border-2 border-foreground bg-background shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
++          <SliderPrimitive.Thumb className="relative z-20 block h-4 w-4 rounded-full border-2 border-foreground bg-background shadow cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
++          <SliderPrimitive.Thumb className="relative z-20 block h-4 w-4 rounded-full border-2 border-foreground bg-background shadow cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+         </SliderPrimitive.Root>
+ 
+         <div className="absolute left-0 right-0 bottom-0 flex justify-between text-[10px] text-muted-foreground pointer-events-none">
+diff --git a/src/pages/DocumentsPage.tsx b/src/pages/DocumentsPage.tsx
+index 40c14d9..4391cf1 100644
+--- a/src/pages/DocumentsPage.tsx
++++ b/src/pages/DocumentsPage.tsx
+@@ -99,8 +99,8 @@ export default function DocumentsPage() {
+             options={documentTypeOptions.map(t => ({ value: t.value, label: t.label, count: documents.filter(d => d.documentType === t.value).length }))} />
+           <MultiPill label="Account" values={accountFilter} onChange={setAccountFilter}
+             options={accountOptions.map(a => ({ value: a.value, label: a.label, count: documents.filter(d => d.relatedAccountId === a.value).length }))} />
+-          <DatePill label="Issued Date" value={issuedDateFilter} onChange={setIssuedDateFilter} />
+-          <DatePill label="Expiration Date" value={expirationDateFilter} onChange={setExpirationDateFilter} />
++          <DatePill label="Issued Date" value={issuedDateFilter} onChange={setIssuedDateFilter} dates={documents.map(d => d.issuedDate).filter(Boolean) as string[]} />
++          <DatePill label="Expiration Date" value={expirationDateFilter} onChange={setExpirationDateFilter} dates={documents.map(d => d.expirationDate).filter(Boolean) as string[]} />
+         </div>
+         {hasActiveFilters && (
+           <div className="flex items-center gap-2 flex-wrap text-xs">
+diff --git a/src/pages/TimesheetsPage.tsx b/src/pages/TimesheetsPage.tsx
+index 0c71ef9..a47e544 100644
+--- a/src/pages/TimesheetsPage.tsx
++++ b/src/pages/TimesheetsPage.tsx
+@@ -483,7 +483,7 @@ export default function TimesheetsPage() {
+           <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search reference, consultant, contract..." />
+           <SinglePill label="Status" value={statusFilter} onChange={setStatusFilter}
+             options={tsStatuses.map(s => ({ value: s, label: s, count: allTimesheets.filter(t => t.status === s).length }))} />
+-          <DatePill label="Week Start" value={weekStartFilter} onChange={setWeekStartFilter} />
++          <DatePill label="Week Start" value={weekStartFilter} onChange={setWeekStartFilter} dates={allTimesheets.map(t => t.weekStart)} />
+           <div className="flex items-center gap-2 ml-auto">
+             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">View</span>
+             <ToggleGroup type="single" value={viewMode} onValueChange={v => v && setViewMode(v as any)} className="border rounded-md p-0.5">

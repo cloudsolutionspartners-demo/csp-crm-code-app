@@ -1,0 +1,2587 @@
+﻿diff --git a/src/components/FilterPills.tsx b/src/components/FilterPills.tsx
+new file mode 100644
+index 0000000..7614490
+--- /dev/null
++++ b/src/components/FilterPills.tsx
+@@ -0,0 +1,407 @@
++import { useState, useMemo } from 'react';
++import * as SliderPrimitive from '@radix-ui/react-slider';
++import { Button } from '@/components/ui/button';
++import { Input } from '@/components/ui/input';
++import { Checkbox } from '@/components/ui/checkbox';
++import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
++import { Search, ChevronDown, ArrowRight, X } from 'lucide-react';
++import { cn } from '@/lib/utils';
++
++export function SearchPill({ value, onChange, placeholder = 'Search...' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
++  return (
++    <div className="relative">
++      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
++      <Input
++        value={value}
++        onChange={e => onChange(e.target.value)}
++        placeholder={placeholder}
++        className="h-9 pl-9 w-64 rounded-full bg-muted/40 border-muted focus-visible:ring-1"
++      />
++    </div>
++  );
++}
++
++type Option = { value: string; label: string; count?: number };
++
++/** Single-select pill (with "All" option). */
++export function SinglePill({ label, value, onChange, options, allLabel = 'All' }:
++  { label: string; value: string; onChange: (v: string) => void; options: Option[]; allLabel?: string }) {
++  const [open, setOpen] = useState(false);
++  const selected = options.find(o => o.value === value);
++  const display = selected ? selected.label : allLabel;
++  const isActive = !!value;
++
++  return (
++    <Popover open={open} onOpenChange={setOpen}>
++      <PopoverTrigger asChild>
++        <Button variant="outline" className={cn(
++          "h-9 rounded-full gap-2 px-4 font-normal hover:bg-muted/60 hover:text-foreground",
++          isActive && "border-primary/40 bg-primary/5 hover:bg-primary/10"
++        )}>
++          <span className="text-muted-foreground text-sm">{label}</span>
++          <span className={cn("text-sm font-medium", isActive ? "text-primary" : "text-foreground")}>{display}</span>
++          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
++        </Button>
++      </PopoverTrigger>
++      <PopoverContent className="w-56 p-1" align="start">
++        <button
++          onClick={() => { onChange(''); setOpen(false); }}
++          className={cn("w-full text-left px-2 py-1.5 rounded text-sm hover:bg-muted", !value && "bg-muted font-medium")}
++        >
++          {allLabel}
++        </button>
++        <div className="max-h-64 overflow-y-auto">
++          {options.map(opt => (
++            <button
++              key={opt.value}
++              onClick={() => { onChange(opt.value); setOpen(false); }}
++              className={cn(
++                "w-full text-left px-2 py-1.5 rounded text-sm hover:bg-muted flex items-center justify-between",
++                value === opt.value && "bg-muted font-medium"
++              )}
++            >
++              <span>{opt.label}</span>
++              {opt.count !== undefined && <span className="text-xs text-muted-foreground">{opt.count}</span>}
++            </button>
++          ))}
++        </div>
++      </PopoverContent>
++    </Popover>
++  );
++}
++
++/** Multi-select pill. */
++export function MultiPill({ label, values, onChange, options, allLabel = 'All' }:
++  { label: string; values: string[]; onChange: (v: string[]) => void; options: Option[]; allLabel?: string }) {
++  const [open, setOpen] = useState(false);
++  const isActive = values.length > 0;
++  const display = values.length === 0
++    ? allLabel
++    : values.length === 1
++      ? (options.find(o => o.value === values[0])?.label ?? values[0])
++      : `${values.length} selected`;
++
++  const toggle = (v: string) => {
++    onChange(values.includes(v) ? values.filter(x => x !== v) : [...values, v]);
++  };
++
++  return (
++    <Popover open={open} onOpenChange={setOpen}>
++      <PopoverTrigger asChild>
++        <Button variant="outline" className={cn(
++          "h-9 rounded-full gap-2 px-4 font-normal hover:bg-muted/60 hover:text-foreground",
++          isActive && "border-primary/40 bg-primary/5 hover:bg-primary/10"
++        )}>
++          <span className="text-muted-foreground text-sm">{label}</span>
++          <span className={cn("text-sm font-medium", isActive ? "text-primary" : "text-foreground")}>{display}</span>
++          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
++        </Button>
++      </PopoverTrigger>
++      <PopoverContent className="w-56 p-2" align="start">
++        <div className="flex items-center justify-between mb-1 px-1">
++          <span className="text-xs font-medium text-muted-foreground">{label}</span>
++          {isActive && (
++            <Button variant="ghost" size="sm" className="h-5 text-xs px-1" onClick={() => onChange([])}>Clear</Button>
++          )}
++        </div>
++        <div className="max-h-64 overflow-y-auto space-y-0.5">
++          {options.map(opt => (
++            <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
++              <Checkbox checked={values.includes(opt.value)} onCheckedChange={() => toggle(opt.value)} className="h-3.5 w-3.5" />
++              <span className="flex-1">{opt.label}</span>
++              {opt.count !== undefined && <span className="text-xs text-muted-foreground">{opt.count}</span>}
++            </label>
++          ))}
++        </div>
++      </PopoverContent>
++    </Popover>
++  );
++}
++
++export function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
++  return (
++    <div className="inline-flex items-center gap-1.5 h-7 pl-3 pr-1 rounded-full bg-muted/60 border text-xs">
++      <span>{label}</span>
++      <button onClick={onRemove} className="h-5 w-5 inline-flex items-center justify-center rounded-full hover:bg-muted-foreground/20">
++        <X className="h-3 w-3" />
++      </button>
++    </div>
++  );
++}
++
++// ============================================================
++// DatePill ΓÇö relative date filter with histogram + range slider
++// ============================================================
++
++export type RelativeDateValue =
++  | { type: 'all' }
++  | { type: 'this_week' }
++  | { type: 'last_week' }
++  | { type: 'this_month' }
++  | { type: 'last_month' }
++  | { type: 'last_n_weeks'; n: number }
++  | { type: 'last_n_months'; n: number }
++  | { type: 'custom'; from: string; to: string };
++
++export const ALL_DATES: RelativeDateValue = { type: 'all' };
++
++const DAY_MS = 86_400_000;
++const WINDOW_DAYS = 365;
++
++function startOfDay(d: Date) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
++function fromISO(s: string) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
++function toISO(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
++
++export function dateRangeFor(v: RelativeDateValue): { from?: Date; to?: Date } {
++  const now = new Date();
++  const d0 = startOfDay(now);
++  switch (v.type) {
++    case 'all': return {};
++    case 'this_week': {
++      const day = d0.getDay();
++      const diff = day === 0 ? -6 : 1 - day;
++      const from = new Date(d0); from.setDate(d0.getDate() + diff);
++      const to = new Date(from); to.setDate(from.getDate() + 6);
++      return { from, to };
++    }
++    case 'last_week': {
++      const day = d0.getDay();
++      const diff = day === 0 ? -6 : 1 - day;
++      const thisMonday = new Date(d0); thisMonday.setDate(d0.getDate() + diff);
++      const from = new Date(thisMonday); from.setDate(thisMonday.getDate() - 7);
++      const to = new Date(from); to.setDate(from.getDate() + 6);
++      return { from, to };
++    }
++    case 'this_month': {
++      const from = new Date(now.getFullYear(), now.getMonth(), 1);
++      const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
++      return { from, to };
++    }
++    case 'last_month': {
++      const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
++      const to = new Date(now.getFullYear(), now.getMonth(), 0);
++      return { from, to };
++    }
++    case 'last_n_weeks': {
++      const to = new Date(d0);
++      const from = new Date(d0); from.setDate(d0.getDate() - 7 * v.n);
++      return { from, to };
++    }
++    case 'last_n_months': {
++      const to = new Date(d0);
++      const from = new Date(now.getFullYear(), now.getMonth() - v.n, now.getDate());
++      return { from, to };
++    }
++    case 'custom': {
++      return { from: fromISO(v.from), to: fromISO(v.to) };
++    }
++  }
++}
++
++const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
++function shortDate(d: Date) { return `${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}`; }
++
++export function relativeDateLabel(v: RelativeDateValue): string {
++  switch (v.type) {
++    case 'all': return 'All time';
++    case 'this_week': return 'This Week';
++    case 'last_week': return 'Last Week';
++    case 'this_month': return 'This Month';
++    case 'last_month': return 'Last Month';
++    case 'last_n_weeks': return `Last ${v.n} Weeks`;
++    case 'last_n_months': return `Last ${v.n} Months`;
++    case 'custom': return `${shortDate(fromISO(v.from))} ΓåÆ ${shortDate(fromISO(v.to))}`;
++  }
++}
++
++function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
++  dates: (string | Date)[]; fromDay: number; toDay: number;
++  onChange: (fromDay: number, toDay: number) => void;
++}) {
++  const today = useMemo(() => startOfDay(new Date()), []);
++  const BUCKETS = 52;
++  const bucketDays = WINDOW_DAYS / BUCKETS;
++
++  const counts = useMemo(() => {
++    const arr = new Array(BUCKETS).fill(0);
++    for (const raw of dates) {
++      const d = typeof raw === 'string'
++        ? fromISO(raw.length > 10 ? raw.slice(0, 10) : raw)
++        : startOfDay(raw);
++      const ageDays = Math.floor((today.getTime() - d.getTime()) / DAY_MS);
++      if (ageDays < 0 || ageDays > WINDOW_DAYS) continue;
++      const bucket = Math.min(BUCKETS - 1, Math.floor((WINDOW_DAYS - ageDays) / bucketDays));
++      arr[bucket]++;
++    }
++    return arr;
++  }, [dates, today]);
++
++  const maxCount = Math.max(1, ...counts);
++  const sliderFrom = WINDOW_DAYS - toDay;
++  const sliderTo = WINDOW_DAYS - fromDay;
++
++  const fromDate = new Date(today.getTime() - toDay * DAY_MS);
++  const toDate = new Date(today.getTime() - fromDay * DAY_MS);
++  const weeks = Math.max(1, Math.round((toDay - fromDay) / 7));
++  const recordsInRange = counts.reduce((sum, c, i) => {
++    const center = (i + 0.5) * bucketDays;
++    return center >= sliderFrom && center <= sliderTo ? sum + c : sum;
++  }, 0);
++
++  return (
++    <div className="space-y-2">
++      <div className="flex items-baseline gap-2">
++        <span className="text-base font-semibold text-foreground">
++          {shortDate(fromDate)} <ArrowRight className="inline h-3.5 w-3.5 -mt-0.5" /> {shortDate(toDate)}
++        </span>
++        <span className="text-xs text-muted-foreground">
++          {weeks} week{weeks === 1 ? '' : 's'} ┬╖ ~{recordsInRange} record{recordsInRange === 1 ? '' : 's'}
++        </span>
++      </div>
++
++      <div className="relative pt-1 pb-6">
++        <div className="flex items-end gap-[2px] h-16 px-0.5 pointer-events-none">
++          {counts.map((c, i) => {
++            const h = (c / maxCount) * 100;
++            const center = (i + 0.5) * bucketDays;
++            const inRange = center >= sliderFrom && center <= sliderTo;
++            return (
++              <div
++                key={i}
++                className={cn("flex-1 rounded-sm transition-colors",
++                  inRange ? "bg-foreground" : "bg-muted-foreground/25")}
++                style={{ height: `${Math.max(6, h)}%` }}
++              />
++            );
++          })}
++        </div>
++
++        <SliderPrimitive.Root
++          className="relative z-10 flex w-full touch-none select-none items-center mt-3"
++          min={0} max={WINDOW_DAYS} step={1} minStepsBetweenThumbs={7}
++          value={[sliderFrom, sliderTo]}
++          onValueChange={(vals) => {
++            const [a, b] = vals;
++            onChange(WINDOW_DAYS - b, WINDOW_DAYS - a);
++          }}
++        >
++          <SliderPrimitive.Track className="relative h-[2px] w-full grow overflow-hidden rounded-full bg-muted">
++            <SliderPrimitive.Range className="absolute h-full bg-foreground" />
++          </SliderPrimitive.Track>
++          <SliderPrimitive.Thumb className="relative z-20 block h-4 w-4 rounded-full border-2 border-foreground bg-background shadow cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
++          <SliderPrimitive.Thumb className="relative z-20 block h-4 w-4 rounded-full border-2 border-foreground bg-background shadow cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
++        </SliderPrimitive.Root>
++
++        <div className="absolute left-0 right-0 bottom-0 flex justify-between text-[10px] text-muted-foreground pointer-events-none">
++          <span>1 yr ago</span><span>9 mo</span><span>6 mo</span><span>3 mo</span><span>Today</span>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++export function DatePill({ label, value, onChange, dates = [] }:
++  { label: string; value: RelativeDateValue; onChange: (v: RelativeDateValue) => void; dates?: (string | Date)[] }) {
++  const [open, setOpen] = useState(false);
++  const isActive = value.type !== 'all';
++
++  const computeInitial = (): { fromDay: number; toDay: number } => {
++    const today = startOfDay(new Date());
++    if (value.type === 'custom') {
++      return {
++        fromDay: Math.max(0, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - fromISO(value.to).getTime()) / DAY_MS))),
++        toDay: Math.max(0, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - fromISO(value.from).getTime()) / DAY_MS))),
++      };
++    }
++    if (value.type !== 'all') {
++      const r = dateRangeFor(value);
++      if (r.from && r.to) {
++        return {
++          fromDay: Math.max(0, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - r.to.getTime()) / DAY_MS))),
++          toDay: Math.max(0, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - r.from.getTime()) / DAY_MS))),
++        };
++      }
++    }
++    return { fromDay: 0, toDay: 90 };
++  };
++
++  const [range, setRange] = useState(computeInitial);
++  const handleOpen = (o: boolean) => {
++    if (o) setRange(computeInitial());
++    setOpen(o);
++  };
++
++  const presets: RelativeDateValue[] = [
++    { type: 'this_week' }, { type: 'last_week' },
++    { type: 'this_month' }, { type: 'last_month' },
++    { type: 'last_n_weeks', n: 4 }, { type: 'last_n_months', n: 3 },
++    { type: 'last_n_months', n: 6 }, { type: 'last_n_months', n: 12 },
++  ];
++
++  const applyRange = () => {
++    const today = startOfDay(new Date());
++    const from = new Date(today.getTime() - range.toDay * DAY_MS);
++    const to = new Date(today.getTime() - range.fromDay * DAY_MS);
++    onChange({ type: 'custom', from: toISO(from), to: toISO(to) });
++    setOpen(false);
++  };
++
++  return (
++    <Popover open={open} onOpenChange={handleOpen}>
++      <PopoverTrigger asChild>
++        <Button variant="outline" className={cn(
++          "h-9 rounded-full gap-2 px-4 font-normal hover:bg-muted/60 hover:text-foreground",
++          isActive && "border-primary/40 bg-primary/5 hover:bg-primary/10"
++        )}>
++          <span className="text-muted-foreground text-sm">{label}</span>
++          <span className={cn("text-sm font-medium", isActive ? "text-primary" : "text-foreground")}>
++            {relativeDateLabel(value)}
++          </span>
++          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
++        </Button>
++      </PopoverTrigger>
++      <PopoverContent className="w-[560px] p-3" align="start">
++        <div className="flex items-center justify-between mb-2">
++          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Presets</span>
++          {isActive && (
++            <Button variant="ghost" size="sm" className="h-6 text-xs"
++              onClick={() => { onChange({ type: 'all' }); setOpen(false); }}>
++              Clear
++            </Button>
++          )}
++        </div>
++        <div className="flex flex-wrap gap-1.5 mb-3">
++          <button
++            onClick={() => { onChange({ type: 'all' }); setOpen(false); }}
++            className={cn("px-3 h-7 rounded-full border text-xs hover:bg-muted",
++              value.type === 'all' && "bg-foreground text-background border-foreground hover:bg-foreground")}
++          >
++            All time
++          </button>
++          {presets.map((p, i) => (
++            <button
++              key={i}
++              onClick={() => { onChange(p); setOpen(false); }}
++              className={cn("px-3 h-7 rounded-full border text-xs hover:bg-muted",
++                JSON.stringify(value) === JSON.stringify(p) && "bg-foreground text-background border-foreground hover:bg-foreground")}
++            >
++              {relativeDateLabel(p)}
++            </button>
++          ))}
++        </div>
++
++        <div className="rounded-lg border bg-background p-3">
++          <HistogramRangeSlider
++            dates={dates}
++            fromDay={range.fromDay}
++            toDay={range.toDay}
++            onChange={(fromDay, toDay) => setRange({ fromDay, toDay })}
++          />
++          <div className="flex justify-end mt-2">
++            <Button size="sm" className="h-7 text-xs" onClick={applyRange}>Apply range</Button>
++          </div>
++        </div>
++      </PopoverContent>
++    </Popover>
++  );
++}
+diff --git a/src/components/expense/ExpenseAlternativeViews.tsx b/src/components/expense/ExpenseAlternativeViews.tsx
+new file mode 100644
+index 0000000..872670c
+--- /dev/null
++++ b/src/components/expense/ExpenseAlternativeViews.tsx
+@@ -0,0 +1,166 @@
++import { useMemo, useState } from 'react';
++import { ChevronRight, ChevronDown } from 'lucide-react';
++import { Expense } from '@/types/crm';
++import { getAccountById, getContractById } from '@/data/mock-data';
++import { StatusBadge } from '@/components/shared';
++import { formatCurrency, formatDate } from '@/lib/format';
++
++type Props = {
++  expenses: Expense[];
++  onOpen: (e: Expense) => void;
++};
++
++// ============================================================
++// Shared sub-row renderer (one expense row inside a group)
++// ============================================================
++function ExpenseRow({ e, onOpen }: { e: Expense; onOpen: (e: Expense) => void }) {
++  const contract = e.contractId ? getContractById(e.contractId) : null;
++  const parent = contract ? getAccountById(contract.parentAccountId) : null;
++  const child = contract?.childAccountId ? getAccountById(contract.childAccountId) : null;
++  return (
++    <div onClick={() => onOpen(e)} className="grid grid-cols-12 gap-3 px-4 py-2 text-sm hover:bg-muted/30 cursor-pointer items-center">
++      <span className="col-span-2 font-mono text-xs">{e.reference}</span>
++      <span className="col-span-2 text-xs">{e.expenseType}</span>
++      <span className="col-span-3 text-xs">
++        {contract ? (
++          <>
++            <div className="font-medium">{contract.contractNumber}</div>
++            {parent && <div className="text-muted-foreground">{parent.name}</div>}
++            {child && <div className="text-muted-foreground">{child.name}</div>}
++          </>
++        ) : <span className="text-muted-foreground">ΓÇö</span>}
++      </span>
++      <span className="col-span-2 text-xs">{formatDate(e.dateIssued)}</span>
++      <span className="col-span-2 text-right font-medium tabular-nums">{formatCurrency(e.totalAmount, e.currencyCode)}</span>
++      <span className="col-span-1 flex justify-end"><StatusBadge status={e.status} /></span>
++    </div>
++  );
++}
++
++// ============================================================
++// Generic grouping shell
++// ============================================================
++function GroupedShell({
++  groups, onOpen,
++}: {
++  groups: { id: string; title: string; subtitle: string; total: number; currency: string; items: Expense[] }[];
++  onOpen: (e: Expense) => void;
++}) {
++  const [openIds, setOpenIds] = useState<Set<string>>(new Set(groups.slice(0, 3).map(g => g.id)));
++  const toggle = (id: string) => { const n = new Set(openIds); n.has(id) ? n.delete(id) : n.add(id); setOpenIds(n); };
++
++  return (
++    <div className="space-y-2">
++      {groups.map(g => {
++        const isOpen = openIds.has(g.id);
++        return (
++          <div key={g.id} className="rounded-lg border bg-card">
++            <button onClick={() => toggle(g.id)} className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 text-left">
++              {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
++              <div className="flex-1">
++                <div className="font-semibold">{g.title}</div>
++                <div className="text-xs text-muted-foreground">{g.subtitle}</div>
++              </div>
++              <div className="text-right">
++                <div className="text-xs text-muted-foreground">Total</div>
++                <div className="text-sm font-semibold tabular-nums">{formatCurrency(g.total, g.currency as any)}</div>
++              </div>
++            </button>
++            {isOpen && (
++              <div className="border-t divide-y">
++                {g.items.map(e => <ExpenseRow key={e.id} e={e} onOpen={onOpen} />)}
++              </div>
++            )}
++          </div>
++        );
++      })}
++      {groups.length === 0 && <div className="text-center py-8 text-muted-foreground border rounded-lg">No expenses.</div>}
++    </div>
++  );
++}
++
++// ============================================================
++// 1. BY VENDOR
++// ============================================================
++export function ByVendorView({ expenses, onOpen }: Props) {
++  const groups = useMemo(() => {
++    const m = new Map<string, Expense[]>();
++    expenses.forEach(e => {
++      const k = e.accountId || '__unknown__';
++      if (!m.has(k)) m.set(k, []);
++      m.get(k)!.push(e);
++    });
++    return Array.from(m.entries()).map(([id, items]) => {
++      const name = id === '__unknown__' ? 'Unknown' : (getAccountById(id)?.name || 'Unknown');
++      const total = items.reduce((s, e) => s + e.totalAmount, 0);
++      const paid = items.filter(e => e.status === 'Paid').length;
++      return {
++        id, title: name,
++        subtitle: `${items.length} expense${items.length !== 1 ? 's' : ''} ┬╖ ${paid} paid`,
++        total, currency: items[0]?.currencyCode || 'EUR',
++        items: items.sort((a, b) => b.dateIssued.localeCompare(a.dateIssued)),
++      };
++    }).sort((a, b) => a.title.localeCompare(b.title));
++  }, [expenses]);
++
++  return <GroupedShell groups={groups} onOpen={onOpen} />;
++}
++
++// ============================================================
++// 2. BY TYPE
++// ============================================================
++export function ByTypeView({ expenses, onOpen }: Props) {
++  const groups = useMemo(() => {
++    const m = new Map<string, Expense[]>();
++    expenses.forEach(e => {
++      if (!m.has(e.expenseType)) m.set(e.expenseType, []);
++      m.get(e.expenseType)!.push(e);
++    });
++    return Array.from(m.entries()).map(([type, items]) => {
++      const total = items.reduce((s, e) => s + e.totalAmount, 0);
++      const paid = items.filter(e => e.status === 'Paid').length;
++      return {
++        id: type, title: type,
++        subtitle: `${items.length} expense${items.length !== 1 ? 's' : ''} ┬╖ ${paid} paid`,
++        total, currency: items[0]?.currencyCode || 'EUR',
++        items: items.sort((a, b) => b.dateIssued.localeCompare(a.dateIssued)),
++      };
++    }).sort((a, b) => a.title.localeCompare(b.title));
++  }, [expenses]);
++
++  return <GroupedShell groups={groups} onOpen={onOpen} />;
++}
++
++// ============================================================
++// 3. BY CONTRACT
++// ============================================================
++export function ByContractView({ expenses, onOpen }: Props) {
++  const groups = useMemo(() => {
++    const m = new Map<string, Expense[]>();
++    expenses.forEach(e => {
++      const k = e.contractId || '__no_contract__';
++      if (!m.has(k)) m.set(k, []);
++      m.get(k)!.push(e);
++    });
++    return Array.from(m.entries()).map(([id, items]) => {
++      const total = items.reduce((s, e) => s + e.totalAmount, 0);
++      let title = 'No Contract';
++      let subtitle = `${items.length} expense${items.length !== 1 ? 's' : ''}`;
++      if (id !== '__no_contract__') {
++        const ctr = getContractById(id);
++        const parent = ctr ? getAccountById(ctr.parentAccountId) : null;
++        const child = ctr?.childAccountId ? getAccountById(ctr.childAccountId) : null;
++        title = ctr?.contractNumber || 'Unknown';
++        const parts = [parent?.name, child?.name].filter(Boolean).join(' ΓÇ║ ');
++        subtitle = `${parts || 'ΓÇö'} ┬╖ ${items.length} expense${items.length !== 1 ? 's' : ''}`;
++      }
++      return {
++        id, title, subtitle, total,
++        currency: items[0]?.currencyCode || 'EUR',
++        items: items.sort((a, b) => b.dateIssued.localeCompare(a.dateIssued)),
++      };
++    }).sort((a, b) => a.title.localeCompare(b.title));
++  }, [expenses]);
++
++  return <GroupedShell groups={groups} onOpen={onOpen} />;
++}
+diff --git a/src/data/mock-data.ts b/src/data/mock-data.ts
+index 26e5f36..0c5aa04 100644
+--- a/src/data/mock-data.ts
++++ b/src/data/mock-data.ts
+@@ -164,14 +164,14 @@ export const invoices: Invoice[] = [
+ export const expenses: Expense[] = [
+   { id: 'exp-1', reference: 'EXP-000001', entityId: 'ent-1', accountId: 'acc-6', expenseType: 'Contractor Payment', contractId: 'ctr-1', currencyCode: 'EUR', totalAmount: 8330, vatAmount: 1330, netAmount: 7000, dateIssued: '2026-01-10', dueDate: '2026-01-25', paymentDate: '2026-01-20', status: 'Paid', periodMonth: 12, periodYear: 2025 },
+   { id: 'exp-2', reference: 'EXP-000002', entityId: 'ent-1', accountId: 'acc-6', expenseType: 'Contractor Payment', contractId: 'ctr-2', currencyCode: 'EUR', totalAmount: 7616, vatAmount: 1216, netAmount: 6400, dateIssued: '2026-01-10', dueDate: '2026-01-25', paymentDate: '2026-01-20', status: 'Paid', periodMonth: 12, periodYear: 2025 },
+-  { id: 'exp-3', reference: 'EXP-000003', entityId: 'ent-2', accountId: 'acc-7', expenseType: 'Contractor Payment', contractId: 'ctr-4', currencyCode: 'EUR', totalAmount: 7140, vatAmount: 1140, netAmount: 6000, dateIssued: '2026-01-10', dueDate: '2026-01-25', paymentDate: '2026-01-22', status: 'Paid', periodMonth: 12, periodYear: 2025 },
++  { id: 'exp-3', reference: 'EXP-000003', entityId: 'ent-2', accountId: 'acc-7', expenseType: 'Contractor Payment', contractId: 'ctr-3', currencyCode: 'GBP', totalAmount: 7140, vatAmount: 1140, netAmount: 6000, dateIssued: '2026-01-10', dueDate: '2026-01-25', paymentDate: '2026-01-22', status: 'Paid', periodMonth: 12, periodYear: 2025 },
+   { id: 'exp-4', reference: 'EXP-000004', entityId: 'ent-3', accountId: 'acc-8', expenseType: 'Contractor Payment', contractId: 'ctr-5', currencyCode: 'USD', totalAmount: 12000, vatAmount: 0, netAmount: 12000, dateIssued: '2026-01-10', dueDate: '2026-01-25', paymentDate: '2026-01-23', status: 'Paid', periodMonth: 12, periodYear: 2025 },
+   { id: 'exp-5', reference: 'EXP-000005', entityId: 'ent-1', accountId: 'acc-9', expenseType: 'Software / Subscription', currencyCode: 'USD', totalAmount: 1500, vatAmount: 0, netAmount: 1500, dateIssued: '2026-01-15', dueDate: '2026-02-14', paymentDate: '2026-02-10', status: 'Paid', periodMonth: 1, periodYear: 2026 },
+   { id: 'exp-6', reference: 'EXP-000006', entityId: 'ent-1', accountId: 'acc-10', expenseType: 'Tax', currencyCode: 'RON', totalAmount: 15000, vatAmount: 0, netAmount: 15000, dateIssued: '2026-01-25', dueDate: '2026-02-25', paymentDate: '2026-02-20', status: 'Paid', periodMonth: 1, periodYear: 2026 },
+   { id: 'exp-7', reference: 'EXP-000007', entityId: 'ent-1', accountId: 'acc-13', expenseType: 'Operating Cost', currencyCode: 'EUR', totalAmount: 2380, vatAmount: 380, netAmount: 2000, dateIssued: '2026-02-01', dueDate: '2026-02-15', paymentDate: '2026-02-10', status: 'Paid', periodMonth: 2, periodYear: 2026 },
+   { id: 'exp-8', reference: 'EXP-000008', entityId: 'ent-1', accountId: 'acc-6', expenseType: 'Contractor Payment', contractId: 'ctr-1', currencyCode: 'EUR', totalAmount: 9163, vatAmount: 1463, netAmount: 7700, dateIssued: '2026-02-10', dueDate: '2026-02-25', status: 'Received', periodMonth: 1, periodYear: 2026 },
+   { id: 'exp-9', reference: 'EXP-000009', entityId: 'ent-1', accountId: 'acc-6', expenseType: 'Contractor Payment', contractId: 'ctr-2', currencyCode: 'EUR', totalAmount: 8377.6, vatAmount: 1337.6, netAmount: 7040, dateIssued: '2026-02-10', dueDate: '2026-02-25', status: 'Received', periodMonth: 1, periodYear: 2026 },
+-  { id: 'exp-10', reference: 'EXP-000010', entityId: 'ent-2', accountId: 'acc-7', expenseType: 'Contractor Payment', contractId: 'ctr-4', currencyCode: 'EUR', totalAmount: 7854, vatAmount: 1254, netAmount: 6600, dateIssued: '2026-02-10', dueDate: '2026-02-25', status: 'Received', periodMonth: 1, periodYear: 2026 },
++  { id: 'exp-10', reference: 'EXP-000010', entityId: 'ent-2', accountId: 'acc-7', expenseType: 'Contractor Payment', contractId: 'ctr-3', currencyCode: 'GBP', totalAmount: 7854, vatAmount: 1254, netAmount: 6600, dateIssued: '2026-02-10', dueDate: '2026-02-25', status: 'Received', periodMonth: 1, periodYear: 2026 },
+   { id: 'exp-11', reference: 'EXP-000011', entityId: 'ent-3', accountId: 'acc-8', expenseType: 'Contractor Payment', contractId: 'ctr-5', currencyCode: 'USD', totalAmount: 13200, vatAmount: 0, netAmount: 13200, dateIssued: '2026-02-10', dueDate: '2026-02-25', status: 'Received', periodMonth: 1, periodYear: 2026 },
+   { id: 'exp-12', reference: 'EXP-000012', entityId: 'ent-1', accountId: 'acc-6', expenseType: 'Contractor Payment', contractId: 'ctr-1', currencyCode: 'EUR', totalAmount: 8747, vatAmount: 1397, netAmount: 7350, dateIssued: '2026-03-10', dueDate: '2026-03-25', status: 'Overdue', periodMonth: 2, periodYear: 2026 },
+   { id: 'exp-13', reference: 'EXP-000013', entityId: 'ent-2', accountId: 'acc-7', expenseType: 'Contractor Payment', contractId: 'ctr-6', currencyCode: 'EUR', totalAmount: 9163, vatAmount: 1463, netAmount: 7700, dateIssued: '2026-02-10', dueDate: '2026-02-25', status: 'Received', periodMonth: 1, periodYear: 2026 },
+diff --git a/src/pages/AccountsPage.tsx b/src/pages/AccountsPage.tsx
+index 9335d0a..fbe6257 100644
+--- a/src/pages/AccountsPage.tsx
++++ b/src/pages/AccountsPage.tsx
+@@ -25,6 +25,7 @@ import {
+   ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, NumberRangeFilterPopover, ClearColumnFiltersButton,
+   getTextFilter, getMultiFilter, getNumberFilter, setTextFilter, setMultiFilter, setNumberFilter,
+ } from '@/components/ColumnFilters';
++import { SearchPill, SinglePill, MultiPill, FilterChip } from '@/components/FilterPills';
+ 
+ const contactTypes: ContactType[] = ['Consultant', 'Client Contact', 'Middleman Contact', 'Finance Contact', 'Permanent Employee'];
+ const contactLookupOptions = contacts.map(c => ({ value: c.id, label: `${c.firstName} ${c.lastName}` }));
+@@ -49,9 +50,10 @@ const mockDocuments: CompanyDocument[] = [
+ export default function AccountsPage() {
+   const confirm = useConfirm();
+   const navigate = useNavigate();
+-  const [statusFilter, setStatusFilter] = useState<string>('');
++  const [statusFilter, setStatusFilter] = useState<string>('Active');
+   const [typeFilter, setTypeFilter] = useState<string>('');
+-  const [countryFilter, setCountryFilter] = useState<string>('');
++  const [countryFilter, setCountryFilter] = useState<string[]>([]);
++  const [searchTerm, setSearchTerm] = useState<string>('');
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+   const [isNew, setIsNew] = useState(false);
+@@ -158,7 +160,8 @@ export default function AccountsPage() {
+     return accounts.filter(a => {
+       if (statusFilter && a.status !== statusFilter) return false;
+       if (typeFilter && a.accountType !== typeFilter) return false;
+-      if (countryFilter && a.entityId !== countryFilter) return false;
++      if (countryFilter.length > 0 && !countryFilter.includes(a.entityId)) return false;
++      if (searchTerm && !a.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+       const name = getTextFilter(colFilters, 'name');
+       if (name && !a.name.toLowerCase().includes(name.toLowerCase())) return false;
+       const typeCol = getMultiFilter(colFilters, 'type');
+@@ -172,7 +175,7 @@ export default function AccountsPage() {
+       if (contractsNum.max && a.activeContracts > Number(contractsNum.max)) return false;
+       return true;
+     });
+-  }, [statusFilter, typeFilter, countryFilter, colFilters]);
++  }, [statusFilter, typeFilter, countryFilter, searchTerm, colFilters]);
+ 
+   const filteredIds = filtered.map(a => a.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+@@ -256,39 +259,63 @@ export default function AccountsPage() {
+           />
+         </div>} />
+ 
+-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
+-          <ToggleGroup type="single" value={statusFilter} onValueChange={setStatusFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {accountStatuses.map(s => (<ToggleGroupItem key={s} value={s} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{s}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{accounts.filter(a => a.status === s).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</span>
+-          <ToggleGroup type="single" value={typeFilter} onValueChange={setTypeFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {accountTypes.map(t => (<ToggleGroupItem key={t} value={t} className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{t}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{accounts.filter(a => a.accountType === t).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Country</span>
+-          <ToggleGroup type="single" value={countryFilter} onValueChange={setCountryFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {countryOptions.map(e => (<ToggleGroupItem key={e.id} value={e.id} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{e.label}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{accounts.filter(a => a.entityId === e.id).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2 ml-auto">
+-          {(() => {
+-            const parentIds = filtered.filter(a => childrenByParent.has(a.id) && !a.parentAccountId).map(a => a.id);
+-            const allExpanded = parentIds.length > 0 && parentIds.every(id => expandedParents.has(id));
+-            return (
+-              <Button size="sm" variant="outline" onClick={() => setExpandedParents(allExpanded ? new Set() : new Set(parentIds))}>
+-                {allExpanded ? 'Collapse all' : 'Expand all'}
+-              </Button>
+-            );
+-          })()}
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search accounts..." />
++          <SinglePill
++            label="Status"
++            value={statusFilter}
++            onChange={setStatusFilter}
++            options={accountStatuses.map(s => ({ value: s, label: s, count: accounts.filter(a => a.status === s).length }))}
++          />
++          <SinglePill
++            label="Type"
++            value={typeFilter}
++            onChange={setTypeFilter}
++            options={accountTypes.map(t => ({ value: t, label: t, count: accounts.filter(a => a.accountType === t).length }))}
++          />
++          <MultiPill
++            label="Country"
++            values={countryFilter}
++            onChange={setCountryFilter}
++            options={countryOptions.map(e => ({ value: e.id, label: e.label, count: accounts.filter(a => a.entityId === e.id).length }))}
++          />
++          <div className="flex items-center gap-2 ml-auto">
++            {(() => {
++              const parentIds = filtered.filter(a => childrenByParent.has(a.id) && !a.parentAccountId).map(a => a.id);
++              const allExpanded = parentIds.length > 0 && parentIds.every(id => expandedParents.has(id));
++              return (
++                <Button size="sm" variant="outline" onClick={() => setExpandedParents(allExpanded ? new Set() : new Set(parentIds))}>
++                  {allExpanded ? 'Collapse all' : 'Expand all'}
++                </Button>
++              );
++            })()}
++          </div>
+         </div>
++
++        {(statusFilter || typeFilter || countryFilter.length > 0 || searchTerm) && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            <span className="text-muted-foreground">{filtered.length} of {accounts.length} accounts</span>
++            {(statusFilter || typeFilter || countryFilter.length > 0 || searchTerm) && <span className="text-muted-foreground">┬╖</span>}
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {statusFilter && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} />}
++            {typeFilter && <FilterChip label={`Type: ${typeFilter}`} onRemove={() => setTypeFilter('')} />}
++            {countryFilter.length > 0 && (
++              <FilterChip
++                label={`Country: ${countryFilter.map(id => countryOptions.find(c => c.id === id)?.label).filter(Boolean).join(', ')}`}
++                onRemove={() => setCountryFilter([])}
++              />
++            )}
++            <Button
++              variant="outline"
++              size="sm"
++              className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setStatusFilter(''); setTypeFilter(''); setCountryFilter([]); }}
++            >
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       <div className="rounded-lg border">
+diff --git a/src/pages/AvailabilityPage.tsx b/src/pages/AvailabilityPage.tsx
+index b42deb2..96f0db6 100644
+--- a/src/pages/AvailabilityPage.tsx
++++ b/src/pages/AvailabilityPage.tsx
+@@ -4,16 +4,16 @@ import { Button } from '@/components/ui/button';
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+ import { Checkbox } from '@/components/ui/checkbox';
+-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
++
+ import { availabilitySlots, contacts, onboardingCandidates } from '@/data/mock-data';
+ import type { AvailabilitySlot, SlotStatus } from '@/types/crm';
+ import { format, parse, isValid } from 'date-fns';
+ import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
+ import { LookupField, TextField } from '@/components/FormField';
+ import {
+-  ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, DateRangeFilterPopover, ClearColumnFiltersButton,
+-  getTextFilter, getMultiFilter, getDateFilter, setTextFilter, setMultiFilter, setDateFilter, matchDateRange,
++  ColumnFilters, ClearColumnFiltersButton, matchDateRange,
+ } from '@/components/ColumnFilters';
++import { SearchPill, SinglePill, MultiPill, FilterChip, DatePill, dateRangeFor, relativeDateLabel, type RelativeDateValue } from '@/components/FilterPills';
+ import { User, Mail, Phone, Briefcase, Calendar, CheckCircle2 } from 'lucide-react';
+ import { toast } from 'sonner';
+ 
+@@ -38,6 +38,9 @@ const fmtDate = (d: string) => {
+ 
+ export default function AvailabilityPage() {
+   const [statusFilter, setStatusFilter] = useState<string>('');
++  const [dayFilter, setDayFilter] = useState<string[]>([]);
++  const [searchTerm, setSearchTerm] = useState<string>('');
++  const [dateFilter, setDateFilter2] = useState<RelativeDateValue>({ type: 'all' });
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+@@ -73,43 +76,55 @@ export default function AvailabilityPage() {
+   const filtered = useMemo(() => {
+     return availabilitySlots.filter(s => {
+       if (statusFilter && s.status !== statusFilter) return false;
+-      const dayCol = getMultiFilter(colFilters, 'dayOfWeek');
+-      if (dayCol.length > 0 && !dayCol.includes(s.dayOfWeek)) return false;
+-      const startText = getTextFilter(colFilters, 'startTime');
+-      if (startText && !s.startTime.includes(startText)) return false;
+-      const candText = getTextFilter(colFilters, 'candidate');
+-      if (candText && !getCandidateName(s.candidateId).toLowerCase().includes(candText.toLowerCase())) return false;
+-      const dateFilter = getDateFilter(colFilters, 'date');
+-      if (!matchDateRange(s.date, dateFilter.from, dateFilter.to)) return false;
+-      const statusCol = getMultiFilter(colFilters, 'status');
+-      if (statusCol.length > 0 && !statusCol.includes(s.status)) return false;
++      if (dayFilter.length > 0 && !dayFilter.includes(s.dayOfWeek)) return false;
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        const candName = getCandidateName(s.candidateId).toLowerCase();
++        const intName = getInterviewerName(s.interviewerId).toLowerCase();
++        if (!candName.includes(q) && !intName.includes(q)) return false;
++      }
++      if (dateFilter.type !== 'all') {
++        const r = dateRangeFor(dateFilter);
++        if (!matchDateRange(s.date, r.from, r.to)) return false;
++      }
+       return true;
+     });
+-  }, [statusFilter, colFilters]);
++  }, [statusFilter, dayFilter, searchTerm, dateFilter]);
+ 
+   const filteredIds = filtered.map(s => s.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+   const toggleAll = (checked: boolean) => setSelectedIds(checked ? filteredIds : []);
+   const toggleOne = (id: string, checked: boolean) => setSelectedIds(checked ? [...selectedIds, id] : selectedIds.filter(x => x !== id));
+ 
++  const hasActiveFilters = !!searchTerm || !!statusFilter || dayFilter.length > 0 || dateFilter.type !== 'all';
++
+   return (
+     <div>
+       <HeaderSelectionBar count={selectedIds.length} onClearSelection={() => setSelectedIds([])} entityLabel="slots" showDelete showDownload />
+       <PageHeader title="Availability Slots" subtitle={`${filtered.length} of ${availabilitySlots.length} slots`}
+         action={<ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />} />
+ 
+-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
+-          <ToggleGroup type="single" value={statusFilter} onValueChange={setStatusFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {slotStatuses.map(s => (
+-              <ToggleGroupItem key={s} value={s} className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">
+-                {s}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{availabilitySlots.filter(sl => sl.status === s).length}</span>
+-              </ToggleGroupItem>
+-            ))}
+-          </ToggleGroup>
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search candidate or interviewer..." />
++          <SinglePill label="Status" value={statusFilter} onChange={setStatusFilter}
++            options={slotStatuses.map(s => ({ value: s, label: s, count: availabilitySlots.filter(sl => sl.status === s).length }))} />
++          <MultiPill label="Day" values={dayFilter} onChange={setDayFilter}
++            options={daysOfWeek.map(d => ({ value: d, label: d, count: availabilitySlots.filter(sl => sl.dayOfWeek === d).length }))} />
++          <DatePill label="Date" value={dateFilter} onChange={setDateFilter2} dates={availabilitySlots.map(s => s.date)} />
+         </div>
++        {hasActiveFilters && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {statusFilter && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} />}
++            {dayFilter.length > 0 && <FilterChip label={`Day: ${dayFilter.join(', ')}`} onRemove={() => setDayFilter([])} />}
++            {dateFilter.type !== 'all' && <FilterChip label={`Date: ${relativeDateLabel(dateFilter)}`} onRemove={() => setDateFilter2({ type: 'all' })} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setStatusFilter(''); setDayFilter([]); setDateFilter2({ type: 'all' }); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       <div className="rounded-lg border">
+@@ -117,12 +132,12 @@ export default function AvailabilityPage() {
+           <TableHeader>
+             <TableRow>
+               <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
+-              <TableHead>Candidate <TextFilterPopover label="Candidate" value={getTextFilter(colFilters, 'candidate')} onChange={v => setTextFilter(setColFilters, 'candidate', v)} /></TableHead>
+-              <TableHead>Day <MultiSelectFilterPopover label="Day" options={daysOfWeek} selected={getMultiFilter(colFilters, 'dayOfWeek')} onChange={v => setMultiFilter(setColFilters, 'dayOfWeek', v)} /></TableHead>
+-              <TableHead>Date <DateRangeFilterPopover label="Date" from={getDateFilter(colFilters, 'date').from} to={getDateFilter(colFilters, 'date').to} onChange={(f, t) => setDateFilter(setColFilters, 'date', f, t)} /></TableHead>
+-              <TableHead>Time <TextFilterPopover label="Time" value={getTextFilter(colFilters, 'startTime')} onChange={v => setTextFilter(setColFilters, 'startTime', v)} /></TableHead>
++              <TableHead>Candidate</TableHead>
++              <TableHead>Day</TableHead>
++              <TableHead>Date</TableHead>
++              <TableHead>Time</TableHead>
+               <TableHead>Interviewer</TableHead>
+-              <TableHead>Status <MultiSelectFilterPopover label="Status" options={slotStatuses} selected={getMultiFilter(colFilters, 'status')} onChange={v => setMultiFilter(setColFilters, 'status', v)} /></TableHead>
++              <TableHead>Status</TableHead>
+             </TableRow>
+           </TableHeader>
+           <TableBody>
+diff --git a/src/pages/CandidatesPage.tsx b/src/pages/CandidatesPage.tsx
+index 0743633..977211e 100644
+--- a/src/pages/CandidatesPage.tsx
++++ b/src/pages/CandidatesPage.tsx
+@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
+ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
++
+ import { Checkbox } from '@/components/ui/checkbox';
+ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+ import { Plus, CheckCircle2, FileText, X, User, Mail, Phone, Briefcase, MapPin } from 'lucide-react';
+@@ -20,6 +20,7 @@ import {
+   getTextFilter, getMultiFilter, getNumberFilter, getDateFilter,
+   setTextFilter, setMultiFilter, setNumberFilter, setDateFilter, matchDateRange,
+ } from '@/components/ColumnFilters';
++import { SearchPill, SinglePill, FilterChip, DatePill, dateRangeFor, relativeDateLabel, type RelativeDateValue } from '@/components/FilterPills';
+ 
+ const candidateStatuses: CandidateStatus[] = ['Applied', 'Scheduled', 'Fit', 'Not Fit'];
+ 
+@@ -44,6 +45,8 @@ export default function CandidatesPage() {
+   const [candidates, setCandidates] = useState<OnboardingCandidate[]>([...onboardingCandidates]);
+   const [statusFilter, setStatusFilter] = useState<string>('All');
+   const [pathFilter, setPathFilter] = useState<string>('');
++  const [searchTerm, setSearchTerm] = useState<string>('');
++  const [appliedDateFilter, setAppliedDateFilter] = useState<RelativeDateValue>({ type: 'all' });
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selectedCandidate, setSelectedCandidate] = useState<OnboardingCandidate | null>(null);
+   const [isNew, setIsNew] = useState(false);
+@@ -128,6 +131,17 @@ export default function CandidatesPage() {
+     return candidates.filter(c => {
+       if (statusFilter && statusFilter !== 'All' && c.status !== statusFilter) return false;
+       if (pathFilter && c.path !== pathFilter) return false;
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        const m = `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
++          c.email.toLowerCase().includes(q) ||
++          (c.b2bEntityName || '').toLowerCase().includes(q);
++        if (!m) return false;
++      }
++      if (appliedDateFilter.type !== 'all') {
++        const r = dateRangeFor(appliedDateFilter);
++        if (!matchDateRange(c.appliedDate, r.from, r.to)) return false;
++      }
+       const name = getTextFilter(colFilters, 'name');
+       if (name && !`${c.firstName} ${c.lastName}`.toLowerCase().includes(name.toLowerCase())) return false;
+       const email = getTextFilter(colFilters, 'email');
+@@ -143,7 +157,7 @@ export default function CandidatesPage() {
+       if (entity && !(c.b2bEntityName || '').toLowerCase().includes(entity.toLowerCase())) return false;
+       return true;
+     });
+-  }, [statusFilter, pathFilter, colFilters]);
++  }, [statusFilter, pathFilter, searchTerm, appliedDateFilter, colFilters, candidates]);
+ 
+   const filteredIds = filtered.map(c => c.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+@@ -177,40 +191,27 @@ export default function CandidatesPage() {
+         ))}
+       </div>
+ 
+-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
+-          <ToggleGroup type="single" value={statusFilter} onValueChange={v => setStatusFilter(v || 'All')} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="All" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {candidateStatuses.map(s => (
+-              <ToggleGroupItem key={s} value={s} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">
+-                {s}
+-                <span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">
+-                  {candidates.filter(c => c.status === s).length}
+-                </span>
+-              </ToggleGroupItem>
+-            ))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Path</span>
+-          <ToggleGroup type="single" value={pathFilter} onValueChange={setPathFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">
+-              All
+-              <span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">
+-                {candidates.length}
+-              </span>
+-            </ToggleGroupItem>
+-            {candidatePaths.map(p => (
+-              <ToggleGroupItem key={p} value={p} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">
+-                {p}
+-                <span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">
+-                  {candidates.filter(c => c.path === p).length}
+-                </span>
+-              </ToggleGroupItem>
+-            ))}
+-          </ToggleGroup>
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search name, email, B2B entity..." />
++          <SinglePill label="Status" value={statusFilter === 'All' ? '' : statusFilter} onChange={v => setStatusFilter(v || 'All')}
++            options={candidateStatuses.map(s => ({ value: s, label: s, count: candidates.filter(c => c.status === s).length }))} />
++          <SinglePill label="Path" value={pathFilter} onChange={setPathFilter}
++            options={candidatePaths.map(p => ({ value: p, label: p, count: candidates.filter(c => c.path === p).length }))} />
++          <DatePill label="Applied" value={appliedDateFilter} onChange={setAppliedDateFilter} dates={candidates.map(c => c.appliedDate)} />
+         </div>
++        {(searchTerm || (statusFilter && statusFilter !== 'All') || pathFilter || appliedDateFilter.type !== 'all') && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {statusFilter && statusFilter !== 'All' && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('All')} />}
++            {pathFilter && <FilterChip label={`Path: ${pathFilter}`} onRemove={() => setPathFilter('')} />}
++            {appliedDateFilter.type !== 'all' && <FilterChip label={`Applied: ${relativeDateLabel(appliedDateFilter)}`} onRemove={() => setAppliedDateFilter({ type: 'all' })} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setStatusFilter('All'); setPathFilter(''); setAppliedDateFilter({ type: 'all' }); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       <div className="rounded-lg border">
+diff --git a/src/pages/ContactsPage.tsx b/src/pages/ContactsPage.tsx
+index 4b830b5..5123b5f 100644
+--- a/src/pages/ContactsPage.tsx
++++ b/src/pages/ContactsPage.tsx
+@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
++
+ import { Badge } from '@/components/ui/badge';
+ import { Checkbox } from '@/components/ui/checkbox';
+ import { Plus, X } from 'lucide-react';
+@@ -14,14 +14,17 @@ import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
+ import { TextField, SelectField, SwitchField, EmailField, LookupField } from '@/components/FormField';
+ import { toast } from 'sonner';
+ import {
+-  ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, ClearColumnFiltersButton,
+-  getTextFilter, getMultiFilter, setTextFilter, setMultiFilter,
++  ColumnFilters, ClearColumnFiltersButton,
+ } from '@/components/ColumnFilters';
++import { SearchPill, SinglePill, MultiPill, FilterChip } from '@/components/FilterPills';
+ 
+ const contactTypes: ContactType[] = ['Consultant', 'Client Contact', 'Middleman Contact', 'Finance Contact', 'Permanent Employee'];
++const uniqueCountries = [...new Set(contacts.map(c => c.country).filter(Boolean) as string[])].sort();
+ 
+ export default function ContactsPage() {
++  const [searchTerm, setSearchTerm] = useState('');
+   const [typeFilter, setTypeFilter] = useState<string>('');
++  const [countryFilter, setCountryFilter] = useState<string[]>([]);
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+   const [isNew, setIsNew] = useState(false);
+@@ -67,20 +70,19 @@ export default function ContactsPage() {
+   const filtered = useMemo(() => {
+     return contacts.filter(c => {
+       if (typeFilter && c.contactType !== typeFilter) return false;
+-      const name = getTextFilter(colFilters, 'name');
+-      if (name && !`${c.firstName} ${c.lastName}`.toLowerCase().includes(name.toLowerCase())) return false;
+-      const company = getTextFilter(colFilters, 'company');
+-      if (company) { const companyName = c.company || (c.accountId ? getAccountById(c.accountId)?.name : '') || ''; if (!companyName.toLowerCase().includes(company.toLowerCase())) return false; }
+-      const typeCol = getMultiFilter(colFilters, 'type');
+-      if (typeCol.length > 0 && !typeCol.includes(c.contactType)) return false;
+-      const email = getTextFilter(colFilters, 'email');
+-      if (email && !c.email.toLowerCase().includes(email.toLowerCase())) return false;
+-      const countryCol = getMultiFilter(colFilters, 'country');
+-      if (countryCol.length > 0 && (!c.country || !countryCol.includes(c.country))) return false;
+-      return true;
++      if (countryFilter.length > 0 && (!c.country || !countryFilter.includes(c.country))) return false;
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        const companyName = c.company || (c.accountId ? getAccountById(c.accountId)?.name : '') || '';
++        if (
++          !`${c.firstName} ${c.lastName}`.toLowerCase().includes(q) &&
++          !c.email.toLowerCase().includes(q) &&
++          !companyName.toLowerCase().includes(q)
++        ) return false;
++      }
+       return true;
+     });
+-  }, [typeFilter, colFilters]);
++  }, [typeFilter, countryFilter, searchTerm]);
+ 
+   const filteredIds = filtered.map(c => c.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+@@ -90,6 +92,8 @@ export default function ContactsPage() {
+   const contactContracts = selectedContact ? contracts.filter(c => c.contactId === selectedContact.id) : [];
+   const contactTimesheets = selectedContact ? timesheets.filter(t => t.contactId === selectedContact.id) : [];
+ 
++  const hasActiveFilters = !!searchTerm || !!typeFilter || countryFilter.length > 0;
++
+   return (
+     <div>
+       <HeaderSelectionBar count={selectedIds.length} onClearSelection={() => setSelectedIds([])} entityLabel="contacts" />
+@@ -99,14 +103,25 @@ export default function ContactsPage() {
+           <Button onClick={openNewForm}><Plus className="h-4 w-4 mr-2" />Add Contact</Button>
+         </div>} />
+ 
+-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</span>
+-          <ToggleGroup type="single" value={typeFilter} onValueChange={setTypeFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {contactTypes.map(t => (<ToggleGroupItem key={t} value={t} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{t}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{contacts.filter(c => c.contactType === t).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search name, email, account..." />
++          <SinglePill label="Type" value={typeFilter} onChange={setTypeFilter}
++            options={contactTypes.map(t => ({ value: t, label: t, count: contacts.filter(c => c.contactType === t).length }))} />
++          <MultiPill label="Country" values={countryFilter} onChange={setCountryFilter}
++            options={uniqueCountries.map(c => ({ value: c, label: c, count: contacts.filter(x => x.country === c).length }))} />
+         </div>
++        {hasActiveFilters && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {typeFilter && <FilterChip label={`Type: ${typeFilter}`} onRemove={() => setTypeFilter('')} />}
++            {countryFilter.length > 0 && <FilterChip label={`Country: ${countryFilter.join(', ')}`} onRemove={() => setCountryFilter([])} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setTypeFilter(''); setCountryFilter([]); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       <div className="rounded-lg border">
+@@ -114,10 +129,10 @@ export default function ContactsPage() {
+           <TableHeader>
+             <TableRow>
+               <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
+-              <TableHead>Name <TextFilterPopover label="Name" value={getTextFilter(colFilters, 'name')} onChange={v => setTextFilter(setColFilters, 'name', v)} /></TableHead>
+-              {typeFilter !== 'Permanent Employee' && <TableHead>Account <TextFilterPopover label="Account" value={getTextFilter(colFilters, 'company')} onChange={v => setTextFilter(setColFilters, 'company', v)} /></TableHead>}
+-              <TableHead>Type <MultiSelectFilterPopover label="Type" options={contactTypes} selected={getMultiFilter(colFilters, 'type')} onChange={v => setMultiFilter(setColFilters, 'type', v)} /></TableHead>
+-              <TableHead>Email <TextFilterPopover label="Email" value={getTextFilter(colFilters, 'email')} onChange={v => setTextFilter(setColFilters, 'email', v)} /></TableHead>
++              <TableHead>Name</TableHead>
++              {typeFilter !== 'Permanent Employee' && <TableHead>Account</TableHead>}
++              <TableHead>Type</TableHead>
++              <TableHead>Email</TableHead>
+               {(!typeFilter || typeFilter === 'Consultant' || typeFilter === 'Permanent Employee') && <TableHead>Skills</TableHead>}
+               {(!typeFilter || typeFilter === 'Consultant' || typeFilter === 'Permanent Employee') && <TableHead>Interviewer</TableHead>}
+               {(!typeFilter || typeFilter === 'Consultant' || typeFilter === 'Permanent Employee') && <TableHead>Assigned</TableHead>}
+diff --git a/src/pages/ContractMilestonesPage.tsx b/src/pages/ContractMilestonesPage.tsx
+index 6af4d23..5a32dff 100644
+--- a/src/pages/ContractMilestonesPage.tsx
++++ b/src/pages/ContractMilestonesPage.tsx
+@@ -14,14 +14,18 @@ import { TextField, SelectField, DateField, LookupField } from '@/components/For
+ import { toast } from 'sonner';
+ import {
+   ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, NumberRangeFilterPopover, ClearColumnFiltersButton,
+-  getTextFilter, getMultiFilter, getNumberFilter, setTextFilter, setMultiFilter, setNumberFilter,
++  getTextFilter, getMultiFilter, getNumberFilter, setTextFilter, setMultiFilter, setNumberFilter, matchDateRange,
+ } from '@/components/ColumnFilters';
++import { SearchPill, SinglePill, FilterChip, DatePill, dateRangeFor, relativeDateLabel, type RelativeDateValue } from '@/components/FilterPills';
+ 
+ const milestoneStatuses: MilestoneStatus[] = ['Pending', 'Invoiced', 'Paid'];
+ const currencyOptions: CurrencyCode[] = ['EUR', 'USD', 'GBP', 'RON'];
+ 
+ export default function ContractMilestonesPage() {
+   const [statusFilter, setStatusFilter] = useState<string>('');
++  const [searchTerm, setSearchTerm] = useState<string>('');
++  const [startDateFilter, setStartDateFilter] = useState<RelativeDateValue>({ type: 'all' });
++  const [endDateFilter, setEndDateFilter] = useState<RelativeDateValue>({ type: 'all' });
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selected, setSelected] = useState<ContractMilestone | null>(null);
+   const [isNew, setIsNew] = useState(false);
+@@ -59,6 +63,22 @@ export default function ContractMilestonesPage() {
+   const filtered = useMemo(() => {
+     return contractMilestones.filter(m => {
+       if (statusFilter && m.status !== statusFilter) return false;
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        const c = getContractById(m.contractId);
++        const ok = m.milestoneId.toLowerCase().includes(q) ||
++          m.description.toLowerCase().includes(q) ||
++          (c?.contractNumber.toLowerCase().includes(q));
++        if (!ok) return false;
++      }
++      if (startDateFilter.type !== 'all') {
++        const r = dateRangeFor(startDateFilter);
++        if (!matchDateRange(m.startDate, r.from, r.to)) return false;
++      }
++      if (endDateFilter.type !== 'all') {
++        const r = dateRangeFor(endDateFilter);
++        if (!matchDateRange(m.endDate, r.from, r.to)) return false;
++      }
+       const msId = getTextFilter(colFilters, 'milestoneId');
+       if (msId && !m.milestoneId.toLowerCase().includes(msId.toLowerCase())) return false;
+       const desc = getTextFilter(colFilters, 'description');
+@@ -70,7 +90,7 @@ export default function ContractMilestonesPage() {
+       if (valRange.max && m.value > Number(valRange.max)) return false;
+       return true;
+     });
+-  }, [statusFilter, colFilters]);
++  }, [statusFilter, searchTerm, startDateFilter, endDateFilter, colFilters]);
+ 
+   const filteredIds = filtered.map(m => m.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+@@ -86,14 +106,26 @@ export default function ContractMilestonesPage() {
+           <Button onClick={openNewForm}><Plus className="h-4 w-4 mr-2" />Add Milestone</Button>
+         </div>} />
+ 
+-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
+-          <ToggleGroup type="single" value={statusFilter} onValueChange={setStatusFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {milestoneStatuses.map(s => (<ToggleGroupItem key={s} value={s} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{s}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{contractMilestones.filter(m => m.status === s).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search milestone, description, contract..." />
++          <SinglePill label="Status" value={statusFilter} onChange={setStatusFilter}
++            options={milestoneStatuses.map(s => ({ value: s, label: s, count: contractMilestones.filter(m => m.status === s).length }))} />
++          <DatePill label="Start Date" value={startDateFilter} onChange={setStartDateFilter} dates={contractMilestones.map(m => m.startDate)} />
++          <DatePill label="End Date" value={endDateFilter} onChange={setEndDateFilter} dates={contractMilestones.map(m => m.endDate)} />
+         </div>
++        {(searchTerm || statusFilter || startDateFilter.type !== 'all' || endDateFilter.type !== 'all') && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {statusFilter && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} />}
++            {startDateFilter.type !== 'all' && <FilterChip label={`Start: ${relativeDateLabel(startDateFilter)}`} onRemove={() => setStartDateFilter({ type: 'all' })} />}
++            {endDateFilter.type !== 'all' && <FilterChip label={`End: ${relativeDateLabel(endDateFilter)}`} onRemove={() => setEndDateFilter({ type: 'all' })} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setStatusFilter(''); setStartDateFilter({ type: 'all' }); setEndDateFilter({ type: 'all' }); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       <div className="rounded-lg border">
+diff --git a/src/pages/ContractsPage.tsx b/src/pages/ContractsPage.tsx
+index 7bb12e1..6de90d8 100644
+--- a/src/pages/ContractsPage.tsx
++++ b/src/pages/ContractsPage.tsx
+@@ -17,8 +17,9 @@ import { TextField, SelectField, SwitchField, DateField, LookupField } from '@/c
+ import { toast } from 'sonner';
+ import {
+   ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, NumberRangeFilterPopover, ClearColumnFiltersButton,
+-  getTextFilter, getMultiFilter, getNumberFilter, setTextFilter, setMultiFilter, setNumberFilter,
++  getTextFilter, getMultiFilter, getNumberFilter, setTextFilter, setMultiFilter, setNumberFilter, matchDateRange,
+ } from '@/components/ColumnFilters';
++import { SearchPill, SinglePill, DatePill, FilterChip, dateRangeFor, relativeDateLabel, ALL_DATES, type RelativeDateValue } from '@/components/FilterPills';
+ 
+ const contractStatuses: ContractStatus[] = ['Draft', 'Active', 'On Hold', 'Completed', 'Terminated'];
+ const contractTypes: ContractType[] = ['Standard Contracting', 'Permanent Employee', 'Fixed Price'];
+@@ -35,6 +36,9 @@ export default function ContractsPage() {
+   const [contractTypeFilter, setContractTypeFilter] = useState<string>('');
+   const [billingTypeFilter, setBillingTypeFilter] = useState<string>('');
+   const [countryFilter, setCountryFilter] = useState<string>('');
++  const [searchTerm, setSearchTerm] = useState<string>('');
++  const [startDateRel, setStartDateRel] = useState<RelativeDateValue>(ALL_DATES);
++  const [endDateRel, setEndDateRel] = useState<RelativeDateValue>(ALL_DATES);
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selected, setSelected] = useState<Contract | null>(null);
+   const [isNew, setIsNew] = useState(false);
+@@ -96,10 +100,24 @@ export default function ContractsPage() {
+   const updateField = (key: string, value: any) => setFormData(prev => ({ ...prev, [key]: value }));
+ 
+   const filtered = useMemo(() => {
++    const sR = dateRangeFor(startDateRel);
++    const eR = dateRangeFor(endDateRel);
+     return contracts.filter(c => {
+       if (statusFilter && c.status !== statusFilter) return false;
+       if (contractTypeFilter && c.contractType !== contractTypeFilter) return false;
+       if (billingTypeFilter && c.billingType !== billingTypeFilter) return false;
++      if (countryFilter && c.entityId !== countryFilter) return false;
++      if (searchTerm) {
++        const s = searchTerm.toLowerCase();
++        const con = getContactById(c.contactId);
++        const acc = getAccountById(c.parentAccountId);
++        if (!c.contractNumber.toLowerCase().includes(s) &&
++            !(c.name?.toLowerCase().includes(s)) &&
++            !(con && `${con.firstName} ${con.lastName}`.toLowerCase().includes(s)) &&
++            !(acc && acc.name.toLowerCase().includes(s))) return false;
++      }
++      if (!matchDateRange(c.startDate, sR.from, sR.to)) return false;
++      if (c.endDate && !matchDateRange(c.endDate, eR.from, eR.to)) return false;
+       const billingCol = getMultiFilter(colFilters, 'billingType');
+       if (billingCol.length > 0 && !billingCol.includes(c.billingType)) return false;
+       const num = getTextFilter(colFilters, 'contractNumber');
+@@ -113,7 +131,7 @@ export default function ContractsPage() {
+       if (marginNum.max && c.marginPercent > Number(marginNum.max)) return false;
+       return true;
+     });
+-  }, [statusFilter, contractTypeFilter, billingTypeFilter, countryFilter, colFilters]);
++  }, [statusFilter, contractTypeFilter, billingTypeFilter, countryFilter, searchTerm, startDateRel, endDateRel, colFilters]);
+ 
+   const filteredIds = filtered.map(c => c.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+@@ -144,35 +162,37 @@ export default function ContractsPage() {
+           <Button onClick={openNewForm}><Plus className="h-4 w-4 mr-2" />Add Contract</Button>
+         </div>} />
+ 
+-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
+-          <ToggleGroup type="single" value={statusFilter} onValueChange={setStatusFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {contractStatuses.map(s => (<ToggleGroupItem key={s} value={s} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{s}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{contracts.filter(c => c.status === s).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Contract Type</span>
+-          <ToggleGroup type="single" value={contractTypeFilter} onValueChange={setContractTypeFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {contractTypes.map(t => (<ToggleGroupItem key={t} value={t} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{t}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{contracts.filter(c => c.contractType === t).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Billing Type</span>
+-          <ToggleGroup type="single" value={billingTypeFilter} onValueChange={setBillingTypeFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {billingTypes.map(b => (<ToggleGroupItem key={b} value={b} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{b}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{contracts.filter(c => c.billingType === b).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Country</span>
+-          <ToggleGroup type="single" value={countryFilter} onValueChange={setCountryFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {countryOptions.map(e => (<ToggleGroupItem key={e.id} value={e.id} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{e.label}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{contracts.filter(c => c.entityId === e.id).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search contracts..." />
++          <SinglePill label="Status" value={statusFilter} onChange={setStatusFilter}
++            options={contractStatuses.map(s => ({ value: s, label: s, count: contracts.filter(c => c.status === s).length }))} />
++          <SinglePill label="Contract Type" value={contractTypeFilter} onChange={setContractTypeFilter}
++            options={contractTypes.map(t => ({ value: t, label: t, count: contracts.filter(c => c.contractType === t).length }))} />
++          <SinglePill label="Billing Type" value={billingTypeFilter} onChange={setBillingTypeFilter}
++            options={billingTypes.map(b => ({ value: b, label: b, count: contracts.filter(c => c.billingType === b).length }))} />
++          <SinglePill label="Country" value={countryFilter} onChange={setCountryFilter}
++            options={countryOptions.map(e => ({ value: e.id, label: e.label, count: contracts.filter(c => c.entityId === e.id).length }))} />
++          <DatePill label="Start Date" value={startDateRel} onChange={setStartDateRel} dates={contracts.map(c => c.startDate)} />
++          <DatePill label="End Date" value={endDateRel} onChange={setEndDateRel} dates={contracts.map(c => c.endDate)} />
+         </div>
++        {(searchTerm || statusFilter || contractTypeFilter || billingTypeFilter || countryFilter || startDateRel.type !== 'all' || endDateRel.type !== 'all') && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            <span className="text-muted-foreground">{filtered.length} of {contracts.length} contracts</span>
++            <span className="text-muted-foreground">┬╖</span>
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {statusFilter && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} />}
++            {contractTypeFilter && <FilterChip label={`Contract: ${contractTypeFilter}`} onRemove={() => setContractTypeFilter('')} />}
++            {billingTypeFilter && <FilterChip label={`Billing: ${billingTypeFilter}`} onRemove={() => setBillingTypeFilter('')} />}
++            {countryFilter && <FilterChip label={`Country: ${countryOptions.find(c => c.id === countryFilter)?.label}`} onRemove={() => setCountryFilter('')} />}
++            {startDateRel.type !== 'all' && <FilterChip label={`Start: ${relativeDateLabel(startDateRel)}`} onRemove={() => setStartDateRel(ALL_DATES)} />}
++            {endDateRel.type !== 'all' && <FilterChip label={`End: ${relativeDateLabel(endDateRel)}`} onRemove={() => setEndDateRel(ALL_DATES)} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setStatusFilter(''); setContractTypeFilter(''); setBillingTypeFilter(''); setCountryFilter(''); setStartDateRel(ALL_DATES); setEndDateRel(ALL_DATES); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       <div className="rounded-lg border">
+diff --git a/src/pages/DividendsPage.tsx b/src/pages/DividendsPage.tsx
+index 27090ca..a0d0656 100644
+--- a/src/pages/DividendsPage.tsx
++++ b/src/pages/DividendsPage.tsx
+@@ -11,10 +11,9 @@ import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
+ import { TextField, SelectField, DateField, LookupField } from '@/components/FormField';
+ import { toast } from 'sonner';
+ import {
+-  ColumnFilters, MultiSelectFilterPopover, NumberRangeFilterPopover, DateRangeFilterPopover, ClearColumnFiltersButton,
+-  getMultiFilter, getNumberFilter, getDateFilter, setMultiFilter, setNumberFilter, setDateFilter, matchDateRange,
++  ColumnFilters, ClearColumnFiltersButton, matchDateRange,
+ } from '@/components/ColumnFilters';
+-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
++import { SearchPill, SinglePill, MultiPill, FilterChip, DatePill, dateRangeFor, relativeDateLabel, type RelativeDateValue } from '@/components/FilterPills';
+ import type { Dividend } from '@/types/crm';
+ 
+ const countryOptions = entities.map(e => ({ id: e.id, label: e.country }));
+@@ -22,7 +21,10 @@ const uniqueCurrencies = [...new Set(dividends.map(d => d.currencyCode))].sort()
+ const currencyOptions = ['EUR', 'USD', 'RON', 'GBP'];
+ 
+ export default function DividendsPage() {
++  const [searchTerm, setSearchTerm] = useState('');
+   const [countryFilter, setCountryFilter] = useState<string>('');
++  const [currencyFilter, setCurrencyFilter] = useState<string[]>([]);
++  const [paymentDateFilter, setPaymentDateFilter] = useState<RelativeDateValue>({ type: 'all' });
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+   const [selected, setSelected] = useState<Dividend | null>(null);
+@@ -54,24 +56,27 @@ export default function DividendsPage() {
+   const updateField = (key: string, value: any) => setFormData(prev => ({ ...prev, [key]: value }));
+ 
+   const filtered = useMemo(() => {
++    const range = dateRangeFor(paymentDateFilter);
+     return dividends.filter(d => {
+       if (countryFilter && d.entityId !== countryFilter) return false;
+-      const currencyCol = getMultiFilter(colFilters, 'currency');
+-      if (currencyCol.length > 0 && !currencyCol.includes(d.currencyCode)) return false;
+-      const amountNum = getNumberFilter(colFilters, 'amount');
+-      if (amountNum.min && d.amount < Number(amountNum.min)) return false;
+-      if (amountNum.max && d.amount > Number(amountNum.max)) return false;
+-      const dateF = getDateFilter(colFilters, 'paymentDate');
+-      if (!matchDateRange(d.paymentDate, dateF.from, dateF.to)) return false;
++      if (currencyFilter.length > 0 && !currencyFilter.includes(d.currencyCode)) return false;
++      if (paymentDateFilter.type !== 'all' && !matchDateRange(d.paymentDate, range.from, range.to)) return false;
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        const country = getEntityById(d.entityId)?.country || '';
++        if (!d.name.toLowerCase().includes(q) && !country.toLowerCase().includes(q)) return false;
++      }
+       return true;
+     });
+-  }, [countryFilter, colFilters]);
++  }, [countryFilter, currencyFilter, paymentDateFilter, searchTerm]);
+ 
+   const filteredIds = filtered.map(d => d.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+   const toggleAll = (checked: boolean) => setSelectedIds(checked ? filteredIds : []);
+   const toggleOne = (id: string, checked: boolean) => setSelectedIds(checked ? [...selectedIds, id] : selectedIds.filter(x => x !== id));
+ 
++  const hasActiveFilters = !!searchTerm || !!countryFilter || currencyFilter.length > 0 || paymentDateFilter.type !== 'all';
++
+   return (
+     <div>
+       <HeaderSelectionBar count={selectedIds.length} onClearSelection={() => setSelectedIds([])} entityLabel="dividends" showActivate={false} showDeactivate={false} />
+@@ -81,14 +86,27 @@ export default function DividendsPage() {
+           <Button onClick={openNewForm}><Plus className="h-4 w-4 mr-2" />Add Dividend</Button>
+         </div>} />
+ 
+-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Country</span>
+-          <ToggleGroup type="single" value={countryFilter} onValueChange={setCountryFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {countryOptions.map(e => (<ToggleGroupItem key={e.id} value={e.id} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{e.label}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{dividends.filter(d => d.entityId === e.id).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search name, country..." />
++          <SinglePill label="Country" value={countryFilter} onChange={setCountryFilter}
++            options={countryOptions.map(e => ({ value: e.id, label: e.label, count: dividends.filter(d => d.entityId === e.id).length }))} />
++          <MultiPill label="Currency" values={currencyFilter} onChange={setCurrencyFilter}
++            options={uniqueCurrencies.map(c => ({ value: c, label: c, count: dividends.filter(d => d.currencyCode === c).length }))} />
++          <DatePill label="Payment Date" value={paymentDateFilter} onChange={setPaymentDateFilter} dates={dividends.map(d => d.paymentDate)} />
+         </div>
++        {hasActiveFilters && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {countryFilter && <FilterChip label={`Country: ${countryOptions.find(c => c.id === countryFilter)?.label || countryFilter}`} onRemove={() => setCountryFilter('')} />}
++            {currencyFilter.length > 0 && <FilterChip label={`Currency: ${currencyFilter.join(', ')}`} onRemove={() => setCurrencyFilter([])} />}
++            {paymentDateFilter.type !== 'all' && <FilterChip label={`Payment Date: ${relativeDateLabel(paymentDateFilter)}`} onRemove={() => setPaymentDateFilter({ type: 'all' })} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setCountryFilter(''); setCurrencyFilter([]); setPaymentDateFilter({ type: 'all' }); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       <div className="rounded-lg border">
+@@ -98,10 +116,10 @@ export default function DividendsPage() {
+               <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
+               <TableHead>Name</TableHead>
+               <TableHead>Country</TableHead>
+-              <TableHead className="text-right">Amount <NumberRangeFilterPopover label="Amount" min={getNumberFilter(colFilters, 'amount').min} max={getNumberFilter(colFilters, 'amount').max} onChange={(min, max) => setNumberFilter(setColFilters, 'amount', min, max)} /></TableHead>
+-              <TableHead>Currency <MultiSelectFilterPopover label="Currency" options={uniqueCurrencies} selected={getMultiFilter(colFilters, 'currency')} onChange={v => setMultiFilter(setColFilters, 'currency', v)} /></TableHead>
++              <TableHead className="text-right">Amount</TableHead>
++              <TableHead>Currency</TableHead>
+               <TableHead className="text-right">Tax Withheld</TableHead>
+-              <TableHead>Payment Date <DateRangeFilterPopover label="Payment Date" from={getDateFilter(colFilters, 'paymentDate').from} to={getDateFilter(colFilters, 'paymentDate').to} onChange={(from, to) => setDateFilter(setColFilters, 'paymentDate', from, to)} /></TableHead>
++              <TableHead>Payment Date</TableHead>
+               <TableHead>Document</TableHead>
+             </TableRow>
+           </TableHeader>
+diff --git a/src/pages/DocumentsPage.tsx b/src/pages/DocumentsPage.tsx
+index f30c6ca..4391cf1 100644
+--- a/src/pages/DocumentsPage.tsx
++++ b/src/pages/DocumentsPage.tsx
+@@ -1,4 +1,4 @@
+-import { useState } from 'react';
++import { useState, useMemo } from 'react';
+ import { PageHeader, EmptyState, StatusBadge } from '@/components/shared';
+ import { FileStack, Plus, X, FileText, Upload } from 'lucide-react';
+ import { Button } from '@/components/ui/button';
+@@ -8,6 +8,8 @@ import { TextField, SelectField, DateField, TextAreaField, LookupField } from '@
+ import { accounts } from '@/data/mock-data';
+ import type { CompanyDocument, DocumentType } from '@/types/crm';
+ import { format, parse, isValid } from 'date-fns';
++import { matchDateRange } from '@/components/ColumnFilters';
++import { SearchPill, MultiPill, FilterChip, DatePill, dateRangeFor, relativeDateLabel, type RelativeDateValue } from '@/components/FilterPills';
+ 
+ const documentTypeOptions: { value: string; label: string }[] = [
+   { value: 'Contract', label: 'Contract' },
+@@ -36,6 +38,12 @@ export default function DocumentsPage() {
+   const [formData, setFormData] = useState<CompanyDocument>(emptyForm);
+   const [editId, setEditId] = useState<string | null>(null);
+ 
++  const [searchTerm, setSearchTerm] = useState('');
++  const [typeFilter, setTypeFilter] = useState<string[]>([]);
++  const [accountFilter, setAccountFilter] = useState<string[]>([]);
++  const [issuedDateFilter, setIssuedDateFilter] = useState<RelativeDateValue>({ type: 'all' });
++  const [expirationDateFilter, setExpirationDateFilter] = useState<RelativeDateValue>({ type: 'all' });
++
+   const openNew = () => { setFormData({ ...emptyForm, id: `doc-${Date.now()}` }); setEditId(null); setOpen(true); };
+   const openEdit = (doc: CompanyDocument) => { setFormData({ ...doc }); setEditId(doc.id); setOpen(true); };
+   const close = () => setOpen(false);
+@@ -58,9 +66,56 @@ export default function DocumentsPage() {
+ 
+   const getAccountName = (id?: string) => id ? accounts.find(a => a.id === id)?.name || 'ΓÇö' : 'ΓÇö';
+ 
++  const filtered = useMemo(() => {
++    const issuedRange = dateRangeFor(issuedDateFilter);
++    const expRange = dateRangeFor(expirationDateFilter);
++    return documents.filter(doc => {
++      if (typeFilter.length > 0 && !typeFilter.includes(doc.documentType)) return false;
++      if (accountFilter.length > 0 && (!doc.relatedAccountId || !accountFilter.includes(doc.relatedAccountId))) return false;
++      if (issuedDateFilter.type !== 'all' && (!doc.issuedDate || !matchDateRange(doc.issuedDate, issuedRange.from, issuedRange.to))) return false;
++      if (expirationDateFilter.type !== 'all' && (!doc.expirationDate || !matchDateRange(doc.expirationDate, expRange.from, expRange.to))) return false;
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        if (
++          !doc.documentName.toLowerCase().includes(q) &&
++          !(doc.description || '').toLowerCase().includes(q) &&
++          !getAccountName(doc.relatedAccountId).toLowerCase().includes(q)
++        ) return false;
++      }
++      return true;
++    });
++  }, [documents, searchTerm, typeFilter, accountFilter, issuedDateFilter, expirationDateFilter]);
++
++  const hasActiveFilters = !!searchTerm || typeFilter.length > 0 || accountFilter.length > 0 || issuedDateFilter.type !== 'all' || expirationDateFilter.type !== 'all';
++
+   return (
+     <div>
+-      <PageHeader title="Company Documents" subtitle="Manage company documents and files" action={<Button onClick={openNew}><Plus className="h-4 w-4 mr-2" /> Upload Document</Button>} />
++      <PageHeader title="Company Documents" subtitle={`${filtered.length} of ${documents.length} documents`} action={<Button onClick={openNew}><Plus className="h-4 w-4 mr-2" /> Upload Document</Button>} />
++
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search name, description, account..." />
++          <MultiPill label="Type" values={typeFilter} onChange={setTypeFilter}
++            options={documentTypeOptions.map(t => ({ value: t.value, label: t.label, count: documents.filter(d => d.documentType === t.value).length }))} />
++          <MultiPill label="Account" values={accountFilter} onChange={setAccountFilter}
++            options={accountOptions.map(a => ({ value: a.value, label: a.label, count: documents.filter(d => d.relatedAccountId === a.value).length }))} />
++          <DatePill label="Issued Date" value={issuedDateFilter} onChange={setIssuedDateFilter} dates={documents.map(d => d.issuedDate).filter(Boolean) as string[]} />
++          <DatePill label="Expiration Date" value={expirationDateFilter} onChange={setExpirationDateFilter} dates={documents.map(d => d.expirationDate).filter(Boolean) as string[]} />
++        </div>
++        {hasActiveFilters && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {typeFilter.length > 0 && <FilterChip label={`Type: ${typeFilter.join(', ')}`} onRemove={() => setTypeFilter([])} />}
++            {accountFilter.length > 0 && <FilterChip label={`Account: ${accountFilter.map(id => accountOptions.find(a => a.value === id)?.label).filter(Boolean).join(', ')}`} onRemove={() => setAccountFilter([])} />}
++            {issuedDateFilter.type !== 'all' && <FilterChip label={`Issued: ${relativeDateLabel(issuedDateFilter)}`} onRemove={() => setIssuedDateFilter({ type: 'all' })} />}
++            {expirationDateFilter.type !== 'all' && <FilterChip label={`Expiration: ${relativeDateLabel(expirationDateFilter)}`} onRemove={() => setExpirationDateFilter({ type: 'all' })} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setTypeFilter([]); setAccountFilter([]); setIssuedDateFilter({ type: 'all' }); setExpirationDateFilter({ type: 'all' }); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
++      </div>
+ 
+       {documents.length === 0 ? (
+         <EmptyState icon={<FileStack className="h-12 w-12" />} title="No documents yet" description="Upload company documents, certificates, and other files." action={<Button onClick={openNew}>Upload Document</Button>} />
+@@ -77,7 +132,9 @@ export default function DocumentsPage() {
+               </TableRow>
+             </TableHeader>
+             <TableBody>
+-              {documents.map(doc => (
++              {filtered.length === 0 ? (
++                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No documents match the current filters.</TableCell></TableRow>
++              ) : filtered.map(doc => (
+                 <TableRow key={doc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openEdit(doc)}>
+                   <TableCell className="font-medium">
+                     <div className="flex items-center gap-2">
+diff --git a/src/pages/ExpensesPage.tsx b/src/pages/ExpensesPage.tsx
+index 5bfa03b..7c40fec 100644
+--- a/src/pages/ExpensesPage.tsx
++++ b/src/pages/ExpensesPage.tsx
+@@ -6,8 +6,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
+ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+ import { Checkbox } from '@/components/ui/checkbox';
+-import { Plus, Upload, FileText, X } from 'lucide-react';
++import { Plus, Upload, FileText, X, Table as TableIcon, Building2, Tag, FileSignature } from 'lucide-react';
+ import { expenses, entities, accounts, contracts, getEntityById, getAccountById, getContactById, getContractById } from '@/data/mock-data';
++import { ByVendorView, ByTypeView, ByContractView } from '@/components/expense/ExpenseAlternativeViews';
+ import type { Expense, ExpenseType, ExpenseStatus, CurrencyCode } from '@/types/crm';
+ import { formatCurrency, formatDate } from '@/lib/format';
+ import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
+@@ -17,6 +18,7 @@ import {
+   ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, NumberRangeFilterPopover, DateRangeFilterPopover, ClearColumnFiltersButton,
+   getTextFilter, getMultiFilter, getNumberFilter, getDateFilter, setTextFilter, setMultiFilter, setNumberFilter, setDateFilter, matchDateRange,
+ } from '@/components/ColumnFilters';
++import { SearchPill, SinglePill, MultiPill, FilterChip, DatePill, dateRangeFor, relativeDateLabel, type RelativeDateValue } from '@/components/FilterPills';
+ 
+ const expenseTypes: ExpenseType[] = ['Contractor Payment', 'Supplier Invoice', 'Tax', 'Employee Salary', 'Operating Cost', 'Software / Subscription'];
+ const expenseStatuses: ExpenseStatus[] = ['Received', 'Paid', 'Overdue'];
+@@ -28,12 +30,16 @@ export default function ExpensesPage() {
+   const [searchParams, setSearchParams] = useSearchParams();
+   const [statusFilter, setStatusFilter] = useState<string>('');
+   const [typeFilter, setTypeFilter] = useState<string>('');
+-  const [countryFilter, setCountryFilter] = useState<string>('');
++  const [countryFilter, setCountryFilter] = useState<string[]>([]);
++  const [searchTerm, setSearchTerm] = useState<string>('');
++  const [dateIssuedFilter, setDateIssuedFilter] = useState<RelativeDateValue>({ type: 'all' });
++  const [dueDateFilter, setDueDateFilter] = useState<RelativeDateValue>({ type: 'all' });
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selected, setSelected] = useState<Expense | null>(null);
+   const [isNew, setIsNew] = useState(false);
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+   const [formData, setFormData] = useState<Record<string, any>>({});
++  const [viewMode, setViewMode] = useState<'table' | 'vendor' | 'type' | 'contract'>('table');
+ 
+   const openForm = (expense: Expense) => {
+     setIsNew(false);
+@@ -82,7 +88,23 @@ export default function ExpensesPage() {
+     return expenses.filter(e => {
+       if (statusFilter && e.status !== statusFilter) return false;
+       if (typeFilter && e.expenseType !== typeFilter) return false;
+-      if (countryFilter && e.entityId !== countryFilter) return false;
++      if (countryFilter.length > 0 && !countryFilter.includes(e.entityId)) return false;
++      if (searchTerm) {
++        const s = searchTerm.toLowerCase();
++        const acc = getAccountById(e.accountId);
++        const matches = e.reference.toLowerCase().includes(s) ||
++          (acc?.name.toLowerCase().includes(s)) ||
++          (e.vendorInvoiceNumber || '').toLowerCase().includes(s);
++        if (!matches) return false;
++      }
++      if (dateIssuedFilter.type !== 'all') {
++        const r = dateRangeFor(dateIssuedFilter);
++        if (!matchDateRange(e.dateIssued, r.from, r.to)) return false;
++      }
++      if (dueDateFilter.type !== 'all') {
++        const r = dateRangeFor(dueDateFilter);
++        if (!matchDateRange(e.dueDate, r.from, r.to)) return false;
++      }
+       const ref = getTextFilter(colFilters, 'reference');
+       if (ref && !e.reference.toLowerCase().includes(ref.toLowerCase())) return false;
+       const vendor = getTextFilter(colFilters, 'vendor');
+@@ -98,7 +120,7 @@ export default function ExpensesPage() {
+       if (totalNum.max && e.totalAmount > Number(totalNum.max)) return false;
+       return true;
+     });
+-  }, [statusFilter, typeFilter, countryFilter, colFilters]);
++  }, [statusFilter, typeFilter, countryFilter, searchTerm, dateIssuedFilter, dueDateFilter, colFilters]);
+ 
+   const filteredIds = filtered.map(e => e.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+@@ -114,31 +136,46 @@ export default function ExpensesPage() {
+           <Button onClick={openNewForm}><Plus className="h-4 w-4 mr-2" />Add Expense</Button>
+         </div>} />
+ 
+-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
+-          <ToggleGroup type="single" value={statusFilter} onValueChange={setStatusFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {expenseStatuses.map(s => (<ToggleGroupItem key={s} value={s} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{s}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{expenses.filter(e => e.status === s).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</span>
+-          <ToggleGroup type="single" value={typeFilter} onValueChange={setTypeFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {expenseTypes.map(t => (<ToggleGroupItem key={t} value={t} className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{t}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{expenses.filter(e => e.expenseType === t).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Country</span>
+-          <ToggleGroup type="single" value={countryFilter} onValueChange={setCountryFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {countryOptions.map(e => (<ToggleGroupItem key={e.id} value={e.id} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{e.label}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{expenses.filter(ex => ex.entityId === e.id).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search reference, vendor, invoice #..." />
++          <SinglePill label="Status" value={statusFilter} onChange={setStatusFilter}
++            options={expenseStatuses.map(s => ({ value: s, label: s, count: expenses.filter(e => e.status === s).length }))} />
++          <SinglePill label="Type" value={typeFilter} onChange={setTypeFilter}
++            options={expenseTypes.map(t => ({ value: t, label: t, count: expenses.filter(e => e.expenseType === t).length }))} />
++          <MultiPill label="Country" values={countryFilter} onChange={setCountryFilter}
++            options={countryOptions.map(e => ({ value: e.id, label: e.label, count: expenses.filter(ex => ex.entityId === e.id).length }))} />
++          <DatePill label="Date Issued" value={dateIssuedFilter} onChange={setDateIssuedFilter} dates={expenses.map(e => e.dateIssued)} />
++          <DatePill label="Due Date" value={dueDateFilter} onChange={setDueDateFilter} dates={expenses.map(e => e.dueDate)} />
++          <div className="flex items-center gap-2 ml-auto">
++            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">View</span>
++            <ToggleGroup type="single" value={viewMode} onValueChange={v => v && setViewMode(v as any)} className="border rounded-md p-0.5">
++              <ToggleGroupItem value="table" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><TableIcon className="h-3.5 w-3.5" />Table</ToggleGroupItem>
++              <ToggleGroupItem value="vendor" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><Building2 className="h-3.5 w-3.5" />By Vendor</ToggleGroupItem>
++              <ToggleGroupItem value="type" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><Tag className="h-3.5 w-3.5" />By Type</ToggleGroupItem>
++              <ToggleGroupItem value="contract" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><FileSignature className="h-3.5 w-3.5" />By Contract</ToggleGroupItem>
++            </ToggleGroup>
++          </div>
+         </div>
++        {(searchTerm || statusFilter || typeFilter || countryFilter.length > 0 || dateIssuedFilter.type !== 'all' || dueDateFilter.type !== 'all') && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {statusFilter && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} />}
++            {typeFilter && <FilterChip label={`Type: ${typeFilter}`} onRemove={() => setTypeFilter('')} />}
++            {countryFilter.length > 0 && <FilterChip label={`Country: ${countryFilter.map(id => countryOptions.find(c => c.id === id)?.label).filter(Boolean).join(', ')}`} onRemove={() => setCountryFilter([])} />}
++            {dateIssuedFilter.type !== 'all' && <FilterChip label={`Date Issued: ${relativeDateLabel(dateIssuedFilter)}`} onRemove={() => setDateIssuedFilter({ type: 'all' })} />}
++            {dueDateFilter.type !== 'all' && <FilterChip label={`Due Date: ${relativeDateLabel(dueDateFilter)}`} onRemove={() => setDueDateFilter({ type: 'all' })} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setStatusFilter(''); setTypeFilter(''); setCountryFilter([]); setDateIssuedFilter({ type: 'all' }); setDueDateFilter({ type: 'all' }); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
++      {viewMode === 'table' && (
+       <div className="rounded-lg border">
++
+         <Table>
+           <TableHeader>
+             <TableRow>
+@@ -168,7 +205,15 @@ export default function ExpensesPage() {
+                 <TableCell className="font-mono text-xs" onClick={() => openForm(e)}>{e.reference}</TableCell>
+                 <TableCell className="text-sm" onClick={() => openForm(e)}>{e.expenseType}</TableCell>
+                 <TableCell onClick={() => openForm(e)}>{getAccountById(e.accountId)?.name}</TableCell>
+-                <TableCell className="text-sm" onClick={() => openForm(e)}>{contract?.contractNumber || 'ΓÇö'}</TableCell>
++                <TableCell className="text-sm" onClick={() => openForm(e)}>
++                  {contract ? (
++                    <div className="leading-tight">
++                      <div className="font-medium">{contract.contractNumber}</div>
++                      <div className="text-xs text-muted-foreground">{getAccountById(contract.parentAccountId)?.name}</div>
++                      {contract.childAccountId && <div className="text-xs text-muted-foreground">{getAccountById(contract.childAccountId)?.name}</div>}
++                    </div>
++                  ) : 'ΓÇö'}
++                </TableCell>
+                 <TableCell onClick={() => openForm(e)}>{e.currencyCode}</TableCell>
+                 <TableCell className="text-right font-medium" onClick={() => openForm(e)}>{formatCurrency(e.totalAmount, e.currencyCode)}</TableCell>
+                 <TableCell className="text-right" onClick={() => openForm(e)}>{formatCurrency(e.vatAmount, e.currencyCode)}</TableCell>
+@@ -182,6 +227,12 @@ export default function ExpensesPage() {
+           </TableBody>
+         </Table>
+       </div>
++      )}
++
++      {viewMode === 'vendor' && <ByVendorView expenses={filtered} onOpen={openForm} />}
++      {viewMode === 'type' && <ByTypeView expenses={filtered} onOpen={openForm} />}
++      {viewMode === 'contract' && <ByContractView expenses={filtered} onOpen={openForm} />}
++
+ 
+       <Sheet open={!!selected} onOpenChange={closeForm}>
+         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+diff --git a/src/pages/InterviewersPage.tsx b/src/pages/InterviewersPage.tsx
+index f445385..b675d37 100644
+--- a/src/pages/InterviewersPage.tsx
++++ b/src/pages/InterviewersPage.tsx
+@@ -11,9 +11,9 @@ import { toast } from 'sonner';
+ import { format, parse, isValid } from 'date-fns';
+ import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
+ import {
+-  ColumnFilters, TextFilterPopover, ClearColumnFiltersButton,
+-  getTextFilter, setTextFilter,
++  ColumnFilters, ClearColumnFiltersButton,
+ } from '@/components/ColumnFilters';
++import { SearchPill, MultiPill, FilterChip } from '@/components/FilterPills';
+ import { CheckCircle2, Clock, User, Calendar } from 'lucide-react';
+ 
+ const interviewers = contacts.filter(c => c.isInterviewer);
+@@ -30,10 +30,16 @@ const getCandidateName = (candidateId: string) => {
+ 
+ export default function InterviewersPage() {
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
++  const [searchTerm, setSearchTerm] = useState('');
++  const [roleFilter, setRoleFilter] = useState<string[]>([]);
++  const [countryFilter, setCountryFilter] = useState<string[]>([]);
+   const [selectedInterviewer, setSelectedInterviewer] = useState<Contact | null>(null);
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+   const [slotsVersion, setSlotsVersion] = useState(0);
+ 
++  const uniqueRoles = useMemo(() => [...new Set(interviewers.map(c => c.jobRole).filter(Boolean) as string[])].sort(), []);
++  const uniqueCountries = useMemo(() => [...new Set(interviewers.map(c => c.country).filter(Boolean) as string[])].sort(), []);
++
+   const openForm = (contact: Contact) => setSelectedInterviewer(contact);
+   const closeForm = () => setSelectedInterviewer(null);
+ 
+@@ -84,35 +90,62 @@ export default function InterviewersPage() {
+ 
+   const filtered = useMemo(() => {
+     return interviewers.filter(c => {
+-      const name = getTextFilter(colFilters, 'name');
+-      if (name && !`${c.firstName} ${c.lastName}`.toLowerCase().includes(name.toLowerCase())) return false;
+-      const email = getTextFilter(colFilters, 'email');
+-      if (email && !c.email.toLowerCase().includes(email.toLowerCase())) return false;
+-      const role = getTextFilter(colFilters, 'jobRole');
+-      if (role && !(c.jobRole || '').toLowerCase().includes(role.toLowerCase())) return false;
++      if (roleFilter.length > 0 && (!c.jobRole || !roleFilter.includes(c.jobRole))) return false;
++      if (countryFilter.length > 0 && (!c.country || !countryFilter.includes(c.country))) return false;
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        if (
++          !`${c.firstName} ${c.lastName}`.toLowerCase().includes(q) &&
++          !c.email.toLowerCase().includes(q) &&
++          !(c.jobRole || '').toLowerCase().includes(q)
++        ) return false;
++      }
+       return true;
+     });
+-  }, [colFilters]);
++  }, [searchTerm, roleFilter, countryFilter]);
+ 
+   const filteredIds = filtered.map(c => c.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+   const toggleAll = (checked: boolean) => setSelectedIds(checked ? filteredIds : []);
+   const toggleOne = (id: string, checked: boolean) => setSelectedIds(checked ? [...selectedIds, id] : selectedIds.filter(x => x !== id));
+ 
++  const hasActiveFilters = !!searchTerm || roleFilter.length > 0 || countryFilter.length > 0;
++
+   return (
+     <div>
+       <HeaderSelectionBar count={selectedIds.length} onClearSelection={() => setSelectedIds([])} entityLabel="interviewers" showActivate={false} showDeactivate={false} showDelete showDownload />
+       <PageHeader title="Interviewers" subtitle={`${filtered.length} of ${interviewers.length} interviewers`}
+         action={<ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />} />
+ 
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search name, email, role..." />
++          <MultiPill label="Role" values={roleFilter} onChange={setRoleFilter}
++            options={uniqueRoles.map(r => ({ value: r, label: r, count: interviewers.filter(i => i.jobRole === r).length }))} />
++          <MultiPill label="Country" values={countryFilter} onChange={setCountryFilter}
++            options={uniqueCountries.map(c => ({ value: c, label: c, count: interviewers.filter(i => i.country === c).length }))} />
++        </div>
++        {hasActiveFilters && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {roleFilter.length > 0 && <FilterChip label={`Role: ${roleFilter.join(', ')}`} onRemove={() => setRoleFilter([])} />}
++            {countryFilter.length > 0 && <FilterChip label={`Country: ${countryFilter.join(', ')}`} onRemove={() => setCountryFilter([])} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setRoleFilter([]); setCountryFilter([]); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
++      </div>
++
+       <div className="rounded-lg border">
+         <Table>
+           <TableHeader>
+             <TableRow>
+               <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
+-              <TableHead>Name <TextFilterPopover label="Name" value={getTextFilter(colFilters, 'name')} onChange={v => setTextFilter(setColFilters, 'name', v)} /></TableHead>
+-              <TableHead>Email <TextFilterPopover label="Email" value={getTextFilter(colFilters, 'email')} onChange={v => setTextFilter(setColFilters, 'email', v)} /></TableHead>
+-              <TableHead>Role <TextFilterPopover label="Role" value={getTextFilter(colFilters, 'jobRole')} onChange={v => setTextFilter(setColFilters, 'jobRole', v)} /></TableHead>
++              <TableHead>Name</TableHead>
++              <TableHead>Email</TableHead>
++              <TableHead>Role</TableHead>
+               <TableHead>Country</TableHead>
+               <TableHead>Booked</TableHead>
+             </TableRow>
+diff --git a/src/pages/InvoicesPage.tsx b/src/pages/InvoicesPage.tsx
+index c1b031c..6d672c3 100644
+--- a/src/pages/InvoicesPage.tsx
++++ b/src/pages/InvoicesPage.tsx
+@@ -22,6 +22,7 @@ import {
+   ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, NumberRangeFilterPopover, DateRangeFilterPopover, ClearColumnFiltersButton,
+   getTextFilter, getMultiFilter, getNumberFilter, getDateFilter, setTextFilter, setMultiFilter, setNumberFilter, setDateFilter, matchDateRange,
+ } from '@/components/ColumnFilters';
++import { SearchPill, SinglePill, DatePill, FilterChip, dateRangeFor, relativeDateLabel, ALL_DATES, type RelativeDateValue } from '@/components/FilterPills';
+ 
+ const invoiceStatuses: InvoiceStatus[] = ['Draft', 'Sent', 'Paid', 'Overdue', 'Cancelled', 'Credit Note'];
+ const countryOptions = entities.map(e => ({ id: e.id, label: e.country }));
+@@ -34,6 +35,9 @@ export default function InvoicesPage() {
+   const [searchParams, setSearchParams] = useSearchParams();
+   const [statusFilter, setStatusFilter] = useState<string>('');
+   const [countryFilter, setCountryFilter] = useState<string>('');
++  const [searchTerm, setSearchTerm] = useState<string>('');
++  const [invoiceDateRel, setInvoiceDateRel] = useState<RelativeDateValue>(ALL_DATES);
++  const [dueDateRel, setDueDateRel] = useState<RelativeDateValue>(ALL_DATES);
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selected, setSelected] = useState<Invoice | null>(null);
+   const [isNew, setIsNew] = useState(false);
+@@ -145,9 +149,18 @@ export default function InvoicesPage() {
+   });
+ 
+   const filtered = useMemo(() => {
++    const invDateR = dateRangeFor(invoiceDateRel);
++    const dueDateR = dateRangeFor(dueDateRel);
+     return invoices.filter(inv => {
+       if (statusFilter && inv.status !== statusFilter) return false;
+       if (countryFilter && inv.entityId !== countryFilter) return false;
++      if (searchTerm) {
++        const s = searchTerm.toLowerCase();
++        const acc = getAccountById(inv.accountId);
++        if (!inv.invoiceNumber.toLowerCase().includes(s) && !(acc?.name.toLowerCase().includes(s))) return false;
++      }
++      if (!matchDateRange(inv.invoiceDate, invDateR.from, invDateR.to)) return false;
++      if (!matchDateRange(inv.dueDate, dueDateR.from, dueDateR.to)) return false;
+       const num = getTextFilter(colFilters, 'invoiceNumber');
+       if (num && !inv.invoiceNumber.toLowerCase().includes(num.toLowerCase())) return false;
+       const account = getTextFilter(colFilters, 'account');
+@@ -163,7 +176,7 @@ export default function InvoicesPage() {
+       if (totalNum.max && inv.total > Number(totalNum.max)) return false;
+       return true;
+     });
+-  }, [statusFilter, countryFilter, colFilters]);
++  }, [statusFilter, countryFilter, searchTerm, invoiceDateRel, dueDateRel, colFilters]);
+ 
+   const filteredIds = filtered.map(i => i.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+@@ -192,30 +205,40 @@ export default function InvoicesPage() {
+           />
+         </div>} />
+ 
+-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
+-          <ToggleGroup type="single" value={statusFilter} onValueChange={setStatusFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {invoiceStatuses.map(s => (<ToggleGroupItem key={s} value={s} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{s}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{invoices.filter(i => i.status === s).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Country</span>
+-          <ToggleGroup type="single" value={countryFilter} onValueChange={setCountryFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {countryOptions.map(e => (<ToggleGroupItem key={e.id} value={e.id} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{e.label}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{invoices.filter(i => i.entityId === e.id).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2 ml-auto">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">View</span>
+-          <ToggleGroup type="single" value={viewMode} onValueChange={v => v && setViewMode(v as any)} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="table" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><TableIcon className="h-3.5 w-3.5" />Table</ToggleGroupItem>
+-            <ToggleGroupItem value="account" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><Building2 className="h-3.5 w-3.5" />By Account</ToggleGroupItem>
+-            <ToggleGroupItem value="timeline" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Timeline</ToggleGroupItem>
+-            <ToggleGroupItem value="consultant" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><Users className="h-3.5 w-3.5" />By Consultant</ToggleGroupItem>
+-          </ToggleGroup>
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search invoices..." />
++          <SinglePill label="Status" value={statusFilter} onChange={setStatusFilter}
++            options={invoiceStatuses.map(s => ({ value: s, label: s, count: invoices.filter(i => i.status === s).length }))} />
++          <SinglePill label="Country" value={countryFilter} onChange={setCountryFilter}
++            options={countryOptions.map(e => ({ value: e.id, label: e.label, count: invoices.filter(i => i.entityId === e.id).length }))} />
++          <DatePill label="Invoice Date" value={invoiceDateRel} onChange={setInvoiceDateRel} dates={invoices.map(i => i.invoiceDate)} />
++          <DatePill label="Due Date" value={dueDateRel} onChange={setDueDateRel} dates={invoices.map(i => i.dueDate)} />
++          <div className="flex items-center gap-2 ml-auto">
++            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">View</span>
++            <ToggleGroup type="single" value={viewMode} onValueChange={v => v && setViewMode(v as any)} className="border rounded-md p-0.5">
++              <ToggleGroupItem value="table" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><TableIcon className="h-3.5 w-3.5" />Table</ToggleGroupItem>
++              <ToggleGroupItem value="account" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><Building2 className="h-3.5 w-3.5" />By Account</ToggleGroupItem>
++              <ToggleGroupItem value="timeline" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Timeline</ToggleGroupItem>
++              <ToggleGroupItem value="consultant" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><Users className="h-3.5 w-3.5" />By Consultant</ToggleGroupItem>
++            </ToggleGroup>
++          </div>
+         </div>
++        {(searchTerm || statusFilter || countryFilter || invoiceDateRel.type !== 'all' || dueDateRel.type !== 'all') && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            <span className="text-muted-foreground">{filtered.length} of {invoices.length} invoices</span>
++            <span className="text-muted-foreground">┬╖</span>
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {statusFilter && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} />}
++            {countryFilter && <FilterChip label={`Country: ${countryOptions.find(c => c.id === countryFilter)?.label}`} onRemove={() => setCountryFilter('')} />}
++            {invoiceDateRel.type !== 'all' && <FilterChip label={`Invoice Date: ${relativeDateLabel(invoiceDateRel)}`} onRemove={() => setInvoiceDateRel(ALL_DATES)} />}
++            {dueDateRel.type !== 'all' && <FilterChip label={`Due Date: ${relativeDateLabel(dueDateRel)}`} onRemove={() => setDueDateRel(ALL_DATES)} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setStatusFilter(''); setCountryFilter(''); setInvoiceDateRel(ALL_DATES); setDueDateRel(ALL_DATES); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       {viewMode === 'table' && (
+diff --git a/src/pages/JDPlatformsPage.tsx b/src/pages/JDPlatformsPage.tsx
+index 1daf279..e469751 100644
+--- a/src/pages/JDPlatformsPage.tsx
++++ b/src/pages/JDPlatformsPage.tsx
+@@ -11,9 +11,9 @@ import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
+ import { TextField, TextAreaField, SelectField } from '@/components/FormField';
+ import { toast } from 'sonner';
+ import {
+-  ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, ClearColumnFiltersButton,
+-  getTextFilter, getMultiFilter, setTextFilter, setMultiFilter,
++  ColumnFilters, ClearColumnFiltersButton,
+ } from '@/components/ColumnFilters';
++import { SearchPill, MultiPill, FilterChip } from '@/components/FilterPills';
+ 
+ const aiOptions = [{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }];
+ 
+@@ -24,6 +24,9 @@ export default function JDPlatformsPage() {
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+   const [formData, setFormData] = useState<Record<string, any>>({});
+ 
++  const [searchTerm, setSearchTerm] = useState('');
++  const [aiFilter, setAiFilter] = useState<string[]>([]);
++
+   const openForm = (platform: JDPlatform) => {
+     setIsNew(false);
+     setSelected(platform);
+@@ -42,32 +45,48 @@ export default function JDPlatformsPage() {
+ 
+   const filtered = useMemo(() => {
+     return jdPlatforms.filter(p => {
+-      const name = getTextFilter(colFilters, 'name');
+-      if (name && !p.name.toLowerCase().includes(name.toLowerCase())) return false;
+-      const desc = getTextFilter(colFilters, 'description');
+-      if (desc && !p.description.toLowerCase().includes(desc.toLowerCase())) return false;
+-      const ai = getMultiFilter(colFilters, 'definedByAI');
+-      if (ai.length > 0) {
+-        const val = p.definedByAI ? 'Yes' : 'No';
+-        if (!ai.includes(val)) return false;
++      if (aiFilter.length > 0) {
++        const v = p.definedByAI ? 'Yes' : 'No';
++        if (!aiFilter.includes(v)) return false;
++      }
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        if (!p.name.toLowerCase().includes(q) && !p.description.toLowerCase().includes(q)) return false;
+       }
+       return true;
+     });
+-  }, [colFilters]);
++  }, [searchTerm, aiFilter]);
+ 
+   const filteredIds = filtered.map(p => p.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+   const toggleAll = (checked: boolean) => setSelectedIds(checked ? filteredIds : []);
+   const toggleOne = (id: string, checked: boolean) => setSelectedIds(checked ? [...selectedIds, id] : selectedIds.filter(x => x !== id));
+ 
++  const hasActiveFilters = !!searchTerm || aiFilter.length > 0;
++
+   return (
+     <div className="flex flex-col h-full">
+       <PageHeader title="JD Platforms" action={<Button size="sm" onClick={openNewForm}><Plus className="h-4 w-4 mr-1" />Add Platform</Button>} />
+ 
+       <HeaderSelectionBar count={selectedIds.length} onClearSelection={() => setSelectedIds([])} showDelete />
+ 
+-      <div className="flex items-center gap-2 px-6 pb-2 flex-wrap">
+-        <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
++      <div className="space-y-3 px-6 pb-2">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search name or description..." />
++          <MultiPill label="Defined by AI" values={aiFilter} onChange={setAiFilter}
++            options={['Yes', 'No'].map(v => ({ value: v, label: v, count: jdPlatforms.filter(p => (p.definedByAI ? 'Yes' : 'No') === v).length }))} />
++          <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
++        </div>
++        {hasActiveFilters && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {aiFilter.length > 0 && <FilterChip label={`Defined by AI: ${aiFilter.join(', ')}`} onRemove={() => setAiFilter([])} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setAiFilter([]); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       <div className="flex-1 overflow-auto px-6 pb-6">
+@@ -75,9 +94,9 @@ export default function JDPlatformsPage() {
+           <TableHeader>
+             <TableRow>
+               <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
+-              <TableHead>Platform Name <TextFilterPopover label="Platform Name" value={getTextFilter(colFilters, 'name')} onChange={v => setTextFilter(setColFilters, 'name', v)} /></TableHead>
+-              <TableHead>Platform Description <TextFilterPopover label="Platform Description" value={getTextFilter(colFilters, 'description')} onChange={v => setTextFilter(setColFilters, 'description', v)} /></TableHead>
+-              <TableHead>Defined by AI <MultiSelectFilterPopover label="Defined by AI" options={['Yes', 'No']} selected={getMultiFilter(colFilters, 'definedByAI')} onChange={v => setMultiFilter(setColFilters, 'definedByAI', v)} /></TableHead>
++              <TableHead>Platform Name</TableHead>
++              <TableHead>Platform Description</TableHead>
++              <TableHead>Defined by AI</TableHead>
+             </TableRow>
+           </TableHeader>
+           <TableBody>
+diff --git a/src/pages/JDSkillsPage.tsx b/src/pages/JDSkillsPage.tsx
+index b78eaed..aaa5b37 100644
+--- a/src/pages/JDSkillsPage.tsx
++++ b/src/pages/JDSkillsPage.tsx
+@@ -11,9 +11,9 @@ import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
+ import { TextField, TextAreaField, SelectField } from '@/components/FormField';
+ import { toast } from 'sonner';
+ import {
+-  ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, ClearColumnFiltersButton,
+-  getTextFilter, getMultiFilter, setTextFilter, setMultiFilter,
++  ColumnFilters, ClearColumnFiltersButton,
+ } from '@/components/ColumnFilters';
++import { SearchPill, MultiPill, FilterChip } from '@/components/FilterPills';
+ 
+ const aiOptions = [{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }];
+ 
+@@ -24,6 +24,9 @@ export default function JDSkillsPage() {
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+   const [formData, setFormData] = useState<Record<string, any>>({});
+ 
++  const [searchTerm, setSearchTerm] = useState('');
++  const [aiFilter, setAiFilter] = useState<string[]>([]);
++
+   const openForm = (skill: JDSkill) => {
+     setIsNew(false);
+     setSelected(skill);
+@@ -42,32 +45,48 @@ export default function JDSkillsPage() {
+ 
+   const filtered = useMemo(() => {
+     return jdSkills.filter(s => {
+-      const name = getTextFilter(colFilters, 'name');
+-      if (name && !s.name.toLowerCase().includes(name.toLowerCase())) return false;
+-      const desc = getTextFilter(colFilters, 'description');
+-      if (desc && !(s.description || '').toLowerCase().includes(desc.toLowerCase())) return false;
+-      const ai = getMultiFilter(colFilters, 'definedByAI');
+-      if (ai.length > 0) {
+-        const val = s.definedByAI ? 'Yes' : 'No';
+-        if (!ai.includes(val)) return false;
++      if (aiFilter.length > 0) {
++        const v = s.definedByAI ? 'Yes' : 'No';
++        if (!aiFilter.includes(v)) return false;
++      }
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        if (!s.name.toLowerCase().includes(q) && !(s.description || '').toLowerCase().includes(q)) return false;
+       }
+       return true;
+     });
+-  }, [colFilters]);
++  }, [searchTerm, aiFilter]);
+ 
+   const filteredIds = filtered.map(s => s.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+   const toggleAll = (checked: boolean) => setSelectedIds(checked ? filteredIds : []);
+   const toggleOne = (id: string, checked: boolean) => setSelectedIds(checked ? [...selectedIds, id] : selectedIds.filter(x => x !== id));
+ 
++  const hasActiveFilters = !!searchTerm || aiFilter.length > 0;
++
+   return (
+     <div className="flex flex-col h-full">
+       <PageHeader title="JD Skills" action={<Button size="sm" onClick={openNewForm}><Plus className="h-4 w-4 mr-1" />Add Skill</Button>} />
+ 
+       <HeaderSelectionBar count={selectedIds.length} onClearSelection={() => setSelectedIds([])} showDelete />
+ 
+-      <div className="flex items-center gap-2 px-6 pb-2 flex-wrap">
+-        <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
++      <div className="space-y-3 px-6 pb-2">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search name or description..." />
++          <MultiPill label="Defined by AI" values={aiFilter} onChange={setAiFilter}
++            options={['Yes', 'No'].map(v => ({ value: v, label: v, count: jdSkills.filter(s => (s.definedByAI ? 'Yes' : 'No') === v).length }))} />
++          <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
++        </div>
++        {hasActiveFilters && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {aiFilter.length > 0 && <FilterChip label={`Defined by AI: ${aiFilter.join(', ')}`} onRemove={() => setAiFilter([])} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setAiFilter([]); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       <div className="flex-1 overflow-auto px-6 pb-6">
+@@ -75,9 +94,9 @@ export default function JDSkillsPage() {
+           <TableHeader>
+             <TableRow>
+               <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
+-              <TableHead>JD Skill Name <TextFilterPopover label="JD Skill Name" value={getTextFilter(colFilters, 'name')} onChange={v => setTextFilter(setColFilters, 'name', v)} /></TableHead>
+-              <TableHead>JD Skill Description <TextFilterPopover label="JD Skill Description" value={getTextFilter(colFilters, 'description')} onChange={v => setTextFilter(setColFilters, 'description', v)} /></TableHead>
+-              <TableHead>Defined by AI <MultiSelectFilterPopover label="Defined by AI" options={['Yes', 'No']} selected={getMultiFilter(colFilters, 'definedByAI')} onChange={v => setMultiFilter(setColFilters, 'definedByAI', v)} /></TableHead>
++              <TableHead>JD Skill Name</TableHead>
++              <TableHead>JD Skill Description</TableHead>
++              <TableHead>Defined by AI</TableHead>
+             </TableRow>
+           </TableHeader>
+           <TableBody>
+diff --git a/src/pages/LeavePage.tsx b/src/pages/LeavePage.tsx
+index 168768b..dbf216c 100644
+--- a/src/pages/LeavePage.tsx
++++ b/src/pages/LeavePage.tsx
+@@ -11,9 +11,9 @@ import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
+ import { TextField, DateField, LookupField } from '@/components/FormField';
+ import { Plus, Check } from 'lucide-react';
+ import {
+-  ColumnFilters, TextFilterPopover, NumberRangeFilterPopover, DateRangeFilterPopover, ClearColumnFiltersButton,
+-  getTextFilter, getNumberFilter, getDateFilter, setTextFilter, setNumberFilter, setDateFilter, matchDateRange,
++  ColumnFilters, ClearColumnFiltersButton, matchDateRange,
+ } from '@/components/ColumnFilters';
++import { SearchPill, MultiPill, FilterChip, DatePill, dateRangeFor, relativeDateLabel, type RelativeDateValue } from '@/components/FilterPills';
+ 
+ const emptyLeave: Omit<LeaveRequest, 'id'> = {
+   name: '',
+@@ -47,22 +47,37 @@ export default function LeavePage() {
+   const [formOpen, setFormOpen] = useState(false);
+   const [editLeave, setEditLeave] = useState<Omit<LeaveRequest, 'id'> & { id?: string }>(emptyLeave);
+ 
++  const [searchTerm, setSearchTerm] = useState('');
++  const [consultantFilter, setConsultantFilter] = useState<string[]>([]);
++  const [leaveTypeFilter, setLeaveTypeFilter] = useState<string[]>([]);
++  const [statusFilter, setStatusFilter] = useState<string[]>([]);
++  const [startDateFilter, setStartDateFilter] = useState<RelativeDateValue>({ type: 'all' });
++  const [endDateFilter, setEndDateFilter] = useState<RelativeDateValue>({ type: 'all' });
++
++  const consultantOptionsAll = useMemo(() => contacts
++    .filter(c => c.contactType === 'Consultant' || c.contactType === 'Permanent Employee')
++    .map(c => ({ value: c.id, label: `${c.firstName} ${c.lastName}` })), []);
++  const leaveTypes = useMemo(() => [...new Set(allLeave.map(l => l.leaveType))], [allLeave]);
++  const statuses = useMemo(() => [...new Set(allLeave.map(l => l.status))], [allLeave]);
++
+   const filtered = useMemo(() => {
++    const startRange = dateRangeFor(startDateFilter);
++    const endRange = dateRangeFor(endDateFilter);
+     return allLeave.filter(lr => {
+-      const consultant = getTextFilter(colFilters, 'consultant');
+-      if (consultant) { const con = getContactById(lr.contactId); if (!con || !`${con.firstName} ${con.lastName}`.toLowerCase().includes(consultant.toLowerCase())) return false; }
+-      const nameF = getTextFilter(colFilters, 'name');
+-      if (nameF && !lr.name.toLowerCase().includes(nameF.toLowerCase())) return false;
+-      const startF = getDateFilter(colFilters, 'startDate');
+-      if (!matchDateRange(lr.startDate, startF.from, startF.to)) return false;
+-      const endF = getDateFilter(colFilters, 'endDate');
+-      if (!matchDateRange(lr.endDate, endF.from, endF.to)) return false;
+-      const days = getNumberFilter(colFilters, 'days');
+-      if (days.min && lr.totalDays < Number(days.min)) return false;
+-      if (days.max && lr.totalDays > Number(days.max)) return false;
++      if (consultantFilter.length > 0 && !consultantFilter.includes(lr.contactId)) return false;
++      if (leaveTypeFilter.length > 0 && !leaveTypeFilter.includes(lr.leaveType)) return false;
++      if (statusFilter.length > 0 && !statusFilter.includes(lr.status)) return false;
++      if (startDateFilter.type !== 'all' && !matchDateRange(lr.startDate, startRange.from, startRange.to)) return false;
++      if (endDateFilter.type !== 'all' && !matchDateRange(lr.endDate, endRange.from, endRange.to)) return false;
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        const con = getContactById(lr.contactId);
++        const conName = con ? `${con.firstName} ${con.lastName}`.toLowerCase() : '';
++        if (!lr.name.toLowerCase().includes(q) && !conName.includes(q)) return false;
++      }
+       return true;
+     });
+-  }, [colFilters, allLeave]);
++  }, [searchTerm, consultantFilter, leaveTypeFilter, statusFilter, startDateFilter, endDateFilter, allLeave]);
+ 
+   const filteredIds = filtered.map(lr => lr.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+@@ -114,6 +129,8 @@ export default function LeavePage() {
+     setFormOpen(false);
+   };
+ 
++  const hasActiveFilters = !!searchTerm || consultantFilter.length > 0 || leaveTypeFilter.length > 0 || statusFilter.length > 0 || startDateFilter.type !== 'all' || endDateFilter.type !== 'all';
++
+   return (
+     <div>
+       <HeaderSelectionBar count={selectedIds.length} onClearSelection={() => setSelectedIds([])} entityLabel="requests"
+@@ -124,16 +141,44 @@ export default function LeavePage() {
+           <Button onClick={openNew} size="sm"><Plus className="h-4 w-4 mr-1" />Add Leave</Button>
+         </div>} />
+ 
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search name, consultant..." />
++          <MultiPill label="Consultant" values={consultantFilter} onChange={setConsultantFilter}
++            options={consultantOptionsAll.map(o => ({ value: o.value, label: o.label, count: allLeave.filter(l => l.contactId === o.value).length }))} />
++          <MultiPill label="Leave Type" values={leaveTypeFilter} onChange={setLeaveTypeFilter}
++            options={leaveTypes.map(t => ({ value: t, label: t, count: allLeave.filter(l => l.leaveType === t).length }))} />
++          <MultiPill label="Status" values={statusFilter} onChange={setStatusFilter}
++            options={statuses.map(s => ({ value: s, label: s, count: allLeave.filter(l => l.status === s).length }))} />
++          <DatePill label="Start Date" value={startDateFilter} onChange={setStartDateFilter} dates={allLeave.map(l => l.startDate)} />
++          <DatePill label="End Date" value={endDateFilter} onChange={setEndDateFilter} dates={allLeave.map(l => l.endDate)} />
++        </div>
++        {hasActiveFilters && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {consultantFilter.length > 0 && <FilterChip label={`Consultant: ${consultantFilter.map(id => consultantOptionsAll.find(c => c.value === id)?.label).filter(Boolean).join(', ')}`} onRemove={() => setConsultantFilter([])} />}
++            {leaveTypeFilter.length > 0 && <FilterChip label={`Leave Type: ${leaveTypeFilter.join(', ')}`} onRemove={() => setLeaveTypeFilter([])} />}
++            {statusFilter.length > 0 && <FilterChip label={`Status: ${statusFilter.join(', ')}`} onRemove={() => setStatusFilter([])} />}
++            {startDateFilter.type !== 'all' && <FilterChip label={`Start: ${relativeDateLabel(startDateFilter)}`} onRemove={() => setStartDateFilter({ type: 'all' })} />}
++            {endDateFilter.type !== 'all' && <FilterChip label={`End: ${relativeDateLabel(endDateFilter)}`} onRemove={() => setEndDateFilter({ type: 'all' })} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setConsultantFilter([]); setLeaveTypeFilter([]); setStatusFilter([]); setStartDateFilter({ type: 'all' }); setEndDateFilter({ type: 'all' }); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
++      </div>
++
+       <div className="rounded-lg border">
+         <Table>
+           <TableHeader>
+             <TableRow>
+               <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
+-              <TableHead>Name <TextFilterPopover label="Name" value={getTextFilter(colFilters, 'name')} onChange={v => setTextFilter(setColFilters, 'name', v)} /></TableHead>
+-              <TableHead>Consultant <TextFilterPopover label="Consultant" value={getTextFilter(colFilters, 'consultant')} onChange={v => setTextFilter(setColFilters, 'consultant', v)} /></TableHead>
+-              <TableHead>Start <DateRangeFilterPopover label="Start Date" from={getDateFilter(colFilters, 'startDate').from} to={getDateFilter(colFilters, 'startDate').to} onChange={(from, to) => setDateFilter(setColFilters, 'startDate', from, to)} /></TableHead>
+-              <TableHead>End <DateRangeFilterPopover label="End Date" from={getDateFilter(colFilters, 'endDate').from} to={getDateFilter(colFilters, 'endDate').to} onChange={(from, to) => setDateFilter(setColFilters, 'endDate', from, to)} /></TableHead>
+-              <TableHead>Days <NumberRangeFilterPopover label="Days" min={getNumberFilter(colFilters, 'days').min} max={getNumberFilter(colFilters, 'days').max} onChange={(min, max) => setNumberFilter(setColFilters, 'days', min, max)} /></TableHead>
++              <TableHead>Name</TableHead>
++              <TableHead>Consultant</TableHead>
++              <TableHead>Start</TableHead>
++              <TableHead>End</TableHead>
++              <TableHead>Days</TableHead>
+               <TableHead>Client Notified</TableHead>
+             </TableRow>
+           </TableHeader>
+diff --git a/src/pages/PaymentDetailsPage.tsx b/src/pages/PaymentDetailsPage.tsx
+index 46ea630..f3624a0 100644
+--- a/src/pages/PaymentDetailsPage.tsx
++++ b/src/pages/PaymentDetailsPage.tsx
+@@ -11,9 +11,9 @@ import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
+ import { TextField, SelectField, LookupField } from '@/components/FormField';
+ import { toast } from 'sonner';
+ import {
+-  ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, ClearColumnFiltersButton,
+-  getTextFilter, getMultiFilter, setTextFilter, setMultiFilter,
++  ColumnFilters, ClearColumnFiltersButton,
+ } from '@/components/ColumnFilters';
++import { SearchPill, MultiPill, FilterChip } from '@/components/FilterPills';
+ 
+ const currencyOptions: { value: string; label: string }[] = ['EUR', 'USD', 'GBP', 'RON'].map(c => ({ value: c, label: c }));
+ 
+@@ -24,6 +24,11 @@ export default function PaymentDetailsPage() {
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+   const [formData, setFormData] = useState<Record<string, any>>({});
+ 
++  const [searchTerm, setSearchTerm] = useState('');
++  const [accountFilter, setAccountFilter] = useState<string[]>([]);
++  const [currencyFilter, setCurrencyFilter] = useState<string[]>([]);
++  const [primaryFilter, setPrimaryFilter] = useState<string[]>([]);
++
+   const openForm = (pd: PaymentDetail) => {
+     setIsNew(false);
+     setSelected(pd);
+@@ -44,37 +49,66 @@ export default function PaymentDetailsPage() {
+   const updateField = (key: string, value: any) => setFormData(prev => ({ ...prev, [key]: value }));
+ 
+   const accountOptions = accounts.map(a => ({ value: a.id, label: a.name }));
++  const uniqueCurrencies = useMemo(() => [...new Set(paymentDetails.map(pd => pd.currencyCode))].sort(), []);
+ 
+   const filtered = useMemo(() => {
+     return paymentDetails.filter(pd => {
+-      const accFilter = getMultiFilter(colFilters, 'account');
+-      if (accFilter.length > 0) {
+-        const accName = getAccountById(pd.accountId)?.name || '';
+-        if (!accFilter.includes(accName)) return false;
++      if (accountFilter.length > 0 && !accountFilter.includes(pd.accountId)) return false;
++      if (currencyFilter.length > 0 && !currencyFilter.includes(pd.currencyCode)) return false;
++      if (primaryFilter.length > 0) {
++        const v = pd.isPrimary ? 'Yes' : 'No';
++        if (!primaryFilter.includes(v)) return false;
++      }
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        const acc = getAccountById(pd.accountId)?.name || '';
++        if (
++          !acc.toLowerCase().includes(q) &&
++          !(pd.bankName || '').toLowerCase().includes(q) &&
++          !pd.iban.toLowerCase().includes(q) &&
++          !pd.swift.toLowerCase().includes(q)
++        ) return false;
+       }
+-      const bank = getTextFilter(colFilters, 'bankName');
+-      if (bank && !pd.bankName?.toLowerCase().includes(bank.toLowerCase())) return false;
+-      const iban = getTextFilter(colFilters, 'iban');
+-      if (iban && !pd.iban.toLowerCase().includes(iban.toLowerCase())) return false;
+-      const swift = getTextFilter(colFilters, 'swift');
+-      if (swift && !pd.swift.toLowerCase().includes(swift.toLowerCase())) return false;
+       return true;
+     });
+-  }, [colFilters]);
++  }, [searchTerm, accountFilter, currencyFilter, primaryFilter]);
+ 
+   const filteredIds = filtered.map(m => m.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+   const toggleAll = (checked: boolean) => setSelectedIds(checked ? filteredIds : []);
+   const toggleOne = (id: string, checked: boolean) => setSelectedIds(checked ? [...selectedIds, id] : selectedIds.filter(x => x !== id));
+ 
++  const hasActiveFilters = !!searchTerm || accountFilter.length > 0 || currencyFilter.length > 0 || primaryFilter.length > 0;
++
+   return (
+     <div className="flex flex-col h-full">
+       <PageHeader title="Payment Details" action={<Button size="sm" onClick={openNewForm}><Plus className="h-4 w-4 mr-1" />Add Payment Detail</Button>} />
+ 
+       <HeaderSelectionBar count={selectedIds.length} onClearSelection={() => setSelectedIds([])} showDelete />
+ 
+-      <div className="flex items-center gap-2 px-6 pb-2 flex-wrap">
+-        <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
++      <div className="space-y-3 px-6 pb-2">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search account, bank, IBAN, SWIFT..." />
++          <MultiPill label="Account" values={accountFilter} onChange={setAccountFilter}
++            options={accountOptions.map(a => ({ value: a.value, label: a.label, count: paymentDetails.filter(pd => pd.accountId === a.value).length }))} />
++          <MultiPill label="Currency" values={currencyFilter} onChange={setCurrencyFilter}
++            options={uniqueCurrencies.map(c => ({ value: c, label: c, count: paymentDetails.filter(pd => pd.currencyCode === c).length }))} />
++          <MultiPill label="Primary" values={primaryFilter} onChange={setPrimaryFilter}
++            options={['Yes', 'No'].map(v => ({ value: v, label: v, count: paymentDetails.filter(pd => (pd.isPrimary ? 'Yes' : 'No') === v).length }))} />
++          <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
++        </div>
++        {hasActiveFilters && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {accountFilter.length > 0 && <FilterChip label={`Account: ${accountFilter.map(id => accountOptions.find(a => a.value === id)?.label).filter(Boolean).join(', ')}`} onRemove={() => setAccountFilter([])} />}
++            {currencyFilter.length > 0 && <FilterChip label={`Currency: ${currencyFilter.join(', ')}`} onRemove={() => setCurrencyFilter([])} />}
++            {primaryFilter.length > 0 && <FilterChip label={`Primary: ${primaryFilter.join(', ')}`} onRemove={() => setPrimaryFilter([])} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setAccountFilter([]); setCurrencyFilter([]); setPrimaryFilter([]); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       <div className="flex-1 overflow-auto px-6 pb-6">
+@@ -82,10 +116,10 @@ export default function PaymentDetailsPage() {
+           <TableHeader>
+             <TableRow>
+               <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
+-              <TableHead>Account <MultiSelectFilterPopover label="Account" options={[...new Set(paymentDetails.map(pd => getAccountById(pd.accountId)?.name || ''))]} selected={getMultiFilter(colFilters, 'account')} onChange={v => setMultiFilter(setColFilters, 'account', v)} /></TableHead>
+-              <TableHead>Bank Name <TextFilterPopover label="Bank Name" value={getTextFilter(colFilters, 'bankName')} onChange={v => setTextFilter(setColFilters, 'bankName', v)} /></TableHead>
+-              <TableHead>IBAN <TextFilterPopover label="IBAN" value={getTextFilter(colFilters, 'iban')} onChange={v => setTextFilter(setColFilters, 'iban', v)} /></TableHead>
+-              <TableHead>SWIFT / BIC <TextFilterPopover label="SWIFT / BIC" value={getTextFilter(colFilters, 'swift')} onChange={v => setTextFilter(setColFilters, 'swift', v)} /></TableHead>
++              <TableHead>Account</TableHead>
++              <TableHead>Bank Name</TableHead>
++              <TableHead>IBAN</TableHead>
++              <TableHead>SWIFT / BIC</TableHead>
+               <TableHead>Currency</TableHead>
+               <TableHead>Primary</TableHead>
+             </TableRow>
+diff --git a/src/pages/ProspectsPage.tsx b/src/pages/ProspectsPage.tsx
+index edf0e0e..230a1b2 100644
+--- a/src/pages/ProspectsPage.tsx
++++ b/src/pages/ProspectsPage.tsx
+@@ -26,6 +26,7 @@ import {
+   getTextFilter, getMultiFilter, getNumberFilter,
+   setTextFilter, setMultiFilter, setNumberFilter,
+ } from '@/components/ColumnFilters';
++import { SearchPill, SinglePill, FilterChip } from '@/components/FilterPills';
+ 
+ const statuses: ProspectStatus[] = ['We Reached Out', 'Customer Reached Out', 'Discussing', 'Proposal Sent', 'Won', 'Lost'];
+ const sources: ProspectSource[] = ['Phone', 'LinkedIn', 'Email', 'Internal Referral'];
+@@ -71,6 +72,7 @@ export default function ProspectsPage() {
+   const [statusFilter, setStatusFilter] = useState<string>('All');
+   const [kindFilter, setKindFilter] = useState<string>('All');
+   const [conversionFilter, setConversionFilter] = useState<string>('All');
++  const [searchTerm, setSearchTerm] = useState<string>('');
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+   const [selected, setSelected] = useState<Prospect | null>(null);
+@@ -240,6 +242,10 @@ export default function ProspectsPage() {
+       if (kindFilter === 'New Business' && p.kind === 'Existing Account') return false;
+       if (conversionFilter === 'Converted' && !isConverted(p)) return false;
+       if (conversionFilter === 'Not Converted' && isConverted(p)) return false;
++      if (searchTerm) {
++        const q = searchTerm.toLowerCase();
++        if (!p.companyName.toLowerCase().includes(q)) return false;
++      }
+       const t = getTextFilter(colFilters, 'company');
+       if (t && !p.companyName.toLowerCase().includes(t.toLowerCase())) return false;
+       const statusMulti = getMultiFilter(colFilters, 'status');
+@@ -249,7 +255,7 @@ export default function ProspectsPage() {
+       if (val.max && (p.estimatedValue || 0) > Number(val.max)) return false;
+       return true;
+     });
+-  }, [items, statusFilter, kindFilter, conversionFilter, colFilters, accountByProspectId]);
++  }, [items, statusFilter, kindFilter, conversionFilter, searchTerm, colFilters, accountByProspectId]);
+ 
+   const toggleAll = (c: boolean) => setSelectedIds(c ? filtered.map(p => p.id) : []);
+   const toggleOne = (id: string, c: boolean) => setSelectedIds(c ? [...selectedIds, id] : selectedIds.filter(i => i !== id));
+@@ -286,31 +292,35 @@ export default function ProspectsPage() {
+         }
+       />
+ 
+-      <div className="flex flex-wrap items-center gap-4 mb-3">
+-        <div>
+-          <p className="text-xs text-muted-foreground mb-1">Status</p>
+-          <ToggleGroup type="single" value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)} variant="outline" size="sm">
+-            <ToggleGroupItem value="All">All</ToggleGroupItem>
+-            {statuses.map(s => <ToggleGroupItem key={s} value={s} className="text-xs">{s}</ToggleGroupItem>)}
+-          </ToggleGroup>
+-        </div>
+-        <div>
+-          <p className="text-xs text-muted-foreground mb-1">Account Type</p>
+-          <ToggleGroup type="single" value={kindFilter} onValueChange={(v) => v && setKindFilter(v)} variant="outline" size="sm">
+-            <ToggleGroupItem value="All" className="text-xs">All</ToggleGroupItem>
+-            <ToggleGroupItem value="New Business" className="text-xs">New Business</ToggleGroupItem>
+-            <ToggleGroupItem value="Existing Account" className="text-xs">Existing Account</ToggleGroupItem>
+-          </ToggleGroup>
+-        </div>
+-        <div>
+-          <p className="text-xs text-muted-foreground mb-1">Conversion</p>
+-          <ToggleGroup type="single" value={conversionFilter} onValueChange={(v) => v && setConversionFilter(v)} variant="outline" size="sm">
+-            <ToggleGroupItem value="All" className="text-xs">All</ToggleGroupItem>
+-            <ToggleGroupItem value="Converted" className="text-xs">Converted</ToggleGroupItem>
+-            <ToggleGroupItem value="Not Converted" className="text-xs">Not Converted</ToggleGroupItem>
+-          </ToggleGroup>
++      <div className="space-y-3 mb-3">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search company..." />
++          <SinglePill label="Status" value={statusFilter === 'All' ? '' : statusFilter} onChange={v => setStatusFilter(v || 'All')}
++            options={statuses.map(s => ({ value: s, label: s, count: items.filter(p => p.status === s).length }))} />
++          <SinglePill label="Account Type" value={kindFilter === 'All' ? '' : kindFilter} onChange={v => setKindFilter(v || 'All')}
++            options={[
++              { value: 'New Business', label: 'New Business' },
++              { value: 'Existing Account', label: 'Existing Account' },
++            ]} />
++          <SinglePill label="Conversion" value={conversionFilter === 'All' ? '' : conversionFilter} onChange={v => setConversionFilter(v || 'All')}
++            options={[
++              { value: 'Converted', label: 'Converted' },
++              { value: 'Not Converted', label: 'Not Converted' },
++            ]} />
++          <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
+         </div>
+-        <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
++        {(searchTerm || statusFilter !== 'All' || kindFilter !== 'All' || conversionFilter !== 'All') && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {statusFilter !== 'All' && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('All')} />}
++            {kindFilter !== 'All' && <FilterChip label={`Account Type: ${kindFilter}`} onRemove={() => setKindFilter('All')} />}
++            {conversionFilter !== 'All' && <FilterChip label={`Conversion: ${conversionFilter}`} onRemove={() => setConversionFilter('All')} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setStatusFilter('All'); setKindFilter('All'); setConversionFilter('All'); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       {/* Aging legend */}
+diff --git a/src/pages/TimesheetsPage.tsx b/src/pages/TimesheetsPage.tsx
+index 43aed79..a47e544 100644
+--- a/src/pages/TimesheetsPage.tsx
++++ b/src/pages/TimesheetsPage.tsx
+@@ -21,8 +21,9 @@ import { SendTimesheetReportFlow } from '@/components/timesheet/SendTimesheetRep
+ import { Progress } from '@/components/ui/progress';
+ import {
+   ColumnFilters, TextFilterPopover, NumberRangeFilterPopover, ClearColumnFiltersButton,
+-  getTextFilter, getNumberFilter, setTextFilter, setNumberFilter,
++  getTextFilter, getNumberFilter, setTextFilter, setNumberFilter, matchDateRange,
+ } from '@/components/ColumnFilters';
++import { SearchPill, SinglePill, FilterChip, DatePill, dateRangeFor, relativeDateLabel, type RelativeDateValue } from '@/components/FilterPills';
+ 
+ const tsStatuses: TimesheetStatus[] = ['Draft', 'Submitted', 'Approved', 'Rejected'];
+ const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+@@ -72,6 +73,8 @@ function buildEntries(weekStartStr: string, dailyHours: number): TimesheetEntry[
+ export default function TimesheetsPage() {
+   const [allTimesheets, setAllTimesheets] = useState<Timesheet[]>(initialTimesheets);
+   const [statusFilter, setStatusFilter] = useState<string>('');
++  const [searchTerm, setSearchTerm] = useState<string>('');
++  const [weekStartFilter, setWeekStartFilter] = useState<RelativeDateValue>({ type: 'all' });
+   const [colFilters, setColFilters] = useState<ColumnFilters>({});
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+   const [viewMode, setViewMode] = useState<'table' | 'account' | 'timeline' | 'consultant'>('table');
+@@ -104,6 +107,19 @@ export default function TimesheetsPage() {
+   const filtered = useMemo(() => {
+     return allTimesheets.filter(t => {
+       if (statusFilter && t.status !== statusFilter) return false;
++      if (searchTerm) {
++        const s = searchTerm.toLowerCase();
++        const con = getContactById(t.contactId);
++        const ctr = getContractById(t.contractId);
++        const matches = t.reference.toLowerCase().includes(s) ||
++          (con && `${con.firstName} ${con.lastName}`.toLowerCase().includes(s)) ||
++          (ctr?.contractNumber.toLowerCase().includes(s));
++        if (!matches) return false;
++      }
++      if (weekStartFilter.type !== 'all') {
++        const r = dateRangeFor(weekStartFilter);
++        if (!matchDateRange(t.weekStart, r.from, r.to)) return false;
++      }
+       const ref = getTextFilter(colFilters, 'reference');
+       if (ref && !t.reference.toLowerCase().includes(ref.toLowerCase())) return false;
+       const consultant = getTextFilter(colFilters, 'consultant');
+@@ -115,7 +131,7 @@ export default function TimesheetsPage() {
+       if (hours.max && t.totalHours > Number(hours.max)) return false;
+       return true;
+     });
+-  }, [statusFilter, colFilters, allTimesheets]);
++  }, [statusFilter, searchTerm, weekStartFilter, colFilters, allTimesheets]);
+ 
+   const filteredIds = filtered.map(t => t.id);
+   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+@@ -462,23 +478,33 @@ export default function TimesheetsPage() {
+           </Button>
+         </div>} />
+ 
+-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+-        <div className="flex items-center gap-2">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
+-          <ToggleGroup type="single" value={statusFilter} onValueChange={setStatusFilter} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="" className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">All</ToggleGroupItem>
+-            {tsStatuses.map(s => (<ToggleGroupItem key={s} value={s} className="text-xs px-3 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm">{s}<span className="ml-1 rounded bg-muted/60 px-1 text-[10px] font-semibold text-muted-foreground data-[state=on]:bg-primary-foreground/20 data-[state=on]:text-primary-foreground">{allTimesheets.filter(t => t.status === s).length}</span></ToggleGroupItem>))}
+-          </ToggleGroup>
+-        </div>
+-        <div className="flex items-center gap-2 ml-auto">
+-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">View</span>
+-          <ToggleGroup type="single" value={viewMode} onValueChange={v => v && setViewMode(v as any)} className="border rounded-md p-0.5">
+-            <ToggleGroupItem value="table" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><TableIcon className="h-3.5 w-3.5" />Table</ToggleGroupItem>
+-            <ToggleGroupItem value="account" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><Building2 className="h-3.5 w-3.5" />By Account</ToggleGroupItem>
+-            <ToggleGroupItem value="timeline" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Timeline</ToggleGroupItem>
+-            <ToggleGroupItem value="consultant" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><Users className="h-3.5 w-3.5" />By Consultant</ToggleGroupItem>
+-          </ToggleGroup>
++      <div className="space-y-3 mb-4">
++        <div className="flex items-center gap-3 flex-wrap">
++          <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search reference, consultant, contract..." />
++          <SinglePill label="Status" value={statusFilter} onChange={setStatusFilter}
++            options={tsStatuses.map(s => ({ value: s, label: s, count: allTimesheets.filter(t => t.status === s).length }))} />
++          <DatePill label="Week Start" value={weekStartFilter} onChange={setWeekStartFilter} dates={allTimesheets.map(t => t.weekStart)} />
++          <div className="flex items-center gap-2 ml-auto">
++            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">View</span>
++            <ToggleGroup type="single" value={viewMode} onValueChange={v => v && setViewMode(v as any)} className="border rounded-md p-0.5">
++              <ToggleGroupItem value="table" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><TableIcon className="h-3.5 w-3.5" />Table</ToggleGroupItem>
++              <ToggleGroupItem value="account" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><Building2 className="h-3.5 w-3.5" />By Account</ToggleGroupItem>
++              <ToggleGroupItem value="timeline" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Timeline</ToggleGroupItem>
++              <ToggleGroupItem value="consultant" className="text-xs px-2.5 h-7 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-sm gap-1.5"><Users className="h-3.5 w-3.5" />By Consultant</ToggleGroupItem>
++            </ToggleGroup>
++          </div>
+         </div>
++        {(searchTerm || statusFilter || weekStartFilter.type !== 'all') && (
++          <div className="flex items-center gap-2 flex-wrap text-xs">
++            {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
++            {statusFilter && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} />}
++            {weekStartFilter.type !== 'all' && <FilterChip label={`Week Start: ${relativeDateLabel(weekStartFilter)}`} onRemove={() => setWeekStartFilter({ type: 'all' })} />}
++            <Button variant="outline" size="sm" className="h-7 text-xs"
++              onClick={() => { setSearchTerm(''); setStatusFilter(''); setWeekStartFilter({ type: 'all' }); }}>
++              Clear all
++            </Button>
++          </div>
++        )}
+       </div>
+ 
+       {viewMode === 'table' && (

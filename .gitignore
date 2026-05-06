@@ -13,3 +13,6 @@ bin/
 .vscode/
 *.log
 power.config.dev.json
+power.config.json.dev
+power.config.json.bak
+deploy-*.ps1

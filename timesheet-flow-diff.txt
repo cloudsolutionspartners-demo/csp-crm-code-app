@@ -1,0 +1,221 @@
+﻿diff --git a/src/components/timesheet/SendTimesheetReportFlow.tsx b/src/components/timesheet/SendTimesheetReportFlow.tsx
+index 29fcb6a..0fc2030 100644
+--- a/src/components/timesheet/SendTimesheetReportFlow.tsx
++++ b/src/components/timesheet/SendTimesheetReportFlow.tsx
+@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
+ import { Textarea } from '@/components/ui/textarea';
+ import { Progress } from '@/components/ui/progress';
+ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
++import { Checkbox } from '@/components/ui/checkbox';
+ 
+ import { FileSpreadsheet, Send, Mail, Eye, Download } from 'lucide-react';
+ import { toast } from 'sonner';
+@@ -47,6 +48,8 @@ export function SendTimesheetReportFlow({ open, onOpenChange }: Props) {
+   const [month, setMonth] = useState<string>(String(new Date().getMonth()));
+   const [year, setYear] = useState<string>(String(currentYear));
+   const [contactId, setContactId] = useState<string>('');
++  const [selectedConsultantIds, setSelectedConsultantIds] = useState<Set<string>>(new Set());
++  const [contactEmail, setContactEmail] = useState<string>('');
+ 
+   // Email step
+   const [emailOpen, setEmailOpen] = useState(false);
+@@ -82,6 +85,20 @@ export function SendTimesheetReportFlow({ open, onOpenChange }: Props) {
+       }));
+   }, [parentAccountId]);
+ 
++  // Consultants assigned to any contract (parent or child) under the selected parent account
++  const consultantOptions = useMemo(() => {
++    if (!parentAccountId) return [];
++    const parentContracts = contracts.filter(
++      c => c.parentAccountId === parentAccountId || c.childAccountId === parentAccountId
++    );
++    const consultantIds = Array.from(new Set(parentContracts.map(c => c.contactId)));
++    return consultantIds
++      .map(id => getContactById(id))
++      .filter((c): c is NonNullable<typeof c> => !!c)
++      .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
++      .map(c => ({ value: c.id, label: `${c.firstName} ${c.lastName}` }));
++  }, [parentAccountId]);
++
+   const selectedAccount = parentAccountId ? getAccountById(parentAccountId) : undefined;
+ 
+   const buildReportRows = useCallback((): ReportRow[] => {
+@@ -89,14 +106,17 @@ export function SendTimesheetReportFlow({ open, onOpenChange }: Props) {
+     const m = parseInt(month, 10);
+     const y = parseInt(year, 10);
+ 
+-    // Find contracts for this parent account
++    // Find contracts for this parent account (parent or child link)
+     const parentContractIds = new Set(
+-      contracts.filter(c => c.parentAccountId === parentAccountId).map(c => c.id)
++      contracts
++        .filter(c => c.parentAccountId === parentAccountId || c.childAccountId === parentAccountId)
++        .map(c => c.id)
+     );
+ 
+     // Filter timesheets whose week START or END falls in this month/year
+     const matching = timesheets.filter(ts => {
+       if (!parentContractIds.has(ts.contractId)) return false;
++      if (selectedConsultantIds.size > 0 && !selectedConsultantIds.has(ts.contactId)) return false;
+       const start = new Date(ts.weekStart);
+       const end = new Date(getWeekEnd(ts.weekStart));
+       return (
+@@ -129,7 +149,7 @@ export function SendTimesheetReportFlow({ open, onOpenChange }: Props) {
+         mon: hours[0], tue: hours[1], wed: hours[2], thu: hours[3], fri: hours[4], sat: hours[5], sun: hours[6],
+       };
+     }).sort((a, b) => a.weekStart.localeCompare(b.weekStart) || a.consultantName.localeCompare(b.consultantName));
+-  }, [parentAccountId, month, year]);
++  }, [parentAccountId, month, year, selectedConsultantIds]);
+ 
+   const generateExcel = (rows: ReportRow[], fileName: string): Blob => {
+     const aoa: (string | number)[][] = [
+@@ -189,6 +209,7 @@ export function SendTimesheetReportFlow({ open, onOpenChange }: Props) {
+       setSendProgress(50); setSendLabel(`Sending email via Outlook to ${recipient}...`);
+       await sendOutlookEmail({
+         to: recipient,
++        cc: contactEmail ? contactEmail : undefined,
+         subject: emailSubject,
+         htmlBody: `<p>${emailBody.replace(/\n/g, '<br/>')}</p>`,
+         attachments: [{ name: reportFileName, contentBytes: base64 }],
+@@ -201,7 +222,7 @@ export function SendTimesheetReportFlow({ open, onOpenChange }: Props) {
+       setEmailOpen(false);
+       onOpenChange(false);
+       // reset
+-      setParentAccountId(''); setContactId(''); setReportBlob(null); setReportRows([]);
++      setParentAccountId(''); setContactId(''); setContactEmail(''); setSelectedConsultantIds(new Set()); setReportBlob(null); setReportRows([]);
+     } catch (error) {
+       console.error(error);
+       setSending(false); setSendProgress(0); setSendLabel('');
+@@ -209,7 +230,7 @@ export function SendTimesheetReportFlow({ open, onOpenChange }: Props) {
+     }
+   }, [emailSubject, emailBody, reportBlob, reportFileName, selectedAccount, contactId, contactOptions, onOpenChange]);
+ 
+-  const prepareDisabled = !parentAccountId || !contactId;
++  const prepareDisabled = !parentAccountId;
+   const sendDisabled = !emailSubject.trim() || !emailBody.trim();
+ 
+   return (
+@@ -227,7 +248,7 @@ export function SendTimesheetReportFlow({ open, onOpenChange }: Props) {
+           <div className="space-y-4 py-2">
+             <div className="space-y-1.5">
+               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Parent Account *</label>
+-              <Select value={parentAccountId} onValueChange={v => { setParentAccountId(v); setContactId(''); }}>
++              <Select value={parentAccountId} onValueChange={v => { setParentAccountId(v); setContactId(''); setContactEmail(''); setSelectedConsultantIds(new Set()); }}>
+                 <SelectTrigger><SelectValue placeholder="Select a parent account..." /></SelectTrigger>
+                 <SelectContent>
+                   {parentAccountOptions.map(o => (
+@@ -260,11 +281,65 @@ export function SendTimesheetReportFlow({ open, onOpenChange }: Props) {
+ 
+             <div className="space-y-1.5">
+               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+-                Contact (recipient on CC) *
++                Consultants
+               </label>
+-              <Select value={contactId} onValueChange={setContactId} disabled={!parentAccountId}>
++              <div className="rounded-md border max-h-48 overflow-y-auto p-2 space-y-1 bg-background">
++                {!parentAccountId ? (
++                  <div className="px-2 py-3 text-xs text-muted-foreground text-center">
++                    Select a parent account first
++                  </div>
++                ) : consultantOptions.length === 0 ? (
++                  <div className="px-2 py-3 text-xs text-muted-foreground text-center">
++                    No consultants assigned to this account.
++                  </div>
++                ) : (
++                  <>
++                    <label className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer text-sm">
++                      <Checkbox
++                        checked={selectedConsultantIds.size === consultantOptions.length && consultantOptions.length > 0}
++                        onCheckedChange={(checked) => {
++                          if (checked) setSelectedConsultantIds(new Set(consultantOptions.map(o => o.value)));
++                          else setSelectedConsultantIds(new Set());
++                        }}
++                      />
++                      <span className="font-medium">All consultants</span>
++                      <span className="ml-auto text-xs text-muted-foreground">{consultantOptions.length}</span>
++                    </label>
++                    <div className="h-px bg-border my-1" />
++                    {consultantOptions.map(o => (
++                      <label key={o.value} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer text-sm">
++                        <Checkbox
++                          checked={selectedConsultantIds.has(o.value)}
++                          onCheckedChange={(checked) => {
++                            setSelectedConsultantIds(prev => {
++                              const next = new Set(prev);
++                              if (checked) next.add(o.value); else next.delete(o.value);
++                              return next;
++                            });
++                          }}
++                        />
++                        <span>{o.label}</span>
++                      </label>
++                    ))}
++                  </>
++                )}
++              </div>
++              {parentAccountId && consultantOptions.length > 0 && (
++                <p className="text-xs text-muted-foreground">
++                  {selectedConsultantIds.size === 0
++                    ? 'No selection ΓÇö report will include all consultants.'
++                    : `${selectedConsultantIds.size} of ${consultantOptions.length} selected`}
++                </p>
++              )}
++            </div>
++
++            <div className="space-y-1.5">
++              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
++                Contact (recipient on CC)
++              </label>
++              <Select value={contactId} onValueChange={(v) => { setContactId(v); const c = contactOptions.find(o => o.value === v); setContactEmail(c?.email || ''); }} disabled={!parentAccountId}>
+                 <SelectTrigger>
+-                  <SelectValue placeholder={parentAccountId ? 'Select a contact...' : 'Select a parent account first'} />
++                  <SelectValue placeholder={parentAccountId ? 'Select a contact (optional)...' : 'Select a parent account first'} />
+                 </SelectTrigger>
+                 <SelectContent>
+                   {contactOptions.length === 0 ? (
+@@ -276,17 +351,45 @@ export function SendTimesheetReportFlow({ open, onOpenChange }: Props) {
+                   ))}
+                 </SelectContent>
+               </Select>
++              <Input
++                type="email"
++                className="mt-2"
++                placeholder="Type or override CC email address"
++                value={contactEmail}
++                onChange={e => setContactEmail(e.target.value)}
++              />
++              <p className="text-xs text-muted-foreground">
++                Pre-fills from selected contact, but you can edit or enter any email.
++              </p>
+             </div>
+ 
+             {selectedAccount && (
+               <div className="text-sm text-muted-foreground rounded-md bg-muted/40 p-3">
+                 Email will be sent to: <span className="font-medium text-foreground">{selectedAccount.email || selectedAccount.invoicingEmail || 'No email configured'}</span>
++                {contactEmail && (
++                  <> ┬╖ CC: <span className="font-medium text-foreground">{contactEmail}</span></>
++                )}
+               </div>
+             )}
+           </div>
+ 
+           <DialogFooter>
+             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
++            <Button variant="outline" onClick={() => {
++              if (!parentAccountId) return;
++              const rows = buildReportRows();
++              if (rows.length === 0) { toast.warning('No timesheets found for this account in the selected period.'); return; }
++              const account = getAccountById(parentAccountId)!;
++              const fileName = `Timesheet_Report_${account.name.replace(/\s+/g, '_')}_${monthNames[parseInt(month, 10)]}_${year}.xlsx`;
++              const blob = generateExcel(rows, fileName);
++              const url = URL.createObjectURL(blob);
++              const a = document.createElement('a');
++              a.href = url; a.download = fileName; a.click();
++              URL.revokeObjectURL(url);
++              toast.success(`Downloaded ${fileName}`);
++            }} disabled={!parentAccountId}>
++              <Download className="h-4 w-4 mr-2" />Download Only
++            </Button>
+             <Button onClick={handlePrepare} disabled={prepareDisabled}>
+               <FileSpreadsheet className="h-4 w-4 mr-2" />Generate Report
+             </Button>

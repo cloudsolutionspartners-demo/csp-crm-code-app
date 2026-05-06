@@ -5,14 +5,16 @@ import {
   LayoutDashboard, Building2, Users, FileText, Receipt, Wallet,
   Clock, CalendarDays, BadgeDollarSign, Landmark, BarChart3, Settings,
   ChevronLeft, ChevronRight, ChevronDown, FileStack, UserPlus, CalendarClock,
-  Milestone,
+  Milestone, Target, MessagesSquare, KanbanSquare,
 } from './Icons';
 
 export type PageId =
   | 'dashboard' | 'accounts' | 'contacts' | 'contracts' | 'documents'
   | 'candidates' | 'interviewers' | 'availability'
+  | 'prospects' | 'prospect-interactions' | 'prospect-pipeline'
   | 'timesheets' | 'leave'
   | 'invoices' | 'expenses' | 'milestones' | 'dividends' | 'bank-reconciliation'
+  | 'payment-details' | 'jd-skills' | 'jd-platforms'
   | 'reports' | 'settings';
 
 const standaloneTop = [
@@ -38,6 +40,15 @@ const groups = [
     ],
   },
   {
+    label: 'Prospecting',
+    items: [
+      { title: 'Prospects', id: 'prospects' as PageId, icon: Target },
+      // Pipeline and Interactions are background features, not shown in Code App
+      // { title: 'Interactions', id: 'prospect-interactions' as PageId, icon: MessagesSquare },
+      // { title: 'Pipeline', id: 'prospect-pipeline' as PageId, icon: KanbanSquare },
+    ],
+  },
+  {
     label: 'Time Management',
     items: [
       { title: 'Timesheets', id: 'timesheets' as PageId, icon: Clock },
@@ -52,6 +63,14 @@ const groups = [
       { title: 'Milestones', id: 'milestones' as PageId, icon: Milestone },
       { title: 'Dividends', id: 'dividends' as PageId, icon: BadgeDollarSign },
       { title: 'Bank Recon', id: 'bank-reconciliation' as PageId, icon: Landmark },
+    ],
+  },
+  {
+    label: 'Metadata',
+    items: [
+      { title: 'Payment Details', id: 'payment-details' as PageId, icon: Landmark },
+      { title: 'JD Skills', id: 'jd-skills' as PageId, icon: FileText },
+      { title: 'JD Platforms', id: 'jd-platforms' as PageId, icon: FileText },
     ],
   },
 ];
@@ -90,8 +109,10 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     'Data Management': true,
     'Onboarding': true,
+    'Prospecting': true,
     'Time Management': true,
     'Finance Management': true,
+    'Metadata': true,
   });
 
   const toggleGroup = (label: string) => {

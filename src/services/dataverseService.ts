@@ -4,13 +4,19 @@ import { MicrosoftDataverseService } from '../generated/services/MicrosoftDatave
 
 // Known environments — keys are env IDs with dashes REMOVED (matches subdomain format)
 const ENV_MAP: Record<string, string> = {
-  '86b4b5e9f876ef52920a6212c9189404': 'https://orgbc36c435.crm.dynamics.com',   // DEV
-  'b66d4c4bb689e7bab992fd27eb058f02': 'https://orga1a2e51e.crm.dynamics.com',   // TEST
+  '86b4b5e9f876ef52920a6212c9189404': 'https://orgbc36c435.crm.dynamics.com',   // OLD DEV
+  'b66d4c4bb689e7bab992fd27eb058f02': 'https://orga1a2e51e.crm.dynamics.com',   // OLD TEST
+  '971f1ff8c4ffee219ef904cfb6802004': 'https://org3006bc14.crm4.dynamics.com',  // NEW DEV
+  '4e7439c6a960e34683f2187042b54f04': 'https://org26dacb9b.crm4.dynamics.com',  // NEW UAT
+  '7026ca2c0785ea98810d1c2bce33ea48': 'https://org2ee69a7d.crm4.dynamics.com',  // PROD
 };
 // Also keep dashed version for URL path matching
 const ENV_MAP_DASHED: Record<string, string> = {
   '86b4b5e9-f876-ef52-920a-6212c9189404': 'https://orgbc36c435.crm.dynamics.com',
   'b66d4c4b-b689-e7ba-b992-fd27eb058f02': 'https://orga1a2e51e.crm.dynamics.com',
+  '971f1ff8-c4ff-ee21-9ef9-04cfb6802004': 'https://org3006bc14.crm4.dynamics.com',
+  '4e7439c6-a960-e346-83f2-187042b54f04': 'https://org26dacb9b.crm4.dynamics.com',
+  '7026ca2c-0785-ea98-810d-1c2bce33ea48': 'https://org2ee69a7d.crm4.dynamics.com', // PROD
 };
 
 let _orgUrl: string | null = null;
@@ -108,11 +114,14 @@ export async function listRecords(
   const $orderby = orderby || undefined;
   const $top = (top && top > 0) ? top : undefined;
 
+  // Request FormattedValue annotations on lookup fields (e.g., contact names on _csp_X_value)
+  const PREFER = 'odata.include-annotations="*"';
+
   // Try 1: WithOrganization (works on DEV)
   try {
     const result = await MicrosoftDataverseService.ListRecordsWithOrganization(
       getOrgUrl(), entityName,
-      undefined, undefined, undefined, undefined,
+      PREFER, undefined, undefined, undefined,
       $select, $filter, $orderby, undefined, undefined, $top,
     ) as any;
 
@@ -137,7 +146,7 @@ export async function listRecords(
   try {
     const result = await MicrosoftDataverseService.ListRecords(
       entityName,
-      undefined, undefined, undefined,
+      PREFER, undefined, undefined,
       $select, $filter, $orderby, undefined, undefined, $top,
     ) as any;
 
@@ -179,12 +188,24 @@ export async function getRecord(entityName: string, id: string, select?: string)
 }
 
 export async function createRecord(entityName: string, data: Record<string, unknown>): Promise<string> {
+  console.log(`[Dataverse] CreateRecord("${entityName}")`, JSON.stringify(data).substring(0, 500));
   // Try WithOrg
   try {
     const result = await MicrosoftDataverseService.CreateRecordWithOrganization(
       'return=representation', 'application/json', getOrgUrl(), entityName, data,
     ) as any;
-    if (result?.success !== false && !result?.error) return result?.data?.id || '';
+    console.log(`[Dataverse] CreateRecord("${entityName}") result:`, result?.success, result?.error?.message || 'no error');
+    if (result?.success !== false && !result?.error) {
+      console.log(`[Dataverse] CreateRecord("${entityName}") success, full data:`, JSON.stringify(result?.data).substring(0, 500));
+      // Try multiple possible ID locations
+      const id = result?.data?.id
+        || result?.data?.itemId
+        || result?.data?.[entityName.slice(0, -1) + 'id']  // e.g. csp_invoiceid from csp_invoices
+        || (typeof result?.data === 'string' ? result.data : '')
+        || '';
+      console.log(`[Dataverse] CreateRecord("${entityName}") resolved id:`, id);
+      return id;
+    }
     if (!isTokenError(result)) throw new Error(result?.error?.message || 'Create failed');
   } catch (e: any) {
     if (!e?.message?.includes('Token') && !e?.message?.includes('token')) throw e;
@@ -196,7 +217,12 @@ export async function createRecord(entityName: string, data: Record<string, unkn
     'return=representation', 'application/json', entityName, data,
   ) as any;
   if (result?.success === false) throw new Error(result?.error?.message || 'Create failed');
-  return result?.data?.id || '';
+  const id = result?.data?.id
+    || result?.data?.itemId
+    || result?.data?.[entityName.slice(0, -1) + 'id']
+    || (typeof result?.data === 'string' ? result.data : '')
+    || '';
+  return id;
 }
 
 export async function updateRecord(entityName: string, id: string, data: Record<string, unknown>): Promise<void> {
@@ -234,6 +260,120 @@ export async function deleteRecord(entityName: string, id: string): Promise<void
   if (result?.success === false) throw new Error(result?.error?.message || 'Delete failed');
 }
 
+export { getOrgUrl };
+
 export function setOrgUrl(url: string) {
   _orgUrl = url.replace(/\/$/, '');
+}
+
+// ===== File upload / download for File-type columns =====
+
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const comma = dataUrl.indexOf(',');
+      resolve(comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function uploadFileField(
+  entityName: string,
+  recordId: string,
+  fieldName: string,
+  file: File,
+): Promise<void> {
+  const base64 = await fileToBase64(file);
+  const contentType = file.type || 'application/octet-stream';
+
+  console.log('[FileUpload] Uploading:', {
+    entityName, recordId, fieldName,
+    fileName: file.name,
+    contentType,
+    base64Length: base64.length,
+  });
+
+  // Dataverse file field expects item with top-level "value" property containing base64
+  const item = JSON.stringify({ value: base64 });
+
+  // content_type must describe the `item` payload (which is JSON), not the file.
+  const result = await MicrosoftDataverseService.UpdateEntityFileImageFieldContentWithOrganization(
+    'application/json', getOrgUrl(), entityName, recordId, fieldName, item, file.name,
+  ) as any;
+
+  console.log('[FileUpload] Result:', JSON.stringify(result).substring(0, 500));
+
+  if (result?.success === false || result?.error) {
+    throw new Error(result?.error?.message || 'File upload failed');
+  }
+}
+
+/**
+ * Upload a file to a Dataverse file column via the Dataverse Web API directly.
+ * Bypasses the Power Platform connector's UpdateEntityFileImageFieldContent
+ * which has been silently failing on csp_invoicedocument uploads.
+ */
+export async function uploadFileFieldDirect(
+  entitySetName: string,
+  recordId: string,
+  fieldName: string,
+  fileName: string,
+  fileContent: Uint8Array,
+  contentType: string = 'application/octet-stream',
+): Promise<void> {
+  const orgUrl = getOrgUrl();
+  if (!orgUrl) throw new Error('Org URL not resolved');
+
+  const url = `${orgUrl}/api/data/v9.2/${entitySetName}(${recordId})/${fieldName}?x-ms-file-name=${encodeURIComponent(fileName)}`;
+
+  console.log('[FileUploadDirect] Uploading:', { url, fileName, contentType, size: fileContent.length });
+
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': contentType,
+      'x-ms-file-name': fileName,
+    },
+    body: new Blob([fileContent.buffer.slice(fileContent.byteOffset, fileContent.byteOffset + fileContent.byteLength) as ArrayBuffer], { type: contentType }),
+  });
+
+  console.log('[FileUploadDirect] Response:', response.status, response.statusText);
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    console.error('[FileUploadDirect] Error:', errorText);
+    throw new Error(`File upload failed: ${response.status} ${response.statusText}`);
+  }
+}
+
+export async function downloadFileField(
+  entityName: string,
+  recordId: string,
+  fieldName: string,
+  fileName: string,
+): Promise<void> {
+  console.log('[FileDownload] Parameters:', { org: getOrgUrl(), entityName, recordId, fieldName, fileName });
+  const result = await MicrosoftDataverseService.GetEntityFileImageFieldContentWithOrganization(
+    'bytes=0-', getOrgUrl(), entityName, recordId, fieldName,
+  ) as any;
+  const base64 = result?.data ?? result;
+  if (typeof base64 !== 'string' || !base64) {
+    throw new Error(result?.error?.message || 'File download failed');
+  }
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes]);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName || 'download';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

@@ -34,7 +34,7 @@ export default function BankReconciliationPage() {
               {bankStatements.map(bs => (
                 <button key={bs.id} onClick={() => setSelectedStatement(bs)}
                   className={`csp-statement-btn ${selectedStatement?.id === bs.id ? 'csp-statement-btn-active' : ''}`}>
-                  <p className="csp-text-bold csp-text-sm">{formatDate(bs.periodStart)} \u2014 {formatDate(bs.periodEnd)}</p>
+                  <p className="csp-text-bold csp-text-sm">{formatDate(bs.periodStart)} {'\u2014'} {formatDate(bs.periodEnd)}</p>
                   <p className="csp-text-xs csp-text-muted">{bs.lines.length} transactions</p>
                 </button>
               ))}

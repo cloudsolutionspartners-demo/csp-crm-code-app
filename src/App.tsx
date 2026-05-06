@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { ToastProvider, AppLayout } from './components/Layout';
+import { ConfirmProvider } from './components/ConfirmDialog';
 import { AppSidebar, PageId } from './components/AppSidebar';
 import DashboardPage from './pages/DashboardPage';
 import AccountsPage from './pages/AccountsPage';
@@ -19,8 +20,15 @@ import SettingsPage from './pages/SettingsPage';
 import CandidatesPage from './pages/CandidatesPage';
 import InterviewersPage from './pages/InterviewersPage';
 import AvailabilityPage from './pages/AvailabilityPage';
+import PaymentDetailsPage from './pages/PaymentDetailsPage';
+import JDSkillsPage from './pages/JDSkillsPage';
+import JDPlatformsPage from './pages/JDPlatformsPage';
+import ProspectsPage from './pages/ProspectsPage';
+// Pipeline and Interactions are background features, not shown in Code App
+// import ProspectPipelinePage from './pages/ProspectPipelinePage';
+// import ProspectInteractionsPage from './pages/ProspectInteractionsPage';
 
-const pageComponents: Record<PageId, React.FC> = {
+const pageComponents: Partial<Record<PageId, React.FC>> = {
   dashboard: DashboardPage,
   accounts: AccountsPage,
   contacts: ContactsPage,
@@ -38,6 +46,13 @@ const pageComponents: Record<PageId, React.FC> = {
   candidates: CandidatesPage,
   interviewers: InterviewersPage,
   availability: AvailabilityPage,
+  'payment-details': PaymentDetailsPage,
+  'jd-skills': JDSkillsPage,
+  'jd-platforms': JDPlatformsPage,
+  prospects: ProspectsPage,
+  // Pipeline and Interactions are background features, not shown in Code App
+  // 'prospect-interactions': ProspectInteractionsPage,
+  // 'prospect-pipeline': ProspectPipelinePage,
 };
 
 export default function App() {
@@ -46,9 +61,11 @@ export default function App() {
 
   return (
     <ToastProvider>
-      <AppLayout sidebar={<AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />}>
-        <PageComponent />
-      </AppLayout>
+      <ConfirmProvider>
+        <AppLayout sidebar={<AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />}>
+          <PageComponent />
+        </AppLayout>
+      </ConfirmProvider>
     </ToastProvider>
   );
 }
