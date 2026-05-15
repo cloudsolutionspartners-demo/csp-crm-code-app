@@ -25,6 +25,10 @@ const contactTypes: ContactType[] = ['Consultant', 'Client Contact', 'Middleman 
 const professionalTypes: ContactType[] = ['Consultant', 'Permanent Employee'];
 
 import { useConfirm } from '../components/ConfirmDialog';
+import { fetchContactCvs, saveContactCv, removeContactCv } from '../services/contactCvService';
+import { MicrosoftDataverseService } from '../generated/services/MicrosoftDataverseService';
+import { getOrgUrl } from '../services/dataverseService';
+import type { ContactCv } from '../types/crm';
 
 export default function ContactsPage() {
   const { toast } = useToast();
@@ -44,6 +48,13 @@ export default function ContactsPage() {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [activeTab, setActiveTab] = useState('general');
   const [isSaving, setIsSaving] = useState(false);
+
+  // CVs tab — Dataverse-backed
+  // NOTE: isPrimary and label are UI-only conveniences in this session;
+  // not persisted to Dataverse (no columns yet on csp_contactcvs).
+  const [contactCvs, setContactCvs] = useState<(ContactCv & { contactId?: string })[]>([]);
+  const [uploadingCv, setUploadingCv] = useState(false);
+  const cvFileRef = React.useRef<HTMLInputElement>(null);
 
   // Skills tab — Dataverse-backed
   const [contactSkills, setContactSkills] = useState<ContactSkillPlatform[]>([]);
@@ -148,6 +159,67 @@ export default function ContactsPage() {
     setAddSkillId(''); setAddPlatformId('');
     // Load skills from Dataverse
     loadContactSkills(contact.id);
+    // Load CVs from Dataverse
+    loadContactCvs(contact.id);
+  };
+
+  const loadContactCvs = async (contactId: string) => {
+    if (!contactId) { setContactCvs([]); return; }
+    try {
+      const cvs = await fetchContactCvs(contactId);
+      // isPrimary/label are not persisted; default first one to primary in UI
+      setContactCvs(cvs.map((c, i) => ({ ...c, isPrimary: i === 0 })));
+    } catch (err) {
+      console.error('[ContactsPage] Load CVs failed:', err);
+      setContactCvs([]);
+    }
+  };
+
+  const handleCvUpload = async (file: File | null) => {
+    if (!file || !selectedContact?.id) return;
+    setUploadingCv(true);
+    try {
+      const newId = await saveContactCv({ contactId: selectedContact.id, fileName: file.name });
+      // Upload binary
+      const arrayBuf = await file.arrayBuffer();
+      let binary = '';
+      const bytes = new Uint8Array(arrayBuf);
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const base64 = btoa(binary);
+      const contentType = file.type || 'application/octet-stream';
+      await MicrosoftDataverseService.UpdateEntityFileImageFieldContentWithOrganization(
+        contentType, getOrgUrl(), 'csp_contactcvs', newId, 'csp_document', base64, file.name,
+      );
+      await loadContactCvs(selectedContact.id);
+      toast.success('CV uploaded');
+    } catch (err: any) {
+      console.error('[ContactsPage] CV upload failed:', err);
+      toast.error(err?.message || 'CV upload failed');
+    } finally {
+      setUploadingCv(false);
+      if (cvFileRef.current) cvFileRef.current.value = '';
+    }
+  };
+
+  const handleCvRemove = async (id: string, fileName: string) => {
+    const ok = await confirm({ title: 'Delete CV', description: `Delete "${fileName}"? This cannot be undone.` });
+    if (!ok) return;
+    try {
+      await removeContactCv(id);
+      setContactCvs(prev => prev.filter(c => c.id !== id));
+      toast.success('CV removed');
+    } catch (err: any) {
+      toast.error(err?.message || 'Remove failed');
+    }
+  };
+
+  const handleCvSetPrimary = (id: string) => {
+    // UI-only — not persisted
+    setContactCvs(prev => prev.map(c => ({ ...c, isPrimary: c.id === id })));
+  };
+
+  const handleCvDownload = (id: string) => {
+    window.open(`${getOrgUrl()}/api/data/v9.2/csp_contactcvs(${id})/csp_document/$value`, '_blank');
   };
 
   const openNewForm = () => {
@@ -228,6 +300,7 @@ export default function ContactsPage() {
 
   const tabs = [
     { id: 'general', label: 'General' },
+    { id: 'cvs', label: `CVs (${contactCvs.length})` },
     ...(showProfessionalTab ? [
       { id: 'professional', label: 'Professional' },
       { id: 'skills', label: `Skills (${contactSkills.length})` },
@@ -357,6 +430,72 @@ export default function ContactsPage() {
                   <SelectField label="Type" value={formData.contactType} onChange={v => updateField('contactType', v)} required options={contactTypes.map(t => ({ value: t, label: t }))} />
                   <LookupField label="Country" value={formData.country} onChange={v => updateField('country', v)} options={countries.map(c => ({ value: c, label: c }))} />
                   <LookupField label="Nationality" value={formData.nationality} onChange={v => updateField('nationality', v)} options={countries.map(c => ({ value: c, label: c }))} />
+                </div>
+              )}
+              {activeTab === 'cvs' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <p style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', margin: 0 }}>
+                      CVs are saved to <code>csp_contactcvs.csp_document</code>. The "primary" star and per-CV label are UI-only.
+                    </p>
+                    <input
+                      ref={cvFileRef} type="file" accept=".pdf,.doc,.docx"
+                      style={{ display: 'none' }}
+                      onChange={e => handleCvUpload(e.target.files?.[0] || null)}
+                    />
+                    <button
+                      type="button"
+                      className="csp-btn csp-btn-primary csp-btn-sm"
+                      disabled={uploadingCv || isNew || !selectedContact?.id}
+                      onClick={() => cvFileRef.current?.click()}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Plus className="csp-icon-sm" /> {uploadingCv ? 'Uploading…' : 'Upload CV'}
+                    </button>
+                  </div>
+
+                  {isNew && (
+                    <p style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', fontStyle: 'italic' }}>
+                      Save the contact first, then upload CVs from this tab.
+                    </p>
+                  )}
+
+                  {!isNew && contactCvs.length === 0 && (
+                    <p style={{ textAlign: 'center', color: 'hsl(var(--muted-foreground))', padding: 24, fontSize: 13 }}>
+                      No CVs on file. Click + Upload CV to add one.
+                    </p>
+                  )}
+
+                  {contactCvs.map(cv => (
+                    <div key={cv.id} style={{
+                      border: '1px solid hsl(var(--border))', borderRadius: 8, padding: 12,
+                      display: 'flex', alignItems: 'center', gap: 12,
+                    }}>
+                      <span style={{ fontSize: 16, color: 'hsl(var(--muted-foreground))' }}>📄</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 500, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cv.fileName}</div>
+                        <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
+                          {cv.label ? `${cv.label} · ` : ''}Uploaded {cv.uploadedAt || '—'}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCvSetPrimary(cv.id)}
+                        title={cv.isPrimary ? 'Primary CV (session)' : 'Set as primary (session)'}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                          fontSize: 16, color: cv.isPrimary ? '#f59e0b' : 'hsl(var(--muted-foreground))',
+                        }}
+                      >{cv.isPrimary ? '★' : '☆'}</button>
+                      <button type="button" className="csp-btn csp-btn-outline csp-btn-sm" onClick={() => handleCvDownload(cv.id)}>Download</button>
+                      <button
+                        type="button"
+                        onClick={() => handleCvRemove(cv.id, cv.fileName)}
+                        aria-label="Delete CV"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#dc2626', fontSize: 18 }}
+                      >×</button>
+                    </div>
+                  ))}
                 </div>
               )}
               {activeTab === 'professional' && (

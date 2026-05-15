@@ -483,7 +483,7 @@ export default function TimesheetsPage() {
           <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search reference, consultant, contract..." />
           <SinglePill label="Status" value={statusFilter} onChange={setStatusFilter}
             options={tsStatuses.map(s => ({ value: s, label: s, count: allTimesheets.filter(t => t.status === s).length }))} />
-          <DatePill label="Week Start" value={weekStartFilter} onChange={setWeekStartFilter} dates={allTimesheets.map(t => t.weekStart)} />
+          <DatePill label="Week Date" value={weekStartFilter} onChange={setWeekStartFilter} dates={allTimesheets.map(t => t.weekStart)} weekMode />
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">View</span>
             <ToggleGroup type="single" value={viewMode} onValueChange={v => v && setViewMode(v as any)} className="border rounded-md p-0.5">
@@ -498,7 +498,7 @@ export default function TimesheetsPage() {
           <div className="flex items-center gap-2 flex-wrap text-xs">
             {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
             {statusFilter && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} />}
-            {weekStartFilter.type !== 'all' && <FilterChip label={`Week Start: ${relativeDateLabel(weekStartFilter)}`} onRemove={() => setWeekStartFilter({ type: 'all' })} />}
+            {weekStartFilter.type !== 'all' && <FilterChip label={`Week Date: ${relativeDateLabel(weekStartFilter)}`} onRemove={() => setWeekStartFilter({ type: 'all' })} />}
             <Button variant="outline" size="sm" className="h-7 text-xs"
               onClick={() => { setSearchTerm(''); setStatusFilter(''); setWeekStartFilter({ type: 'all' }); }}>
               Clear all

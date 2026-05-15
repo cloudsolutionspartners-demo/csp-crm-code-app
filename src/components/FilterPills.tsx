@@ -233,6 +233,27 @@ function startOfDay(d: Date) { return new Date(d.getFullYear(), d.getMonth(), d.
 function fromISO(s: string) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
 function toISO(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
+function mondayOfWeek(d: Date): Date {
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day; // Monday = 1
+  const mon = new Date(d);
+  mon.setDate(mon.getDate() + diff);
+  return startOfDay(mon);
+}
+
+function sundayOfWeek(d: Date): Date {
+  const mon = mondayOfWeek(d);
+  const sun = new Date(mon);
+  sun.setDate(sun.getDate() + 6);
+  return startOfDay(sun);
+}
+
+function weekModeMonthRange(year: number, month: number): { from: Date; to: Date } {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  return { from: mondayOfWeek(firstDay), to: sundayOfWeek(lastDay) };
+}
+
 export function dateRangeFor(v: RelativeDateValue): { from?: Date; to?: Date } {
   const now = new Date();
   const d0 = startOfDay(now);
@@ -295,41 +316,101 @@ export function relativeDateLabel(v: RelativeDateValue): string {
   }
 }
 
-function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
+function HistogramRangeSlider({ dates, fromDay, toDay, onChange, onFutureDays, weekMode = false }: {
   dates: (string | Date)[];
   fromDay: number;
   toDay: number;
   onChange: (fromDay: number, toDay: number) => void;
+  onFutureDays?: (days: number) => void;
+  weekMode?: boolean;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
   const BUCKETS = 52;
   const bucketDays = WINDOW_DAYS / BUCKETS;
 
-  const counts = useMemo(() => {
+  const { counts, futureDays } = useMemo(() => {
     const arr = new Array(BUCKETS).fill(0);
+    let maxFutureDays = 0;
     for (const raw of dates) {
       const d = typeof raw === 'string'
         ? fromISO(raw.length > 10 ? raw.slice(0, 10) : raw)
         : startOfDay(raw);
+      if (isNaN(d.getTime())) continue;
       const ageDays = Math.floor((today.getTime() - d.getTime()) / DAY_MS);
-      if (ageDays < 0 || ageDays > WINDOW_DAYS) continue;
-      const bucket = Math.min(BUCKETS - 1, Math.floor((WINDOW_DAYS - ageDays) / bucketDays));
+      // Track how far into the future dates go
+      if (ageDays < 0) maxFutureDays = Math.max(maxFutureDays, Math.abs(ageDays));
+      if (ageDays > WINDOW_DAYS) continue;
+      // Allow future dates (negative ageDays) — clamp to bucket 0 (rightmost = today/future)
+      const effectiveAgeDays = Math.max(0, ageDays);
+      const bucket = Math.min(BUCKETS - 1, Math.floor((WINDOW_DAYS - effectiveAgeDays) / bucketDays));
       arr[bucket]++;
     }
-    return arr;
+    return { counts: arr, futureDays: maxFutureDays };
   }, [dates, today]);
+
+  useEffect(() => {
+    onFutureDays?.(futureDays);
+  }, [futureDays, onFutureDays]);
 
   const maxCount = Math.max(1, ...counts);
   const sliderFrom = WINDOW_DAYS - toDay;
   const sliderTo = WINDOW_DAYS - fromDay;
 
   const fromDate = new Date(today.getTime() - toDay * DAY_MS);
-  const toDate = new Date(today.getTime() - fromDay * DAY_MS);
+  // When slider is at the right edge (fromDay = 0), extend the displayed "to" date
+  // by futureDays so the label reflects the full range of dates in the data set.
+  const toDate = new Date(today.getTime() + (futureDays - fromDay) * DAY_MS);
   const weeks = Math.max(1, Math.round((toDay - fromDay) / 7));
   const recordsInRange = counts.reduce((sum, c, i) => {
     const center = (i + 0.5) * bucketDays;
     return center >= sliderFrom && center <= sliderTo ? sum + c : sum;
   }, 0);
+
+  // Custom dual-thumb slider drag state
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState<'left' | 'right' | null>(null);
+
+  const posToValue = (clientX: number) => {
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect) return 0;
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(pct * WINDOW_DAYS);
+  };
+
+  const startDragLeft = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    setDragging('left');
+  };
+  const startDragRight = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    setDragging('right');
+  };
+
+  useEffect(() => {
+    if (!dragging) return;
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+      const val = posToValue(clientX);
+      if (dragging === 'left') {
+        const clamped = Math.min(val, sliderTo - 7);
+        onChange(WINDOW_DAYS - sliderTo, WINDOW_DAYS - clamped);
+      } else {
+        const clamped = Math.max(val, sliderFrom + 7);
+        onChange(WINDOW_DAYS - clamped, WINDOW_DAYS - sliderFrom);
+      }
+    };
+    const handleUp = () => setDragging(null);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+    document.addEventListener('touchmove', handleMove);
+    document.addEventListener('touchend', handleUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleUp);
+    };
+  }, [dragging, sliderFrom, sliderTo, onChange]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -361,44 +442,70 @@ function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
           })}
         </div>
 
-        <div style={{ position: 'relative', marginTop: 12 }}>
-          <input
-            type="range"
-            min={0} max={WINDOW_DAYS} step={1}
-            value={sliderFrom}
-            onChange={e => {
-              const v = Number(e.target.value);
-              const clamped = Math.min(v, sliderTo - 7);
-              onChange(WINDOW_DAYS - sliderTo, WINDOW_DAYS - clamped);
+        <div
+          ref={trackRef}
+          style={{
+            position: 'relative', height: 20, marginTop: 12, cursor: 'pointer',
+            display: 'flex', alignItems: 'center',
+            touchAction: 'none',
+          }}
+        >
+          {/* Track background */}
+          <div style={{
+            position: 'absolute', left: 0, right: 0, height: 2,
+            borderRadius: 1, background: 'hsl(var(--muted))',
+          }} />
+          {/* Active range highlight */}
+          <div style={{
+            position: 'absolute', height: 2, borderRadius: 1,
+            background: 'hsl(var(--foreground))',
+            left: `${(sliderFrom / WINDOW_DAYS) * 100}%`,
+            width: `${((sliderTo - sliderFrom) / WINDOW_DAYS) * 100}%`,
+          }} />
+          {/* Left thumb */}
+          <div
+            onMouseDown={startDragLeft}
+            onTouchStart={startDragLeft}
+            style={{
+              position: 'absolute', width: 16, height: 16, borderRadius: '50%',
+              border: '2px solid hsl(var(--foreground))', background: 'hsl(var(--background))',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+              cursor: dragging === 'left' ? 'grabbing' : 'grab',
+              left: `calc(${(sliderFrom / WINDOW_DAYS) * 100}% - 8px)`,
+              zIndex: 2,
+              boxSizing: 'border-box',
             }}
-            style={{ width: '100%' }}
           />
-          <input
-            type="range"
-            min={0} max={WINDOW_DAYS} step={1}
-            value={sliderTo}
-            onChange={e => {
-              const v = Number(e.target.value);
-              const clamped = Math.max(v, sliderFrom + 7);
-              onChange(WINDOW_DAYS - clamped, WINDOW_DAYS - sliderFrom);
+          {/* Right thumb */}
+          <div
+            onMouseDown={startDragRight}
+            onTouchStart={startDragRight}
+            style={{
+              position: 'absolute', width: 16, height: 16, borderRadius: '50%',
+              border: '2px solid hsl(var(--foreground))', background: 'hsl(var(--background))',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+              cursor: dragging === 'right' ? 'grabbing' : 'grab',
+              left: `calc(${(sliderTo / WINDOW_DAYS) * 100}% - 8px)`,
+              zIndex: 2,
+              boxSizing: 'border-box',
             }}
-            style={{ width: '100%' }}
           />
         </div>
 
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'hsl(var(--muted-foreground))', pointerEvents: 'none' }}>
-          <span>1 yr ago</span><span>9 mo</span><span>6 mo</span><span>3 mo</span><span>Today</span>
+          <span>1 yr ago</span><span>9 mo</span><span>6 mo</span><span>3 mo</span><span>Today</span>{futureDays > 0 && <span>End of month</span>}
         </div>
       </div>
     </div>
   );
 }
 
-export function DatePill({ label, value, onChange, dates = [] }: {
+export function DatePill({ label, value, onChange, dates = [], weekMode = false }: {
   label: string;
   value: RelativeDateValue;
   onChange: (v: RelativeDateValue) => void;
   dates?: (string | Date)[];
+  weekMode?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useOutsideClose(open, () => setOpen(false));
@@ -425,23 +532,58 @@ export function DatePill({ label, value, onChange, dates = [] }: {
   };
 
   const [range, setRange] = useState(computeInitial);
+  const [futureDaysVal, setFutureDaysVal] = useState(0);
 
   useEffect(() => {
     if (open) setRange(computeInitial());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const presets: RelativeDateValue[] = [
-    { type: 'this_week' }, { type: 'last_week' },
-    { type: 'this_month' }, { type: 'last_month' },
-    { type: 'last_n_weeks', n: 4 }, { type: 'last_n_months', n: 3 },
-    { type: 'last_n_months', n: 6 }, { type: 'last_n_months', n: 12 },
-  ];
+  const presets: RelativeDateValue[] = weekMode
+    ? [
+        { type: 'this_week' }, { type: 'last_week' },
+        { type: 'this_month' }, { type: 'last_month' },
+      ]
+    : [
+        { type: 'this_week' }, { type: 'last_week' },
+        { type: 'this_month' }, { type: 'last_month' },
+        { type: 'last_n_weeks', n: 4 }, { type: 'last_n_months', n: 3 },
+        { type: 'last_n_months', n: 6 }, { type: 'last_n_months', n: 12 },
+      ];
+
+  const selectPreset = (p: RelativeDateValue) => {
+    if (weekMode && p.type !== 'all' && p.type !== 'custom') {
+      const now = new Date();
+      let from: Date | null = null;
+      let to: Date | null = null;
+      if (p.type === 'this_week') {
+        from = mondayOfWeek(now); to = sundayOfWeek(now);
+      } else if (p.type === 'last_week') {
+        const lastWeek = new Date(now); lastWeek.setDate(now.getDate() - 7);
+        from = mondayOfWeek(lastWeek); to = sundayOfWeek(lastWeek);
+      } else if (p.type === 'this_month') {
+        const r = weekModeMonthRange(now.getFullYear(), now.getMonth());
+        from = r.from; to = r.to;
+      } else if (p.type === 'last_month') {
+        const r = weekModeMonthRange(now.getFullYear(), now.getMonth() - 1);
+        from = r.from; to = r.to;
+      }
+      if (from && to) {
+        onChange({ type: 'custom', from: toISO(from), to: toISO(to) });
+        setOpen(false);
+        return;
+      }
+    }
+    onChange(p);
+    setOpen(false);
+  };
 
   const applyRange = () => {
     const today = startOfDay(new Date());
     const from = new Date(today.getTime() - range.toDay * DAY_MS);
-    const to = new Date(today.getTime() - range.fromDay * DAY_MS);
+    // When slider is at rightmost position (fromDay = 0), extend by futureDays
+    // so the pill label matches the slider's "→ to" date exactly.
+    const to = new Date(today.getTime() + (futureDaysVal - range.fromDay) * DAY_MS);
     onChange({ type: 'custom', from: toISO(from), to: toISO(to) });
     setOpen(false);
   };
@@ -469,7 +611,7 @@ export function DatePill({ label, value, onChange, dates = [] }: {
                 <button
                   key={i}
                   type="button"
-                  onClick={() => { onChange(p); setOpen(false); }}
+                  onClick={() => selectPreset(p)}
                   style={{
                     padding: '0 12px', height: 28, borderRadius: 9999,
                     border: '1px solid hsl(var(--border))', fontSize: 11, cursor: 'pointer',
@@ -486,7 +628,17 @@ export function DatePill({ label, value, onChange, dates = [] }: {
               dates={dates}
               fromDay={range.fromDay}
               toDay={range.toDay}
-              onChange={(fromDay, toDay) => setRange({ fromDay, toDay })}
+              weekMode={weekMode}
+              onChange={(fromDay, toDay) => {
+                if (weekMode) {
+                  const snappedFrom = Math.round(fromDay / 7) * 7;
+                  const snappedTo = Math.round(toDay / 7) * 7;
+                  setRange({ fromDay: snappedFrom, toDay: Math.max(snappedTo, snappedFrom + 7) });
+                } else {
+                  setRange({ fromDay, toDay });
+                }
+              }}
+              onFutureDays={setFutureDaysVal}
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
               <button type="button" onClick={applyRange} className="csp-btn csp-btn-primary csp-btn-sm">Apply range</button>

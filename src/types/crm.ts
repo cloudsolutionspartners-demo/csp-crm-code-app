@@ -316,6 +316,7 @@ export interface PaymentDetail {
 // ===== ONBOARDING =====
 export type CandidatePath = 'CIM to B2B' | 'B2B seeking Contracts';
 export type CandidateStatus = 'Applied' | 'Scheduled' | 'Fit' | 'Not Fit';
+export type CandidateSource = 'Website' | 'Recruiter' | 'Referral';
 
 export interface OnboardingCandidate {
   id: string;
@@ -324,6 +325,8 @@ export interface OnboardingCandidate {
   email: string;
   phone?: string;
   path: CandidatePath;
+  candidateRole?: string;
+  source?: CandidateSource;
   cvFileName: string;
   hourlyRateEur: number;
   b2bEntityName?: string;
@@ -452,6 +455,91 @@ export interface ProspectMaterial {
   fileName: string;
   sharedDate: string;
   description?: string;
+}
+
+// ===== CONTACT CVs =====
+export interface ContactCv {
+  id: string;
+  fileName: string;
+  label?: string;
+  uploadedAt: string;
+  isPrimary?: boolean;
+}
+
+// ===== OPPORTUNITIES =====
+export type OpportunityStatus = 'New' | 'Interview Booked' | 'Won' | 'Lost';
+export type OpportunitySource = 'From Existing Client' | 'From Prospect' | 'From New Client' | 'From Existing Consultant';
+export type OpportunityClientLinkType = 'Account' | 'Prospect' | 'Free Text' | 'Contact';
+export type RateUnit = 'Hour' | 'Day';
+export type ApplicantStatus = 'Drafted' | 'Sent' | 'Accepted' | 'Rejected';
+
+export interface OpportunityMaterial {
+  id: string;
+  opportunityId: string;
+  fileName: string;
+  sharedDate?: string;
+  description?: string;
+  documentFileName?: string;
+}
+
+export interface OpportunityApplicant {
+  id: string;
+  opportunityId: string;
+  candidateId?: string;
+  contactId?: string;
+  rate?: number;
+  rateUnit?: string;
+  rateCurrency?: string;
+  status: ApplicantStatus;
+  documentFileName?: string;
+}
+
+export interface ContactRateLine {
+  contactId: string;
+  rate?: number;
+  unit: RateUnit;
+  currency?: CurrencyCode;
+}
+
+export interface ContactCvSelection {
+  contactId: string;
+  cvId: string;
+}
+
+export interface CandidateRateLine {
+  candidateId: string;
+  rate?: number;
+  unit: RateUnit;
+  currency?: CurrencyCode;
+  applicantStatus?: ApplicantStatus;
+  cvOverrideFileName?: string;
+}
+
+export interface Opportunity {
+  id: string;
+  opportunityNumber: string;
+  source: OpportunitySource;
+  clientLinkType: OpportunityClientLinkType;
+  accountId?: string;
+  accountName?: string;
+  prospectId?: string;
+  prospectName?: string;
+  freeClientName?: string;
+  sourceContactId?: string;
+  sourceContactName?: string;
+  role: string;
+  opportunityRate?: number;
+  opportunityRateUnit?: string;
+  opportunityCurrency?: string;
+  startDate?: string;
+  closingDate?: string;
+  details?: string;
+  outcomeComments?: string;
+  status: OpportunityStatus;
+  ownerContactId?: string;
+  createdAt: string;
+  applicants?: OpportunityApplicant[];
+  materials?: OpportunityMaterial[];
 }
 
 // ===== CURRENCY MAP =====

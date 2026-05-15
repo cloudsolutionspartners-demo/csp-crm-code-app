@@ -1,61 +1,1253 @@
-﻿diff --git a/src/components/FilterPills.tsx b/src/components/FilterPills.tsx
-index b5976c4..7614490 100644
---- a/src/components/FilterPills.tsx
-+++ b/src/components/FilterPills.tsx
-@@ -260,7 +260,7 @@ function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
-       </div>
+﻿diff --git a/Business Logic/26-corporate-actions.md b/Business Logic/26-corporate-actions.md
+new file mode 100644
+index 0000000..6a08fc2
+--- /dev/null
++++ b/Business Logic/26-corporate-actions.md	
+@@ -0,0 +1,93 @@
++# 26 ΓÇö Corporate Actions
++
++## Purpose
++
++Landing page (`/`). Replaces the previous KPI dashboard. A Kanban board of **Corporate Actions** ΓÇö AI-surfaced "things to do" raised autonomously by background agents that scan the system for discrepancies (overdue invoices, missing FX rates, suspected duplicate accounts, etc.). Each card is a single, trackable item that the internal admin works through to keep the operation tidy and to leave an auditable trail of what was done and how.
++
++## Primary entity: `CorporateAction` (`csp_CorporateAction`)
++
++Mirrors the Dataverse table `Corporate Action` in `CSPCRMSolution`.
++
++| Field | Dataverse name | Type | Required | Notes |
++|---|---|---|---|---|
++| `id` | `csp_CorporateActionId` | Unique identifier | yes | system |
++| `actionSummarizedTitle` | `csp_ActionSummarizedTitle` | String | yes | short title shown on the card and in the slide-over header. Authored by the AI agent. |
++| `actionDetails` | `csp_ActionDetails` | Multiple lines of text | yes | full AI-written analysis of the issue. **Read-only in the UI** ΓÇö never editable by end users. |
++| `closingComments` | `csp_ClosingComments` | Multiple lines of text | conditional | user notes. Required only when transitioning to `Cancelled` (see business rules). Optional in any other status. |
++| `priority` | `csp_Priority` | Choice (`Low` / `Medium` / `High`) | yes | drives the card icon. Choice values: `Low = 725,070,000`, `Medium = 725,070,001`, `High = 725,070,002`. |
++| `dueDate` | `csp_Duedate` | DateOnly | no | shown on the card; drives the urgency chip. |
++| `status` | `statuscode` | Choice | yes | **`New` ΓåÆ `In Progress` ΓåÆ `Closed`**, plus `Cancelled` from any state. Defaults to `New`. |
++| `createdAt` | `CreatedOn` | Date and time | derived | system |
++| `modifiedAt` | `ModifiedOn` | Date and time | derived | system; used to determine which Closed items appear on the board (see business rules). |
++
++Standard Dataverse fields (`OwnerId`, `OwningBusinessUnit`, `OwningTeam`, `OwningUser`, `CreatedBy`, `ModifiedBy`, `VersionNumber`, etc.) are present on the table but not surfaced in the UI for the prototype.
++
++## Validation rules
++
++- `actionSummarizedTitle`, `actionDetails`, `priority`, `status` required.
++- `actionDetails` **cannot be edited** by the user ΓÇö the field is rendered read-only in the slide-over and there is no inline editor.
++- `closingComments` **must be non-empty** before saving when `status = Cancelled`. In all other statuses it is optional.
++- `dueDate` is optional and unconstrained (past/today/future all allowed). The UI colours past-due cards differently but does not block.
++
++## Business rules
++
++### Status transitions
++
++- Any status can move to any other status, with the single restriction above (Cancelled requires Closing Comments).
++- Status changes are made from a **sticky pill switcher in the slide-over header**. The change is persisted only when the user clicks **Save**.
++- Drag-and-drop on the board moves a card between lanes instantly. Dropping on the **Cancelled** lane without Closing Comments shows an error toast and opens the slide-over so the user can add the comments and Save.
++
++### Closed lane visibility
++
++- The **Closed** lane on the board only displays items whose `modifiedAt` falls in the **current calendar month**. Older Closed items remain in the database (and remain reachable via search / list views in production) but drop off the board to keep it focused on recent work.
++- All other lanes (`New`, `In Progress`, `Cancelled`) show every record in that status.
++
++### Priority iconography
++
++The card uses an emoji glyph paired with the priority chip ΓÇö chosen so the urgency is legible at a glance from across the room:
++
++| Priority | Glyph | Meaning |
++|---|---|---|
++| Low | ≡ƒºè (cube of ice) | informational, no rush |
++| Medium | ≡ƒÜ¿ (police siren) | needs attention this week |
++| High | ≡ƒöÑ (fire / flame) | act now |
++
++### Due-date chip
++
++Computed dynamically against the device clock:
++
++- `dueDate < today` and status is `New`/`In Progress` ΓåÆ "Nd overdue" in rose, bold.
++- `dueDate = today` ΓåÆ "Due today" in amber, bold.
++- `dueDate within next 3 days` ΓåÆ "Due in Nd" in amber.
++- otherwise ΓåÆ formatted date in muted grey.
++- `Closed` / `Cancelled` cards always show the formatted date in muted grey (urgency no longer relevant).
++
++## UI
++
++### Board
++
++- 4 lanes, fixed order: **New ┬╖ In Progress ┬╖ Closed ┬╖ Cancelled** (matches the `statuscode` option set order). Each lane has a coloured top bar, a count chip, and a drop target.
++- Cards show: priority glyph + chip, `actionSummarizedTitle` (clamped to 3 lines), and the due-date chip.
++- Drag-and-drop between lanes is enabled. The hovered lane highlights with a primary ring.
++- Clicking a card opens the slide-over editor.
++
++### Slide-over editor
++
++- Header: priority glyph, priority chip, `actionSummarizedTitle`, sub-line with due date and creation date.
++- **Sticky status switcher** sits directly under the header (a 4-segment pill control mirroring the lane order). The currently active status is highlighted in its lane colour. Clicking `Cancelled` while Closing Comments is empty shows an error toast and refuses the change.
++- Body:
++  - **Action Details** ΓÇö read-only block with a lock icon and an "AI generated ┬╖ read only" annotation. The container is tall (~360px min-height, 60vh max with scroll) so long AI analyses fit without truncation.
++  - **Closing Comments** ΓÇö editable textarea, with a hint that it is required to cancel.
++- **Sticky footer**: `Cancel` (discards draft, closes the sheet) and `Save` (commits status + closing comments). `Save` is disabled until the form is dirty, and disabled when the draft status is `Cancelled` with empty Closing Comments.
++
++## Permissions
++
++Admin and Owner can view and edit. There is no public/anonymous access. Standard ownership semantics from Dataverse apply (`OwnerId` is set to the creating service principal for AI-raised records, can be reassigned).
++
++## Cross-entity effects
++
++None at the prototype stage. In production, closing or cancelling a Corporate Action would optionally write back to the source entity (e.g. mark the underlying invoice as "reminder sent") ΓÇö out of scope for the UX validation prototype.
++
++## Filters
++
++The current prototype renders the full board without filters. Production additions will likely include: `Search` (title, details), `Priority` (multi), `Due date` (relative pills), `Owner` (lookup).
+diff --git a/Business Logic/Changelog.md b/Business Logic/Changelog.md
+index a1f0f2f..f1702a7 100644
+--- a/Business Logic/Changelog.md	
++++ b/Business Logic/Changelog.md	
+@@ -15,7 +15,22 @@ Format:
  
-       <div className="relative pt-1 pb-6">
--        <div className="flex items-end gap-[2px] h-16 px-0.5">
-+        <div className="flex items-end gap-[2px] h-16 px-0.5 pointer-events-none">
-           {counts.map((c, i) => {
-             const h = (c / maxCount) * 100;
-             const center = (i + 0.5) * bucketDays;
-@@ -277,7 +277,7 @@ function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
+ ---
+ 
+-## 2026-05-13 ΓÇö New `Contact CV` entity (`csp_ContactCV`)
++## 2026-05-15 ΓÇö Corporate Actions board replaces the Dashboard
++**Files:** `Business Logic/26-corporate-actions.md`, `Business Logic/01-dashboard.md`, `Business Logic/README.md`, `src/types/crm.ts`, `src/data/mock-data.ts`, `src/pages/Dashboard.tsx`, `src/components/AppSidebar.tsx`
++**Author:** Lovable AI
++**Type:** Added
++
++- New Dataverse-backed entity **`csp_CorporateAction`** (`Corporate Action` in `CSPCRMSolution`) with fields: `csp_ActionSummarizedTitle`, `csp_ActionDetails` (read-only to end users), `csp_ClosingComments`, `csp_Priority` (Low / Medium / High ΓÇö Choice values 725,070,000 / 001 / 002), `csp_Duedate`, `statuscode` (New / In Progress / Closed / Cancelled). Spec lives in `Business Logic/26-corporate-actions.md`.
++- The landing page (`/`) is renamed from **Dashboard** to **Corporate Actions** in the sidebar and is rebuilt as a 4-lane Kanban board (lanes = `statuscode` options, fixed order). The previous KPI/charts dashboard is removed.
++- Card layout shows the summarized title, the priority paired with a glyph (≡ƒºè Low / ≡ƒÜ¿ Medium / ≡ƒöÑ High) and the due date with dynamic urgency styling (overdue, due today, due in Γëñ3 days, otherwise neutral).
++- Drag-and-drop moves a card between lanes. The **Cancelled** lane refuses drops without Closing Comments ΓÇö the slide-over opens with a toast prompting the user to fill them in and Save.
++- The **Closed** lane only lists items whose `ModifiedOn` is in the current calendar month so the board stays focused on recent work.
++- Slide-over editor: read-only Action Details block (~2.5├ù taller than the default with internal scroll for long AI analyses), editable Closing Comments, **sticky 4-segment status switcher in the header** mirroring the lane order, and a sticky footer with **Cancel** (discard draft) and **Save** (commit status + comments). `Save` is disabled while the form is clean or while the draft is `Cancelled` with empty Closing Comments.
++- Validation: end users can never edit `csp_ActionDetails`. `csp_ClosingComments` is required only when transitioning to `Cancelled`.
++
++---
++
++
+ **Files:** `Business Logic/25-contact-cvs.md`, `Business Logic/03-contacts.md`, `Business Logic/README.md`, `src/types/crm.ts`
+ **Author:** Lovable AI
+ **Type:** Added
+diff --git a/Business Logic/README.md b/Business Logic/README.md
+index e311954..4c00088 100644
+--- a/Business Logic/README.md	
++++ b/Business Logic/README.md	
+@@ -19,7 +19,7 @@ This folder is the **single source of truth** for business rules and validation
+ 
+ | # | File | Route |
+ |---|------|-------|
+-| 1 | `01-dashboard.md` | `/` |
++| 1 | `01-dashboard.md` (superseded by `26-corporate-actions.md`) | `/` |
+ | 2 | `02-accounts.md` | `/accounts` |
+ | 3 | `03-contacts.md` | `/contacts` |
+ | 4 | `04-contracts.md` | `/contracts` |
+@@ -44,6 +44,7 @@ This folder is the **single source of truth** for business rules and validation
+ | 23 | `23-prospect-interactions.md` | (sub-table / panel inside Prospects) |
+ | 24 | `24-opportunities.md` | `/prospecting/opportunities` |
+ | 25 | `25-contact-cvs.md` | (sub-table / panel inside Contacts) |
++| 26 | `26-corporate-actions.md` | `/` (replaces the old Dashboard) |
+ 
+ ## Conventions used in every page file
+ 
+diff --git a/src/components/AppSidebar.tsx b/src/components/AppSidebar.tsx
+index fe65a34..12f3806 100644
+--- a/src/components/AppSidebar.tsx
++++ b/src/components/AppSidebar.tsx
+@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
+ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+ 
+ const standaloneTop = [
+-  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
++  { title: 'Corporate Actions', url: '/', icon: KanbanSquare },
+ ];
+ 
+ const groups = [
+diff --git a/src/data/mock-data.ts b/src/data/mock-data.ts
+index d8bf09d..2b91d16 100644
+--- a/src/data/mock-data.ts
++++ b/src/data/mock-data.ts
+@@ -6,8 +6,126 @@ import {
+   ContractMilestone, JDSkill, JDPlatform,
+   Prospect, ProspectInteraction, ProspectMaterial,
+   Opportunity, OpportunityMaterial,
++  CorporateAction,
+ } from '@/types/crm';
+ 
++export const corporateActions: CorporateAction[] = [
++  {
++    id: 'ca-001',
++    actionSummarizedTitle: 'Invoice INV-2025-0142 overdue by 18 days',
++    actionDetails: 'AI scan detected that invoice INV-2025-0142 issued to Acme Holdings on 2026-04-12 for Γé¼24,500 has been in "Sent" status for 47 days, exceeding the 30-day payment terms by 18 days. No matching credit was found in the latest bank statement reconciliation. Recommended: send a payment reminder and validate banking details on file.',
++    priority: 'High',
++    status: 'New',
++    dueDate: '2026-05-22',
++    createdAt: '2026-05-14T08:12:00Z',
++    modifiedAt: '2026-05-14T08:12:00Z',
++  },
++  {
++    id: 'ca-002',
++    actionSummarizedTitle: 'Contract CT-088 ends in 12 days, no renewal in pipeline',
++    actionDetails: 'Contract CT-088 (Consultant: Petar Ivanov, Client: Northwind Logistics) has an end date of 2026-05-27 and no follow-on opportunity has been raised. Average margin on this contract is 27%. Recommended: contact the account manager and confirm renewal intent.',
++    priority: 'High',
++    status: 'In Progress',
++    dueDate: '2026-05-20',
++    createdAt: '2026-05-12T09:45:00Z',
++    modifiedAt: '2026-05-13T14:02:00Z',
++  },
++  {
++    id: 'ca-003',
++    actionSummarizedTitle: '3 candidates marked Fit but no interview slot booked',
++    actionDetails: 'Candidates Maria Stoyanova, James O\'Connor and Lucia Marin have been marked Fit for over 5 days with no Booked availability slot. Hiring velocity drops by ~40% when slots are not confirmed within 7 days of Fit decision.',
++    priority: 'Medium',
++    status: 'New',
++    dueDate: '2026-05-19',
++    createdAt: '2026-05-13T11:30:00Z',
++    modifiedAt: '2026-05-13T11:30:00Z',
++  },
++  {
++    id: 'ca-004',
++    actionSummarizedTitle: 'Exchange rate for EURΓåÆRON missing for May 2026',
++    actionDetails: 'No ExchangeRate record exists for EURΓåÆRON with effective date in May 2026. Reports and invoice snapshots will fall back to April 2026 rate (4.9772). Recommended: import the BNR official monthly rate.',
++    priority: 'Low',
++    status: 'New',
++    dueDate: '2026-05-31',
++    createdAt: '2026-05-10T07:00:00Z',
++    modifiedAt: '2026-05-10T07:00:00Z',
++  },
++  {
++    id: 'ca-005',
++    actionSummarizedTitle: 'Bank statement BG-Apr-2026 has 4 unmatched credits',
++    actionDetails: 'Smart Match for the BG entity April 2026 statement left 4 credit lines unreconciled (total Γé¼18,420). Two are within ┬▒0.01 of open invoices but outside the ┬▒30 day window. Recommended: review manually and confirm matches.',
++    priority: 'Medium',
++    status: 'In Progress',
++    dueDate: '2026-05-18',
++    createdAt: '2026-05-08T15:20:00Z',
++    modifiedAt: '2026-05-13T09:10:00Z',
++  },
++  {
++    id: 'ca-006',
++    actionSummarizedTitle: 'Public holidays for 2026 not loaded for Bulgaria',
++    actionDetails: 'Settings ΓåÆ Public Holidays contains 0 records with country=Bulgaria and year=2026. Working day calculations on Reports and Leave will be inaccurate.',
++    priority: 'Medium',
++    status: 'Closed',
++    closingComments: 'Imported the official 2026 BG holiday calendar (12 entries) on 2026-05-09. Verified Reports working-day counts for May refreshed correctly.',
++    dueDate: '2026-05-15',
++    createdAt: '2026-05-05T10:00:00Z',
++    modifiedAt: '2026-05-09T16:40:00Z',
++  },
++  {
++    id: 'ca-007',
++    actionSummarizedTitle: 'Duplicate Account suspected: "Globex" vs "Globex Corp"',
++    actionDetails: 'Two Account records share the same VAT number (DE811234567) with slightly different names: Globex (acc-117) and Globex Corp (acc-204). Likely duplicates, with 3 contracts and 14 invoices spread across both.',
++    priority: 'High',
++    status: 'In Progress',
++    dueDate: '2026-05-25',
++    createdAt: '2026-05-11T13:15:00Z',
++    modifiedAt: '2026-05-14T08:55:00Z',
++  },
++  {
++    id: 'ca-008',
++    actionSummarizedTitle: 'Timesheet TS-0421 submitted with 0 entries',
++    actionDetails: 'Consultant Andrei Popescu submitted timesheet TS-0421 for week 19/2026 with 0 logged entries. Either an erroneous submission or full leave week ΓÇö flagged for verification.',
++    priority: 'Low',
++    status: 'Cancelled',
++    closingComments: 'Confirmed with consultant ΓÇö full week of approved annual leave already on record. Timesheet legitimately empty. No action needed.',
++    dueDate: '2026-05-12',
++    createdAt: '2026-05-09T09:00:00Z',
++    modifiedAt: '2026-05-10T11:25:00Z',
++  },
++  {
++    id: 'ca-009',
++    actionSummarizedTitle: 'Opportunity OPP-073 has no profiles sent for 21 days',
++    actionDetails: 'Opportunity OPP-073 (Account: Stark Industries, raised 2026-04-23) is in Discussing stage with 0 candidate profiles sent. Average win rate drops below 5% when no profiles are sent within 14 days.',
++    priority: 'Medium',
++    status: 'New',
++    dueDate: '2026-05-21',
++    createdAt: '2026-05-14T07:30:00Z',
++    modifiedAt: '2026-05-14T07:30:00Z',
++  },
++  {
++    id: 'ca-010',
++    actionSummarizedTitle: 'Dividend DIV-014 missing AGA document',
++    actionDetails: 'Dividend payment DIV-014 (CSP-RO, Γé¼45,000, paid 2026-04-18) has no documentFile attached. Required for compliance and audit trail.',
++    priority: 'High',
++    status: 'New',
++    dueDate: '2026-05-17',
++    createdAt: '2026-05-13T16:00:00Z',
++    modifiedAt: '2026-05-13T16:00:00Z',
++  },
++  {
++    id: 'ca-011',
++    actionSummarizedTitle: 'Contract CT-091 buy/sell currencies differ ΓÇö FX not pinned',
++    actionDetails: 'Contract CT-091 has sellCurrency=GBP and buyCurrency=EUR with no exchange rate snapshot recorded for the active month. Profit forecast may be inaccurate.',
++    priority: 'Low',
++    status: 'Closed',
++    closingComments: 'FX rate pinned manually for May 2026 (GBPΓåÆEUR 1.1732). Will revisit when monthly rate is loaded automatically.',
++    dueDate: '2026-05-14',
++    createdAt: '2026-05-07T08:45:00Z',
++    modifiedAt: '2026-05-11T10:30:00Z',
++  },
++];
++
++
+ // ===== BUSINESS ENTITIES =====
+ export const entities: BusinessEntity[] = [
+   {
+diff --git a/src/pages/Dashboard.tsx b/src/pages/Dashboard.tsx
+index 45f7bab..72fcbd6 100644
+--- a/src/pages/Dashboard.tsx
++++ b/src/pages/Dashboard.tsx
+@@ -1,623 +1,344 @@
+-import { useMemo } from 'react';
+-import { useNavigate } from 'react-router-dom';
+-import {
+-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+-  PieChart, Pie, Cell, Legend,
+-} from 'recharts';
+-import { KpiCard, PageHeader, StatusBadge } from '@/components/shared';
+-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+-import { Badge } from '@/components/ui/badge';
++import { useEffect, useMemo, useState } from 'react';
++import { PageHeader } from '@/components/shared';
++import { corporateActions as seedActions } from '@/data/mock-data';
++import type { CorporateAction, CorporateActionPriority, CorporateActionStatus } from '@/types/crm';
++import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+ import { Button } from '@/components/ui/button';
+-import { formatCurrency } from '@/lib/format';
+-import {
+-  Users, UserCheck, UserX, Target, TrendingUp, Receipt, AlertCircle, Calendar, Plane,
+-} from 'lucide-react';
+-import {
+-  onboardingCandidates, prospects, invoices, expenses, contracts, leaveRequests,
+-  getAccountById, getContactById,
+-} from '@/data/mock-data';
+-import type { ProspectStatus, CurrencyCode, LeaveType, Expense } from '@/types/crm';
+-import { ExpenseFormSheet } from '@/components/expense/ExpenseFormSheet';
+-import { useState } from 'react';
++import { Textarea } from '@/components/ui/textarea';
++import { Label } from '@/components/ui/label';
++import { Badge } from '@/components/ui/badge';
++import { Calendar, Sparkles, AlertTriangle, Lock } from 'lucide-react';
++import { toast } from 'sonner';
++import { cn } from '@/lib/utils';
++import { formatDate } from '@/lib/format';
+ 
+-const PIPELINE_STAGES: ProspectStatus[] = [
+-  'We Reached Out', 'Customer Reached Out', 'Discussing', 'Proposal Sent', 'Won',
+-];
++const STATUSES: CorporateActionStatus[] = ['New', 'In Progress', 'Closed', 'Cancelled'];
+ 
+-const STAGE_COLORS: Record<string, string> = {
+-  'We Reached Out': 'hsl(220, 60%, 45%)',
+-  'Customer Reached Out': 'hsl(207, 63%, 44%)',
+-  'Discussing': 'hsl(38, 92%, 50%)',
+-  'Proposal Sent': 'hsl(270, 60%, 50%)',
+-  'Won': 'hsl(142, 76%, 36%)',
+-  'Lost': 'hsl(0, 70%, 55%)',
++const STATUS_STYLES: Record<CorporateActionStatus, { ring: string; bar: string; chip: string; glow: string }> = {
++  'New':         { ring: 'ring-sky-200',    bar: 'from-sky-500 to-sky-400',           chip: 'bg-sky-100 text-sky-800',       glow: 'shadow-[0_0_0_1px_hsl(var(--border))]' },
++  'In Progress': { ring: 'ring-amber-200',  bar: 'from-amber-500 to-orange-400',      chip: 'bg-amber-100 text-amber-800',   glow: 'shadow-[0_0_0_1px_hsl(var(--border))]' },
++  'Closed':      { ring: 'ring-emerald-200',bar: 'from-emerald-500 to-emerald-400',   chip: 'bg-emerald-100 text-emerald-800', glow: 'shadow-[0_0_0_1px_hsl(var(--border))]' },
++  'Cancelled':   { ring: 'ring-slate-200',  bar: 'from-slate-500 to-slate-400',       chip: 'bg-slate-200 text-slate-700',   glow: 'shadow-[0_0_0_1px_hsl(var(--border))]' },
+ };
+ 
+-function inMonth(dateStr: string, year: number, month: number): boolean {
+-  const d = new Date(dateStr);
+-  return d.getFullYear() === year && d.getMonth() === month;
+-}
++const PRIORITY_META: Record<CorporateActionPriority, { emoji: string; label: string; ring: string; bg: string; text: string }> = {
++  Low:    { emoji: '≡ƒºè', label: 'Low',    ring: 'ring-sky-300',     bg: 'bg-sky-50',     text: 'text-sky-700' },
++  Medium: { emoji: '≡ƒÜ¿', label: 'Medium', ring: 'ring-amber-300',   bg: 'bg-amber-50',   text: 'text-amber-700' },
++  High:   { emoji: '≡ƒöÑ', label: 'High',   ring: 'ring-rose-300',    bg: 'bg-rose-50',    text: 'text-rose-700' },
++};
+ 
+-function startOfMonth(year: number, month: number) {
+-  return new Date(year, month, 1);
++function daysUntil(dateStr?: string): number | null {
++  if (!dateStr) return null;
++  const today = new Date(); today.setHours(0, 0, 0, 0);
++  const d = new Date(dateStr); d.setHours(0, 0, 0, 0);
++  return Math.round((d.getTime() - today.getTime()) / 86400000);
+ }
+-function endOfMonth(year: number, month: number) {
+-  return new Date(year, month + 1, 0);
++
++function dueLabel(action: CorporateAction): { text: string; tone: string } | null {
++  if (!action.dueDate) return null;
++  const closed = action.status === 'Closed' || action.status === 'Cancelled';
++  const days = daysUntil(action.dueDate)!;
++  if (closed) return { text: formatDate(action.dueDate), tone: 'text-muted-foreground' };
++  if (days < 0) return { text: `${Math.abs(days)}d overdue`, tone: 'text-rose-700 font-semibold' };
++  if (days === 0) return { text: 'Due today', tone: 'text-amber-700 font-semibold' };
++  if (days <= 3) return { text: `Due in ${days}d`, tone: 'text-amber-700 font-medium' };
++  return { text: formatDate(action.dueDate), tone: 'text-muted-foreground' };
+ }
+ 
+ export default function Dashboard() {
+-  const navigate = useNavigate();
+-  const now = new Date();
+-  const y = now.getFullYear();
+-  const m = now.getMonth();
+-
+-  const prevY = m === 0 ? y - 1 : y;
+-  const prevM = m === 0 ? 11 : m - 1;
+-  const nextY = m === 11 ? y + 1 : y;
+-  const nextM = m === 11 ? 0 : m + 1;
+-
+-  const [expenseDialog, setExpenseDialog] = useState<{ open: boolean; expense: Expense | null }>({
+-    open: false,
+-    expense: null,
+-  });
+-  const [refreshTick, setRefreshTick] = useState(0);
+-
+-  const monthLabel = (yy: number, mm: number) =>
+-    new Date(yy, mm, 1).toLocaleString('en-US', { month: 'short', year: 'numeric' });
+-
+-  // ============ ONBOARDING ============
+-  const onboardingStats = useMemo(() => {
+-    const buckets = [
+-      { key: 'last', y: prevY, m: prevM, label: monthLabel(prevY, prevM) },
+-      { key: 'this', y, m, label: monthLabel(y, m) },
+-      { key: 'next', y: nextY, m: nextM, label: monthLabel(nextY, nextM) },
+-    ];
+-    return buckets.map((b) => {
+-      const inBucket = onboardingCandidates.filter((c) => inMonth(c.appliedDate, b.y, b.m));
+-      return {
+-        ...b,
+-        total: inBucket.length,
+-        fit: inBucket.filter((c) => c.status === 'Fit').length,
+-        notFit: inBucket.filter((c) => c.status === 'Not Fit').length,
+-        scheduled: inBucket.filter((c) => c.status === 'Scheduled').length,
+-        applied: inBucket.filter((c) => c.status === 'Applied').length,
+-      };
+-    });
+-  }, [y, m, prevY, prevM, nextY, nextM]);
+-
+-  const onboardingChartData = onboardingStats.map((b) => ({
+-    month: b.label.split(' ')[0],
+-    Fit: b.fit,
+-    'Not Fit': b.notFit,
+-    Pending: b.scheduled + b.applied,
+-  }));
+-
+-  // ============ PROSPECTS ============
+-  const prospectStats = useMemo(() => {
+-    const byStage = PIPELINE_STAGES.map((s) => ({
+-      stage: s,
+-      count: prospects.filter((p) => p.status === s).length,
+-      value: prospects
+-        .filter((p) => p.status === s)
+-        .reduce((sum, p) => sum + (p.estimatedValue ?? 0), 0),
+-    }));
+-    const lostCount = prospects.filter((p) => p.status === 'Lost').length;
+-    const wonThisMonth = prospects.filter(
+-      (p) => p.status === 'Won' && p.lastActivityDate && inMonth(p.lastActivityDate, y, m),
+-    ).length;
+-    const activePipelineValue = prospects
+-      .filter((p) => !['Won', 'Lost'].includes(p.status))
+-      .reduce((sum, p) => sum + (p.estimatedValue ?? 0), 0);
+-    return { byStage, lostCount, wonThisMonth, activePipelineValue };
+-  }, [y, m]);
+-
+-  const prospectChartData = prospectStats.byStage.map((s) => ({
+-    name: s.stage,
+-    value: s.count,
+-  }));
++  const [actions, setActions] = useState<CorporateAction[]>(() => [...seedActions]);
++  const [openId, setOpenId] = useState<string | null>(null);
++  const [draggedId, setDraggedId] = useState<string | null>(null);
++  const [dragOver, setDragOver] = useState<CorporateActionStatus | null>(null);
+ 
+-  // ============ INVOICES ΓÇö incoming this month ============
+-  const invoiceCash = useMemo(() => {
+-    const monthStart = startOfMonth(y, m);
+-    const monthEnd = endOfMonth(y, m);
+-    const incoming = invoices.filter((inv) => {
+-      if (inv.status !== 'Sent' && inv.status !== 'Overdue') return false;
+-      const due = new Date(inv.dueDate);
+-      return due >= monthStart && due <= monthEnd;
+-    });
+-
+-    // Aggregate per currency
+-    const byCurrency = new Map<CurrencyCode, { billing: number; profit: number; count: number }>();
+-    let totalBillingEur = 0;
+-    let totalProfitEur = 0;
+-    // Naive FX ΓåÆ EUR for display rollup
+-    const toEur: Record<CurrencyCode, number> = { EUR: 1, USD: 0.92, GBP: 1.17, RON: 0.2 };
+-
+-    for (const inv of incoming) {
+-      const billing = inv.subtotal;
+-      // Estimate cost from contract buyRate vs sellRate ratio if we can map
+-      let estCost = billing * 0.78; // fallback ~22% margin
+-      if (inv.contractId) {
+-        const c = contracts.find((cc) => cc.id === inv.contractId);
+-        if (c && c.sellRate > 0) {
+-          estCost = billing * (c.buyRate / c.sellRate);
+-        }
++  const grouped = useMemo(() => {
++    const g: Record<CorporateActionStatus, CorporateAction[]> = {
++      'New': [], 'In Progress': [], 'Closed': [], 'Cancelled': [],
++    };
++    const now = new Date();
++    const ym = (d: Date) => d.getFullYear() * 12 + d.getMonth();
++    const currentYm = ym(now);
++    for (const a of actions) {
++      if (a.status === 'Closed') {
++        const m = new Date(a.modifiedAt);
++        if (ym(m) !== currentYm) continue;
+       }
+-      const profit = billing - estCost;
+-      const cur = byCurrency.get(inv.currencyCode) ?? { billing: 0, profit: 0, count: 0 };
+-      cur.billing += billing;
+-      cur.profit += profit;
+-      cur.count += 1;
+-      byCurrency.set(inv.currencyCode, cur);
+-      totalBillingEur += billing * (toEur[inv.currencyCode] ?? 1);
+-      totalProfitEur += profit * (toEur[inv.currencyCode] ?? 1);
++      g[a.status].push(a);
+     }
++    return g;
++  }, [actions]);
+ 
+-    // Weekly schedule within month
+-    const weeks: { label: string; billing: number; profit: number }[] = [];
+-    let cursor = new Date(monthStart);
+-    let weekIdx = 1;
+-    while (cursor <= monthEnd) {
+-      const weekEnd = new Date(cursor);
+-      weekEnd.setDate(weekEnd.getDate() + 6);
+-      const cap = weekEnd > monthEnd ? monthEnd : weekEnd;
+-      const inWeek = incoming.filter((inv) => {
+-        const d = new Date(inv.dueDate);
+-        return d >= cursor && d <= cap;
+-      });
+-      const billing = inWeek.reduce(
+-        (s, inv) => s + inv.subtotal * (toEur[inv.currencyCode] ?? 1), 0,
+-      );
+-      const profit = inWeek.reduce((s, inv) => {
+-        let estCost = inv.subtotal * 0.78;
+-        if (inv.contractId) {
+-          const c = contracts.find((cc) => cc.id === inv.contractId);
+-          if (c && c.sellRate > 0) estCost = inv.subtotal * (c.buyRate / c.sellRate);
+-        }
+-        return s + (inv.subtotal - estCost) * (toEur[inv.currencyCode] ?? 1);
+-      }, 0);
+-      weeks.push({
+-        label: `W${weekIdx} (${cursor.getDate()}ΓÇô${cap.getDate()})`,
+-        billing: Math.round(billing),
+-        profit: Math.round(profit),
+-      });
+-      cursor = new Date(cap);
+-      cursor.setDate(cursor.getDate() + 1);
+-      weekIdx++;
++  const moveTo = (id: string, status: CorporateActionStatus) => {
++    const action = actions.find(a => a.id === id);
++    if (!action) return;
++    if (status === 'Cancelled' && !action.closingComments?.trim()) {
++      toast.error('Closing Comments required before cancelling.');
++      setOpenId(id);
++      return;
+     }
++    setActions(prev => prev.map(a => a.id === id ? { ...a, status, modifiedAt: new Date().toISOString() } : a));
++    toast.success(`Moved to ${status}`);
++  };
+ 
+-    return {
+-      incoming,
+-      byCurrency: Array.from(byCurrency.entries()),
+-      totalBillingEur,
+-      totalProfitEur,
+-      weeks,
+-    };
+-  }, [y, m]);
+-
+-  // ============ EXPENSES ΓÇö unpaid due this month ============
+-  const expenseDue = useMemo(() => {
+-    const monthEnd = endOfMonth(y, m);
+-    const unpaid = expenses.filter((e) => {
+-      if (e.status === 'Paid') return false;
+-      const due = new Date(e.dueDate);
+-      return due <= monthEnd;
+-    });
+-    const toEur: Record<CurrencyCode, number> = { EUR: 1, USD: 0.92, GBP: 1.17, RON: 0.2 };
+-    const byCurrency = new Map<CurrencyCode, { amount: number; count: number }>();
+-    let totalEur = 0;
+-    let overdueCount = 0;
+-    for (const e of unpaid) {
+-      const cur = byCurrency.get(e.currencyCode) ?? { amount: 0, count: 0 };
+-      cur.amount += e.totalAmount;
+-      cur.count += 1;
+-      byCurrency.set(e.currencyCode, cur);
+-      totalEur += e.totalAmount * (toEur[e.currencyCode] ?? 1);
+-      if (new Date(e.dueDate) < now) overdueCount++;
+-    }
+-    // Top 5 to pay (largest first, then earliest due)
+-    const top = [...unpaid]
+-      .sort((a, b) => {
+-        const dueDiff = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+-        if (dueDiff !== 0) return dueDiff;
+-        return b.totalAmount - a.totalAmount;
+-      })
+-      .slice(0, 6);
+-    return { unpaid, byCurrency: Array.from(byCurrency.entries()), totalEur, overdueCount, top };
+-  }, [y, m, refreshTick]);
+-
+-  // ============ LEAVE ΓÇö last/this/next month ============
+-  const leaveStats = useMemo(() => {
+-    // A leave entry belongs to a bucket if it overlaps that calendar month.
+-    const overlaps = (l: { startDate: string; endDate: string }, yy: number, mm: number) => {
+-      const ms = startOfMonth(yy, mm);
+-      const me = endOfMonth(yy, mm);
+-      const ls = new Date(l.startDate);
+-      const le = new Date(l.endDate);
+-      return le >= ms && ls <= me;
+-    };
+-    const buckets = [
+-      { key: 'last', y: prevY, m: prevM, label: monthLabel(prevY, prevM) },
+-      { key: 'this', y, m, label: monthLabel(y, m) },
+-      { key: 'next', y: nextY, m: nextM, label: monthLabel(nextY, nextM) },
+-    ];
+-    return buckets.map((b) => {
+-      const list = leaveRequests
+-        .filter((l) => l.status !== 'Rejected' && overlaps(l, b.y, b.m))
+-        .sort((a, b2) => new Date(a.startDate).getTime() - new Date(b2.startDate).getTime());
+-      return { ...b, list };
+-    });
+-  }, [y, m, prevY, prevM, nextY, nextM]);
+-
+-  const leaveTypeColor: Record<LeaveType, string> = {
+-    'Annual Leave': 'bg-sky-100 text-sky-800',
+-    'Sick Leave': 'bg-rose-100 text-rose-800',
+-    'Personal Leave': 'bg-amber-100 text-amber-800',
+-    'Public Holiday': 'bg-violet-100 text-violet-800',
++  const updateAction = (id: string, patch: Partial<CorporateAction>) => {
++    setActions(prev => prev.map(a => a.id === id ? { ...a, ...patch, modifiedAt: new Date().toISOString() } : a));
+   };
+ 
++  const open = actions.find(a => a.id === openId) || null;
++
+   return (
+-    <div className="space-y-6">
++    <div>
+       <PageHeader
+-        title="Dashboard"
+-        subtitle={`Operational snapshot ΓÇö ${monthLabel(y, m)}`}
++        title="Corporate Actions"
++        subtitle="AI-surfaced things to do ΓÇö keep the operation tidy, leave a trail."
+       />
+ 
+-      {/* ============ ONBOARDING ============ */}
+-      <section>
+-        <div className="flex items-center justify-between mb-3">
+-          <h2 className="text-lg font-semibold flex items-center gap-2">
+-            <Users className="h-5 w-5 text-primary" /> Candidate Onboarding
+-          </h2>
+-          <Button variant="outline" size="sm" onClick={() => navigate('/onboarding/candidates')}>
+-            View all
+-          </Button>
+-        </div>
+-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+-          {onboardingStats.map((b) => (
+-            <Card key={b.key}>
+-              <CardHeader className="pb-2">
+-                <CardTitle className="text-sm font-medium text-muted-foreground">
+-                  {b.key === 'last' ? 'Last month' : b.key === 'this' ? 'This month' : 'Next month'}
+-                  <span className="ml-2 text-xs font-normal">({b.label})</span>
+-                </CardTitle>
+-              </CardHeader>
+-              <CardContent>
+-                <div className="text-3xl font-bold">{b.total}</div>
+-                <div className="text-xs text-muted-foreground mb-3">candidates</div>
+-                <div className="flex flex-wrap gap-2 text-xs">
+-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-100 text-emerald-800">
+-                    <UserCheck className="h-3 w-3" /> {b.fit} Fit
+-                  </span>
+-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-rose-100 text-rose-800">
+-                    <UserX className="h-3 w-3" /> {b.notFit} Not Fit
+-                  </span>
+-                  {(b.scheduled + b.applied) > 0 && (
+-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-muted text-muted-foreground">
+-                      {b.scheduled + b.applied} Pending
+-                    </span>
+-                  )}
+-                </div>
+-              </CardContent>
+-            </Card>
+-          ))}
+-          <Card>
+-            <CardHeader className="pb-2">
+-              <CardTitle className="text-sm font-medium text-muted-foreground">3-month outcome</CardTitle>
+-            </CardHeader>
+-            <CardContent>
+-              <ResponsiveContainer width="100%" height={120}>
+-                <BarChart data={onboardingChartData}>
+-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+-                  <YAxis hide />
+-                  <Tooltip />
+-                  <Bar dataKey="Fit" stackId="a" fill="hsl(142, 76%, 36%)" radius={[0, 0, 0, 0]} />
+-                  <Bar dataKey="Not Fit" stackId="a" fill="hsl(0, 70%, 55%)" />
+-                  <Bar dataKey="Pending" stackId="a" fill="hsl(220, 14%, 75%)" radius={[4, 4, 0, 0]} />
+-                </BarChart>
+-              </ResponsiveContainer>
+-            </CardContent>
+-          </Card>
+-        </div>
+-      </section>
+-
+-      {/* ============ PROSPECTS ============ */}
+-      <section>
+-        <div className="flex items-center justify-between mb-3">
+-          <h2 className="text-lg font-semibold flex items-center gap-2">
+-            <Target className="h-5 w-5 text-primary" /> Prospects Pipeline
+-          </h2>
+-          <Button variant="outline" size="sm" onClick={() => navigate('/prospecting/prospects')}>
+-            Open Kanban
+-          </Button>
+-        </div>
+-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+-          <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-3 gap-3">
+-            <KpiCard
+-              title="Active pipeline"
+-              value={String(
+-                prospects.filter((p) => !['Won', 'Lost'].includes(p.status)).length,
++      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
++        {STATUSES.map(status => {
++          const items = grouped[status];
++          const styles = STATUS_STYLES[status];
++          const isDragOver = dragOver === status;
++          return (
++            <div
++              key={status}
++              onDragOver={(e) => { e.preventDefault(); setDragOver(status); }}
++              onDragLeave={() => setDragOver(prev => prev === status ? null : prev)}
++              onDrop={() => { if (draggedId) moveTo(draggedId, status); setDraggedId(null); setDragOver(null); }}
++              className={cn(
++                'flex flex-col rounded-xl border bg-muted/20 transition-all',
++                isDragOver && 'ring-2 ring-primary/40 bg-primary/5'
+               )}
+-              subtitle={`${formatCurrency(prospectStats.activePipelineValue, 'EUR')} estimated`}
+-            />
+-            <KpiCard
+-              title="Won this month"
+-              value={String(prospectStats.wonThisMonth)}
+-              icon={<TrendingUp className="h-4 w-4" />}
+-            />
+-            <KpiCard title="Lost (all time)" value={String(prospectStats.lostCount)} />
+-            {prospectStats.byStage.map((s) => (
+-              <Card key={s.stage}>
+-                <CardContent className="p-4">
+-                  <div className="flex items-center justify-between mb-1">
+-                    <span className="text-xs font-medium text-muted-foreground">{s.stage}</span>
+-                    <Badge
+-                      style={{ backgroundColor: STAGE_COLORS[s.stage], color: 'white' }}
+-                      className="text-xs"
+-                    >
+-                      {s.count}
+-                    </Badge>
+-                  </div>
+-                  <div className="text-sm font-semibold">
+-                    {s.value > 0 ? formatCurrency(s.value, 'EUR') : 'ΓÇö'}
+-                  </div>
+-                </CardContent>
+-              </Card>
+-            ))}
+-          </div>
+-          <Card>
+-            <CardHeader className="pb-2">
+-              <CardTitle className="text-sm font-medium">Stage distribution</CardTitle>
+-            </CardHeader>
+-            <CardContent>
+-              <ResponsiveContainer width="100%" height={220}>
+-                <PieChart>
+-                  <Pie
+-                    data={prospectChartData.filter((d) => d.value > 0)}
+-                    cx="50%"
+-                    cy="50%"
+-                    outerRadius={70}
+-                    innerRadius={35}
+-                    dataKey="value"
+-                    label={({ name, value }) => `${value}`}
+-                  >
+-                    {prospectChartData.map((d, i) => (
+-                      <Cell key={i} fill={STAGE_COLORS[d.name] ?? 'hsl(220, 14%, 60%)'} />
+-                    ))}
+-                  </Pie>
+-                  <Tooltip />
+-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+-                </PieChart>
+-              </ResponsiveContainer>
+-            </CardContent>
+-          </Card>
+-        </div>
+-      </section>
+-
+-      {/* ============ INVOICES INCOMING ============ */}
+-      <section>
+-        <div className="flex items-center justify-between mb-3">
+-          <h2 className="text-lg font-semibold flex items-center gap-2">
+-            <Receipt className="h-5 w-5 text-primary" /> Incoming Invoice Cash ΓÇö {monthLabel(y, m)}
+-          </h2>
+-          <Button variant="outline" size="sm" onClick={() => navigate('/invoices')}>
+-            View invoices
+-          </Button>
+-        </div>
+-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+-          <Card>
+-            <CardHeader className="pb-2">
+-              <CardTitle className="text-sm font-medium text-muted-foreground">
+-                Expected this month
+-              </CardTitle>
+-            </CardHeader>
+-            <CardContent className="space-y-3">
+-              <div>
+-                <div className="text-xs text-muted-foreground">Total billing (EUR equiv.)</div>
+-                <div className="text-2xl font-bold">
+-                  {formatCurrency(invoiceCash.totalBillingEur, 'EUR')}
+-                </div>
++            >
++              <div className="px-3 pt-3">
++                <div className={cn('h-1.5 w-full rounded-full bg-gradient-to-r', styles.bar)} />
+               </div>
+-              <div>
+-                <div className="text-xs text-muted-foreground">Estimated profit</div>
+-                <div className="text-xl font-semibold text-emerald-700">
+-                  {formatCurrency(invoiceCash.totalProfitEur, 'EUR')}
++              <div className="px-3 py-2 flex items-center justify-between">
++                <div className="flex items-center gap-2">
++                  <span className="text-sm font-semibold">{status}</span>
++                  <span className={cn('text-[11px] rounded-full px-2 py-0.5 font-medium', styles.chip)}>{items.length}</span>
+                 </div>
+               </div>
+-              <div className="pt-2 border-t space-y-1">
+-                {invoiceCash.byCurrency.length === 0 && (
+-                  <div className="text-sm text-muted-foreground">No invoices due this month.</div>
+-                )}
+-                {invoiceCash.byCurrency.map(([cur, v]) => (
+-                  <div key={cur} className="flex justify-between text-xs">
+-                    <span className="text-muted-foreground">
+-                      {cur} ┬╖ {v.count} invoice{v.count > 1 ? 's' : ''}
+-                    </span>
+-                    <span className="font-medium">
+-                      {formatCurrency(v.billing, cur)} ┬╖ profit {formatCurrency(v.profit, cur)}
+-                    </span>
+-                  </div>
++              <div className="flex-1 px-2 pb-2 space-y-2 min-h-[60vh]">
++                {items.map(a => (
++                  <ActionCard
++                    key={a.id}
++                    action={a}
++                    onClick={() => setOpenId(a.id)}
++                    onDragStart={() => setDraggedId(a.id)}
++                    onDragEnd={() => { setDraggedId(null); setDragOver(null); }}
++                  />
+                 ))}
++                {items.length === 0 && (
++                  <div className="text-[11px] text-muted-foreground/60 text-center py-6 border border-dashed rounded-md">
++                    Drop here
++                  </div>
++                )}
+               </div>
+-            </CardContent>
+-          </Card>
++            </div>
++          );
++        })}
++      </div>
+ 
+-          <Card className="lg:col-span-2">
+-            <CardHeader className="pb-2">
+-              <CardTitle className="text-sm font-medium">When the cash lands (by week)</CardTitle>
+-            </CardHeader>
+-            <CardContent>
+-              <ResponsiveContainer width="100%" height={220}>
+-                <BarChart data={invoiceCash.weeks}>
+-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+-                  <YAxis tick={{ fontSize: 11 }} />
+-                  <Tooltip
+-                    formatter={(v: number) => formatCurrency(v, 'EUR')}
+-                  />
+-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+-                  <Bar dataKey="billing" fill="hsl(207, 63%, 44%)" name="Billing" radius={[4, 4, 0, 0]} />
+-                  <Bar dataKey="profit" fill="hsl(142, 76%, 36%)" name="Profit" radius={[4, 4, 0, 0]} />
+-                </BarChart>
+-              </ResponsiveContainer>
+-            </CardContent>
+-          </Card>
+-        </div>
+-      </section>
++      <ActionSheet
++        action={open}
++        onClose={() => setOpenId(null)}
++        onSave={(patch) => {
++          if (!open) return false;
++          if (patch.status === 'Cancelled' && !patch.closingComments?.trim()) {
++            toast.error('Closing Comments required before cancelling.');
++            return false;
++          }
++          updateAction(open.id, patch);
++          toast.success('Changes saved');
++          setOpenId(null);
++          return true;
++        }}
++      />
++    </div>
++  );
++}
+ 
+-      {/* ============ EXPENSES UNPAID ============ */}
+-      <section>
+-        <div className="flex items-center justify-between mb-3">
+-          <h2 className="text-lg font-semibold flex items-center gap-2">
+-            <AlertCircle className="h-5 w-5 text-primary" /> Expenses to Pay ΓÇö {monthLabel(y, m)}
+-          </h2>
+-          <Button variant="outline" size="sm" onClick={() => navigate('/expenses')}>
+-            View expenses
+-          </Button>
+-        </div>
+-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+-          <Card>
+-            <CardHeader className="pb-2">
+-              <CardTitle className="text-sm font-medium text-muted-foreground">
+-                Unpaid &amp; due this month
+-              </CardTitle>
+-            </CardHeader>
+-            <CardContent className="space-y-3">
+-              <div>
+-                <div className="text-xs text-muted-foreground">Total to pay (EUR equiv.)</div>
+-                <div className="text-2xl font-bold">
+-                  {formatCurrency(expenseDue.totalEur, 'EUR')}
+-                </div>
+-              </div>
+-              {expenseDue.overdueCount > 0 && (
+-                <Badge variant="destructive" className="text-xs">
+-                  {expenseDue.overdueCount} already overdue
+-                </Badge>
+-              )}
+-              <div className="pt-2 border-t space-y-1">
+-                {expenseDue.byCurrency.length === 0 && (
+-                  <div className="text-sm text-muted-foreground">Nothing due ΓÇö all clear!</div>
+-                )}
+-                {expenseDue.byCurrency.map(([cur, v]) => (
+-                  <div key={cur} className="flex justify-between text-xs">
+-                    <span className="text-muted-foreground">
+-                      {cur} ┬╖ {v.count} item{v.count > 1 ? 's' : ''}
+-                    </span>
+-                    <span className="font-medium">{formatCurrency(v.amount, cur)}</span>
+-                  </div>
+-                ))}
+-              </div>
+-            </CardContent>
+-          </Card>
++function KpiPill({ icon, label, value, tone }: { icon?: React.ReactNode; label: string; value: number; tone: string }) {
++  return (
++    <div className="rounded-xl border bg-card p-3 flex items-center gap-3">
++      {icon && <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center', tone)}>{icon}</div>}
++      <div>
++        <p className="text-xs text-muted-foreground">{label}</p>
++        <p className="text-xl font-bold leading-tight">{value}</p>
++      </div>
++    </div>
++  );
++}
+ 
+-          <Card className="lg:col-span-2">
+-            <CardHeader className="pb-2">
+-              <CardTitle className="text-sm font-medium flex items-center gap-2">
+-                <Calendar className="h-4 w-4" /> Top items to settle
+-              </CardTitle>
+-            </CardHeader>
+-            <CardContent>
+-              {expenseDue.top.length === 0 ? (
+-                <div className="text-sm text-muted-foreground py-6 text-center">
+-                  No unpaid expenses.
+-                </div>
+-              ) : (
+-                <div className="divide-y">
+-                  {expenseDue.top.map((e) => {
+-                    const acct = getAccountById(e.accountId);
+-                    const overdue = new Date(e.dueDate) < now;
+-                    return (
+-                      <button
+-                        key={e.id}
+-                        onClick={() => setExpenseDialog({ open: true, expense: e })}
+-                        className="w-full flex items-center justify-between py-2 text-sm text-left hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
+-                      >
+-                        <div className="flex-1 min-w-0">
+-                          <div className="font-medium truncate">{acct?.name ?? e.reference}</div>
+-                          <div className="text-xs text-muted-foreground">
+-                            {e.expenseType} ┬╖ due {new Date(e.dueDate).toLocaleDateString('en-GB')}
+-                          </div>
+-                        </div>
+-                        <div className="flex items-center gap-3">
+-                          <StatusBadge status={overdue ? 'Overdue' : e.status} />
+-                          <div className="text-right font-semibold">
+-                            {formatCurrency(e.totalAmount, e.currencyCode)}
+-                          </div>
+-                        </div>
+-                      </button>
+-                    );
+-                  })}
+-                </div>
+-              )}
+-            </CardContent>
+-          </Card>
++function ActionCard({
++  action, onClick, onDragStart, onDragEnd,
++}: {
++  action: CorporateAction;
++  onClick: () => void;
++  onDragStart: () => void;
++  onDragEnd: () => void;
++}) {
++  const p = PRIORITY_META[action.priority];
++  const due = dueLabel(action);
++  return (
++    <div
++      draggable
++      onDragStart={onDragStart}
++      onDragEnd={onDragEnd}
++      onClick={onClick}
++      className={cn(
++        'group rounded-lg border bg-card p-3 cursor-grab active:cursor-grabbing',
++        'hover:shadow-md hover:border-primary/40 transition'
++      )}
++    >
++      <div className="flex items-start gap-2.5">
++        <div className={cn(
++          'shrink-0 h-9 w-9 rounded-lg flex items-center justify-center text-lg ring-1',
++          p.bg, p.ring
++        )} title={`${p.label} priority`}>
++          {p.emoji}
          </div>
+-      </section>
++        <div className="min-w-0 flex-1">
++          <p className="text-sm font-medium leading-snug line-clamp-3">{action.actionSummarizedTitle}</p>
++          <div className="mt-2 flex items-center justify-between gap-2">
++            <span className={cn('text-[10px] rounded px-1.5 py-0.5 font-medium', p.bg, p.text)}>
++              {p.label}
++            </span>
++            {due && (
++              <span className={cn('inline-flex items-center gap-1 text-[11px]', due.tone)}>
++                <Calendar className="h-3 w-3" />{due.text}
++              </span>
++            )}
++          </div>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++function ActionSheet({
++  action, onClose, onSave,
++}: {
++  action: CorporateAction | null;
++  onClose: () => void;
++  onSave: (patch: { status: CorporateActionStatus; closingComments?: string }) => boolean;
++}) {
++  const [draftStatus, setDraftStatus] = useState<CorporateActionStatus>('New');
++  const [draftComments, setDraftComments] = useState('');
++
++  // Reset draft when opening a different action.
++  useEffect(() => {
++    if (action) {
++      setDraftStatus(action.status);
++      setDraftComments(action.closingComments ?? '');
++    }
++  }, [action?.id]);
++
++  if (!action) return null;
++  const p = PRIORITY_META[action.priority];
++  const dirty = draftStatus !== action.status || draftComments !== (action.closingComments ?? '');
++  const cancelBlocked = draftStatus === 'Cancelled' && !draftComments.trim();
++
++  const handleSave = () => {
++    onSave({ status: draftStatus, closingComments: draftComments });
++  };
++  const handleCancel = () => {
++    setDraftStatus(action.status);
++    setDraftComments(action.closingComments ?? '');
++    onClose();
++  };
++
++  return (
++    <Sheet open={!!action} onOpenChange={(o) => { if (!o) handleCancel(); }}>
++      <SheetContent className="w-full sm:max-w-xl overflow-y-auto flex flex-col p-0">
++        <div className="px-6 pt-6">
++          <SheetHeader>
++            <div className="flex items-center gap-2">
++              <span className={cn('h-9 w-9 rounded-lg flex items-center justify-center text-lg ring-1', p.bg, p.ring)}>{p.emoji}</span>
++              <Badge variant="outline" className={cn('font-medium', p.text)}>{p.label} priority</Badge>
++            </div>
++            <SheetTitle className="text-left mt-2">{action.actionSummarizedTitle}</SheetTitle>
++            <SheetDescription className="text-left">
++              {action.dueDate ? `Due ${formatDate(action.dueDate)}` : 'No due date set'}
++              {' ┬╖ '}Created {formatDate(action.createdAt.slice(0, 10))}
++            </SheetDescription>
++          </SheetHeader>
  
-         <SliderPrimitive.Root
--          className="relative flex w-full touch-none select-none items-center mt-1"
-+          className="relative z-10 flex w-full touch-none select-none items-center mt-3"
-           min={0} max={WINDOW_DAYS} step={1} minStepsBetweenThumbs={7}
-           value={[sliderFrom, sliderTo]}
-           onValueChange={(vals) => {
-@@ -288,8 +288,8 @@ function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
-           <SliderPrimitive.Track className="relative h-[2px] w-full grow overflow-hidden rounded-full bg-muted">
-             <SliderPrimitive.Range className="absolute h-full bg-foreground" />
-           </SliderPrimitive.Track>
--          <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border-2 border-foreground bg-background shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
--          <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border-2 border-foreground bg-background shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-+          <SliderPrimitive.Thumb className="relative z-20 block h-4 w-4 rounded-full border-2 border-foreground bg-background shadow cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-+          <SliderPrimitive.Thumb className="relative z-20 block h-4 w-4 rounded-full border-2 border-foreground bg-background shadow cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-         </SliderPrimitive.Root>
- 
-         <div className="absolute left-0 right-0 bottom-0 flex justify-between text-[10px] text-muted-foreground pointer-events-none">
-diff --git a/src/pages/DocumentsPage.tsx b/src/pages/DocumentsPage.tsx
-index 40c14d9..4391cf1 100644
---- a/src/pages/DocumentsPage.tsx
-+++ b/src/pages/DocumentsPage.tsx
-@@ -99,8 +99,8 @@ export default function DocumentsPage() {
-             options={documentTypeOptions.map(t => ({ value: t.value, label: t.label, count: documents.filter(d => d.documentType === t.value).length }))} />
-           <MultiPill label="Account" values={accountFilter} onChange={setAccountFilter}
-             options={accountOptions.map(a => ({ value: a.value, label: a.label, count: documents.filter(d => d.relatedAccountId === a.value).length }))} />
--          <DatePill label="Issued Date" value={issuedDateFilter} onChange={setIssuedDateFilter} />
--          <DatePill label="Expiration Date" value={expirationDateFilter} onChange={setExpirationDateFilter} />
-+          <DatePill label="Issued Date" value={issuedDateFilter} onChange={setIssuedDateFilter} dates={documents.map(d => d.issuedDate).filter(Boolean) as string[]} />
-+          <DatePill label="Expiration Date" value={expirationDateFilter} onChange={setExpirationDateFilter} dates={documents.map(d => d.expirationDate).filter(Boolean) as string[]} />
+-      {/* ============ LEAVE ============ */}
+-      <section>
+-        <div className="flex items-center justify-between mb-3">
+-          <h2 className="text-lg font-semibold flex items-center gap-2">
+-            <Plane className="h-5 w-5 text-primary" /> Leave Schedule
+-          </h2>
+-          <Button variant="outline" size="sm" onClick={() => navigate('/leave')}>
+-            View all
+-          </Button>
++          {/* Sticky status switcher */}
++          <div className="mt-4 -mx-6 px-6 py-3 sticky top-0 z-10 bg-background/95 backdrop-blur border-y">
++            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Status Reason</Label>
++            <div className="mt-1.5 inline-flex w-full rounded-lg border bg-muted/40 p-1 gap-1">
++              {STATUSES.map(s => {
++                const active = draftStatus === s;
++                const blocked = s === 'Cancelled' && !draftComments.trim();
++                return (
++                  <button
++                    key={s}
++                    type="button"
++                    onClick={() => {
++                      if (blocked) {
++                        toast.error('Closing Comments required to set Cancelled.');
++                        return;
++                      }
++                      setDraftStatus(s);
++                    }}
++                    className={cn(
++                      'flex-1 text-xs font-medium rounded-md px-2 py-1.5 transition-all',
++                      active
++                        ? cn(STATUS_STYLES[s].chip, 'shadow-sm ring-1 ring-border')
++                        : 'text-muted-foreground hover:bg-background/80',
++                      blocked && !active && 'opacity-50 cursor-not-allowed'
++                    )}
++                    title={blocked ? 'Add Closing Comments to enable' : `Set status to ${s}`}
++                  >
++                    {s}
++                  </button>
++                );
++              })}
++            </div>
++            {cancelBlocked && (
++              <p className="mt-1.5 text-[11px] text-amber-700">
++                Add Closing Comments below to confirm Cancelled.
++              </p>
++            )}
++          </div>
          </div>
-         {hasActiveFilters && (
-           <div className="flex items-center gap-2 flex-wrap text-xs">
-diff --git a/src/pages/TimesheetsPage.tsx b/src/pages/TimesheetsPage.tsx
-index 0c71ef9..a47e544 100644
---- a/src/pages/TimesheetsPage.tsx
-+++ b/src/pages/TimesheetsPage.tsx
-@@ -483,7 +483,7 @@ export default function TimesheetsPage() {
-           <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search reference, consultant, contract..." />
-           <SinglePill label="Status" value={statusFilter} onChange={setStatusFilter}
-             options={tsStatuses.map(s => ({ value: s, label: s, count: allTimesheets.filter(t => t.status === s).length }))} />
--          <DatePill label="Week Start" value={weekStartFilter} onChange={setWeekStartFilter} />
-+          <DatePill label="Week Start" value={weekStartFilter} onChange={setWeekStartFilter} dates={allTimesheets.map(t => t.weekStart)} />
-           <div className="flex items-center gap-2 ml-auto">
-             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">View</span>
-             <ToggleGroup type="single" value={viewMode} onValueChange={v => v && setViewMode(v as any)} className="border rounded-md p-0.5">
+-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+-          {leaveStats.map((b) => {
+-            const totalDays = b.list.reduce((s, l) => s + l.totalDays, 0);
+-            return (
+-              <Card key={b.key}>
+-                <CardHeader className="pb-2">
+-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
+-                    <span>
+-                      {b.key === 'last' ? 'Last month' : b.key === 'this' ? 'This month' : 'Next month'}
+-                      <span className="ml-2 text-xs font-normal">({b.label})</span>
+-                    </span>
+-                    <span className="text-xs font-semibold text-foreground">
+-                      {b.list.length} ┬╖ {totalDays}d
+-                    </span>
+-                  </CardTitle>
+-                </CardHeader>
+-                <CardContent>
+-                  {b.list.length === 0 ? (
+-                    <div className="text-xs text-muted-foreground py-4 text-center">
+-                      No leave scheduled.
+-                    </div>
+-                  ) : (
+-                    <div className="divide-y">
+-                      {b.list.map((l) => {
+-                        const c = getContactById(l.contactId);
+-                        const name = c ? `${c.firstName} ${c.lastName}` : 'Unknown';
+-                        const start = new Date(l.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+-                        const end = new Date(l.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+-                        return (
+-                          <div key={l.id} className="py-2 text-sm">
+-                            <div className="font-medium truncate">{name}</div>
+-                            <div className="text-xs text-muted-foreground">
+-                              {start === end ? start : `${start} ΓÇô ${end}`} ┬╖ {l.totalDays}d
+-                            </div>
+-                          </div>
+-                        );
+-                      })}
+-                    </div>
+-                  )}
+-                </CardContent>
+-              </Card>
+-            );
+-          })}
++
++        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
++          <div>
++            <Label className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
++              <Lock className="h-3 w-3" />
++              Action Details
++              <span className="text-[10px] font-normal normal-case ml-auto text-muted-foreground/70">AI generated ┬╖ read only</span>
++            </Label>
++            <div className="mt-1.5 rounded-md border bg-muted/30 p-3 text-sm whitespace-pre-wrap leading-relaxed min-h-[360px] max-h-[60vh] overflow-y-auto">
++              {action.actionDetails}
++            </div>
++          </div>
++
++          <div>
++            <Label htmlFor="closing" className="text-xs uppercase tracking-wide text-muted-foreground">
++              Closing Comments
++              <span className="text-[10px] font-normal normal-case ml-2 text-muted-foreground/70">
++                Required to cancel
++              </span>
++            </Label>
++            <Textarea
++              id="closing"
++              className="mt-1.5 min-h-[140px]"
++              placeholder="Notes on what was done, why this was cancelled, or context for the next personΓÇª"
++              value={draftComments}
++              onChange={(e) => setDraftComments(e.target.value)}
++            />
++          </div>
+         </div>
+-      </section>
+ 
+-      <ExpenseFormSheet
+-        expense={expenseDialog.expense}
+-        open={expenseDialog.open}
+-        onOpenChange={(o) => {
+-          setExpenseDialog((s) => ({ ...s, open: o }));
+-          if (!o) setRefreshTick((t) => t + 1);
+-        }}
+-      />
+-    </div>
++        {/* Sticky footer actions */}
++        <div className="border-t bg-background px-6 py-3 flex items-center justify-end gap-2">
++          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
++          <Button onClick={handleSave} disabled={!dirty || cancelBlocked}>Save</Button>
++        </div>
++      </SheetContent>
++    </Sheet>
+   );
+ }
+diff --git a/src/types/crm.ts b/src/types/crm.ts
+index d099357..18e7c62 100644
+--- a/src/types/crm.ts
++++ b/src/types/crm.ts
+@@ -559,6 +559,22 @@ export interface Opportunity {
+   createdAt: string;
+ }
+ 
++// ===== CORPORATE ACTIONS =====
++export type CorporateActionStatus = 'New' | 'In Progress' | 'Closed' | 'Cancelled';
++export type CorporateActionPriority = 'Low' | 'Medium' | 'High';
++
++export interface CorporateAction {
++  id: string;
++  actionSummarizedTitle: string;
++  actionDetails: string;
++  closingComments?: string;
++  priority: CorporateActionPriority;
++  status: CorporateActionStatus;
++  dueDate?: string;
++  createdAt: string;
++  modifiedAt: string;
++}
++
+ // ===== CURRENCY MAP =====
+ export const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = {
+   USD: '$',

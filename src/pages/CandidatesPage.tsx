@@ -13,6 +13,8 @@ import { SearchPill, SinglePill, FilterChip, DatePill, dateRangeFor, relativeDat
 import { Plus } from '../components/Icons';
 import { cn, formatDate } from '../lib/utils';
 import { fetchCandidates, saveCandidate } from '../services/candidateService';
+import { Csp_candidatesService } from '../generated/services/Csp_candidatesService';
+import { getOrgUrl } from '../services/dataverseService';
 import type { CandidateRecord } from '../services/candidateService';
 import { fetchContacts } from '../services/contactService';
 import { listRecords, createRecord, updateRecord } from '../services/dataverseService';
@@ -22,6 +24,7 @@ import { onboardingCandidates as mockCandidates, contacts as mockContacts } from
 /* ── Constants ───────────────────────────────────────────────── */
 
 const statusOptions = ['Applied', 'Scheduled', 'Fit', 'Not Fit'] as const;
+const candidateSources = ['Website', 'Recruiter', 'Referral'] as const;
 const pathOptions = ['B2B seeking Contracts', 'CIM to B2B'] as const;
 const currencyOptions = ['EUR', 'USD', 'GBP', 'RON'] as const;
 
@@ -49,6 +52,8 @@ interface CandidateRow {
   email: string;
   phone: string;
   path: string;
+  candidateRole: string;
+  cvFileName: string;
   hourlyRateEur: number;
   b2bEntityName: string;
   aiDecision: string;
@@ -57,6 +62,7 @@ interface CandidateRow {
   currencyCode: string;
   status: string;
   appliedDate: string;
+  source: string;
 }
 
 function mapRecord(r: CandidateRecord): CandidateRow {
@@ -72,6 +78,8 @@ function mapMock(m: any): CandidateRow {
     email: m.email,
     phone: m.phone || '',
     path: m.path || 'B2B seeking Contracts',
+    candidateRole: m.candidateRole || '',
+    cvFileName: m.cvFileName || '',
     hourlyRateEur: m.hourlyRateEur ?? 0,
     b2bEntityName: m.b2bEntityName || '',
     aiDecision: m.aiDecision || '',
@@ -80,6 +88,7 @@ function mapMock(m: any): CandidateRow {
     currencyCode: m.currencyCode || 'EUR',
     status: m.status || 'Applied',
     appliedDate: m.appliedDate || '',
+    source: m.source || 'Website',
   };
 }
 
@@ -94,6 +103,13 @@ const formTabs = [
 /* ── Page Component ──────────────────────────────────────────── */
 
 import { useConfirm } from '../components/ConfirmDialog';
+import { SendCandidateProfilesDialog } from '../components/candidate/SendCandidateProfilesDialog';
+import { RaiseOpportunityForm } from '../components/opportunity/RaiseOpportunityForm';
+import { fetchAccounts } from '../services/accountService';
+import { fetchProspects } from '../services/prospectService';
+import { fetchUnitsOfMeasure } from '../services/unitOfMeasureService';
+import { listRecords as listRec } from '../services/dataverseService';
+import type { Account, Prospect } from '../types/crm';
 
 export default function CandidatesPage() {
   const { toast } = useToast();
@@ -125,6 +141,7 @@ export default function CandidatesPage() {
   // Filter state
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [pathFilter, setPathFilter] = useState<string>('');
+  const [sourceFilter, setSourceFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [appliedDateFilter, setAppliedDateFilter] = useState<RelativeDateValue>({ type: 'all' });
   const [colFilters, setColFilters] = useState<ColumnFilters>({});
@@ -139,6 +156,35 @@ export default function CandidatesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
   const [emailError, setEmailError] = useState('');
+  const [cvFile, setCvFile] = useState<File | null>(null);
+  const cvFileRef = React.useRef<HTMLInputElement>(null);
+  const [sendProfilesOpen, setSendProfilesOpen] = useState(false);
+  const [raiseOppOpen, setRaiseOppOpen] = useState(false);
+  const [oppAccounts, setOppAccounts] = useState<Account[]>([]);
+  const [oppProspects, setOppProspects] = useState<Prospect[]>([]);
+  const [oppUoms, setOppUoms] = useState<{ id: string; name: string }[]>([]);
+  const [oppCurrencies, setOppCurrencies] = useState<{ id: string; code: string }[]>([]);
+  // Load opportunity-related reference data once
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const [accs, props, uomRecs, curRecs] = await Promise.all([
+          fetchAccounts(),
+          fetchProspects(),
+          fetchUnitsOfMeasure(),
+          listRec('transactioncurrencies', 'transactioncurrencyid,isocurrencycode,currencyname', undefined, 'isocurrencycode asc'),
+        ]);
+        setOppAccounts(accs);
+        setOppProspects(props);
+        setOppUoms(uomRecs.map(u => ({ id: u.id, name: u.name })));
+        setOppCurrencies(curRecs
+          .map(r => ({ id: String(r.transactioncurrencyid).replace(/[{}]/g, ''), code: (r.isocurrencycode || '').toUpperCase(), name: r.currencyname || '' }))
+          .filter(c => !!c.code));
+      } catch (err) {
+        console.error('[CandidatesPage] failed to load opp reference data:', err);
+      }
+    })();
+  }, []);
 
   /* ── Counts ──────────────────────────────────────────────── */
 
@@ -160,6 +206,7 @@ export default function CandidatesPage() {
     return candidates.filter(c => {
       if (statusFilter && c.status !== statusFilter) return false;
       if (pathFilter && c.path !== pathFilter) return false;
+      if (sourceFilter && (c.source || '') !== sourceFilter) return false;
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
         const m = `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
@@ -178,11 +225,17 @@ export default function CandidatesPage() {
       const name = getTextFilter(colFilters, 'name');
       if (name && !`${c.firstName} ${c.lastName}`.toLowerCase().includes(name.toLowerCase())) return false;
 
+      const role = getTextFilter(colFilters, 'role');
+      if (role && !(c.candidateRole || '').toLowerCase().includes(role.toLowerCase())) return false;
+
       const email = getTextFilter(colFilters, 'email');
       if (email && !c.email.toLowerCase().includes(email.toLowerCase())) return false;
 
       const pathCol = getMultiFilter(colFilters, 'path');
       if (pathCol.length > 0 && !pathCol.includes(c.path)) return false;
+
+      const sourceCol = getMultiFilter(colFilters, 'source');
+      if (sourceCol.length > 0 && !sourceCol.includes(c.source || '')) return false;
 
       const rate = getNumberFilter(colFilters, 'rate');
       if (rate.min && c.hourlyRateEur < Number(rate.min)) return false;
@@ -196,9 +249,9 @@ export default function CandidatesPage() {
 
       return true;
     });
-  }, [candidates, statusFilter, pathFilter, searchTerm, appliedDateFilter, colFilters]);
+  }, [candidates, statusFilter, pathFilter, sourceFilter, searchTerm, appliedDateFilter, colFilters]);
 
-  const hasActiveFilters = !!searchTerm || !!statusFilter || !!pathFilter || appliedDateFilter.type !== 'all';
+  const hasActiveFilters = !!searchTerm || !!statusFilter || !!pathFilter || !!sourceFilter || appliedDateFilter.type !== 'all';
 
   /* ── Selection helpers ───────────────────────────────────── */
 
@@ -246,10 +299,13 @@ export default function CandidatesPage() {
       email: candidate.email,
       phone: candidate.phone,
       path: candidate.path,
+      candidateRole: candidate.candidateRole || '',
+      cvFileName: candidate.cvFileName || '',
       hourlyRateEur: candidate.hourlyRateEur,
       b2bEntityName: candidate.b2bEntityName,
       currencyCode: candidate.currencyCode || 'EUR',
       status: candidate.status,
+      source: candidate.source || 'Website',
       // AI fields (read-only)
       aiDecision: candidate.aiDecision,
       aiSummary: candidate.aiSummary,
@@ -265,6 +321,8 @@ export default function CandidatesPage() {
       reviewedBy: '',
       reviewerNotes: '',
     });
+    setCvFile(null);
+    if (cvFileRef.current) cvFileRef.current.value = '';
     fetchCandidateSlots(candidate.id);
   };
 
@@ -278,10 +336,14 @@ export default function CandidatesPage() {
       email: '',
       phone: '',
       path: 'B2B seeking Contracts',
-      hourlyRateEur: 0,
+      candidateRole: '',
+      cvFileName: '',
+      hourlyRateEur: '',
       b2bEntityName: '',
       currencyCode: 'EUR',
       status: 'Applied',
+      source: 'Website',
+      appliedDate: new Date().toISOString().substring(0, 10),
       aiDecision: '',
       aiSummary: '',
       aiSuggestedRate: 0,
@@ -294,6 +356,8 @@ export default function CandidatesPage() {
       reviewedBy: '',
       reviewerNotes: '',
     });
+    setCvFile(null);
+    if (cvFileRef.current) cvFileRef.current.value = '';
   };
 
   const handleAssignInterviewer = async (interviewerId: string) => {
@@ -387,7 +451,18 @@ export default function CandidatesPage() {
     setEmailError('');
     setIsSaving(true);
     try {
-      await saveCandidate(formData, isNew ? undefined : selectedCandidate?.id);
+      const candidateId = await saveCandidate(formData, isNew ? undefined : selectedCandidate?.id);
+      if (cvFile && candidateId) {
+        try {
+          await Csp_candidatesService.upload(candidateId, 'csp_candidatecv', cvFile, cvFile.name);
+          console.log('[Candidate] CV uploaded for', candidateId);
+        } catch (uploadErr: any) {
+          console.error('[Candidate] CV upload failed:', uploadErr?.message);
+          toast.error('Candidate saved but CV upload failed');
+        }
+      }
+      setCvFile(null);
+      if (cvFileRef.current) cvFileRef.current.value = '';
       toast.success(isNew ? `Candidate "${name}" created` : `Candidate "${name}" saved`);
       closeForm();
       await refetch();
@@ -407,8 +482,77 @@ export default function CandidatesPage() {
 
   /* ── Render ──────────────────────────────────────────────── */
 
+  const rowTint: Record<string, string> = {
+    Fit: 'rgba(34, 197, 94, 0.06)',
+    'Not Fit': 'rgba(239, 68, 68, 0.06)',
+    Scheduled: 'rgba(245, 158, 11, 0.06)',
+    Applied: 'transparent',
+  };
+  const statusBadgeStyles: Record<string, React.CSSProperties> = {
+    Applied: { background: 'hsl(215 20% 93%)', color: 'hsl(215 25% 35%)' },
+    Scheduled: { background: 'hsl(38 92% 92%)', color: 'hsl(38 75% 30%)' },
+    Fit: { background: 'hsl(142 60% 92%)', color: 'hsl(142 60% 25%)' },
+    'Not Fit': { background: 'hsl(0 65% 93%)', color: 'hsl(0 60% 35%)' },
+    Booked: { background: 'hsl(215 20% 93%)', color: 'hsl(215 25% 35%)' },
+  };
+  const renderCandidateBadge = (status: string) => (
+    <span
+      style={{
+        ...(statusBadgeStyles[status] || statusBadgeStyles.Applied),
+        display: 'inline-block', padding: '2px 10px', borderRadius: 9999,
+        fontSize: 11, fontWeight: 600, lineHeight: 1.5,
+      }}
+    >{status}</span>
+  );
+  const sourceToggleRow = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'hsl(var(--muted-foreground))' }}>Source</span>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {candidateSources.map(s => {
+          const active = formData.source === s;
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => updateField('source', s)}
+              style={{
+                padding: '4px 14px', fontSize: 12, cursor: 'pointer', borderRadius: 9999,
+                background: active ? 'hsl(222 47% 20%)' : 'transparent',
+                color: active ? 'white' : 'hsl(var(--muted-foreground))',
+                border: active ? 'none' : '1px solid transparent',
+              }}
+            >{s}</button>
+          );
+        })}
+      </div>
+      {formData.source === 'Recruiter' && (
+        <span style={{ fontSize: 12, color: '#d97706', marginLeft: 4 }}>Outreach must go through the recruiter.</span>
+      )}
+    </div>
+  );
+
   return (
-    <div>
+    <div className="csp-candidates-page">
+      <style>{`
+        .csp-candidates-page .csp-input-readonly {
+          background-color: hsl(40 33% 97%) !important;
+          color: hsl(var(--foreground)) !important;
+        }
+        .csp-candidates-page .csp-textarea-tinted .csp-textarea {
+          background-color: hsl(40 33% 97%) !important;
+        }
+        .csp-candidates-page .csp-tab-pill {
+          background: transparent; border: 1px solid transparent; padding: 6px 14px; border-radius: 6px;
+          font-size: 13px; font-weight: 500; cursor: pointer; color: hsl(var(--muted-foreground));
+        }
+        .csp-candidates-page .csp-tab-pill.is-active {
+          background: white; border-color: hsl(var(--border));
+          color: hsl(222 47% 20%); font-weight: 600;
+        }
+        .csp-candidates-page .csp-form-field > button[type="button"] {
+          display: none !important;
+        }
+      `}</style>
       <HeaderSelectionBar
         count={selectedIds.length}
         onClearSelection={() => setSelectedIds([])}
@@ -433,6 +577,15 @@ export default function CandidatesPage() {
         action={
           <div className="csp-flex-gap-2">
             <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
+            <button
+              className="csp-btn csp-btn-outline csp-btn-sm"
+              disabled={selectedIds.length !== 1}
+              onClick={() => setRaiseOppOpen(true)}
+              title={selectedIds.length === 1 ? 'Raise opportunity for the selected candidate' : 'Select a single candidate to enable'}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              💼 Raise Opportunity
+            </button>
             <button className="csp-btn csp-btn-primary" onClick={openNewForm}>
               <Plus className="csp-icon-inline" />Add Candidate
             </button>
@@ -449,6 +602,8 @@ export default function CandidatesPage() {
             options={statusOptions.map(s => ({ value: s, label: s, count: statusCounts[s] }))} />
           <SinglePill label="Path" value={pathFilter} onChange={setPathFilter}
             options={pathOptions.map(p => ({ value: p, label: p, count: pathCounts[p] }))} />
+          <SinglePill label="Source" value={sourceFilter} onChange={setSourceFilter}
+            options={candidateSources.map(s => ({ value: s, label: s, count: candidates.filter(c => c.source === s).length }))} />
           <DatePill label="Applied" value={appliedDateFilter} onChange={setAppliedDateFilter} dates={candidates.map(c => c.appliedDate).filter(Boolean) as string[]} />
         </div>
         {hasActiveFilters && (
@@ -456,8 +611,9 @@ export default function CandidatesPage() {
             {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
             {statusFilter && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} />}
             {pathFilter && <FilterChip label={`Path: ${pathFilter}`} onRemove={() => setPathFilter('')} />}
+            {sourceFilter && <FilterChip label={`Source: ${sourceFilter}`} onRemove={() => setSourceFilter('')} />}
             {appliedDateFilter.type !== 'all' && <FilterChip label={`Applied: ${relativeDateLabel(appliedDateFilter)}`} onRemove={() => setAppliedDateFilter({ type: 'all' })} />}
-            <button className="csp-btn csp-btn-outline csp-btn-sm" onClick={() => { setSearchTerm(''); setStatusFilter(''); setPathFilter(''); setAppliedDateFilter({ type: 'all' }); }}>Clear all</button>
+            <button className="csp-btn csp-btn-outline csp-btn-sm" onClick={() => { setSearchTerm(''); setStatusFilter(''); setPathFilter(''); setSourceFilter(''); setAppliedDateFilter({ type: 'all' }); }}>Clear all</button>
           </div>
         )}
       </div>
@@ -465,6 +621,7 @@ export default function CandidatesPage() {
       {/* ── Status legend ────────────────────────────────── */}
 
       <div className="csp-legend-row">
+        <span style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'hsl(var(--muted-foreground))', marginRight: 8 }}>Legend</span>
         {statusOptions.map(s => (
           <span key={s} className="csp-legend-item">
             <span className={cn('csp-dot', statusDotColors[s])} />{s}
@@ -482,14 +639,6 @@ export default function CandidatesPage() {
                 <Checkbox checked={allSelected} onChange={toggleAll} />
               </th>
               <th>
-                ID Number{' '}
-                <TextFilterPopover
-                  label="ID Number"
-                  value={getTextFilter(colFilters, 'idNumber')}
-                  onChange={v => setTextFilter(setColFilters, 'idNumber', v)}
-                />
-              </th>
-              <th>
                 Name{' '}
                 <TextFilterPopover
                   label="Name"
@@ -498,11 +647,28 @@ export default function CandidatesPage() {
                 />
               </th>
               <th>
+                Role{' '}
+                <TextFilterPopover
+                  label="Role"
+                  value={getTextFilter(colFilters, 'role')}
+                  onChange={v => setTextFilter(setColFilters, 'role', v)}
+                />
+              </th>
+              <th>
                 Email{' '}
                 <TextFilterPopover
                   label="Email"
                   value={getTextFilter(colFilters, 'email')}
                   onChange={v => setTextFilter(setColFilters, 'email', v)}
+                />
+              </th>
+              <th>
+                Source{' '}
+                <MultiSelectFilterPopover
+                  label="Source"
+                  options={[...candidateSources]}
+                  selected={getMultiFilter(colFilters, 'source')}
+                  onChange={v => setMultiFilter(setColFilters, 'source', v)}
                 />
               </th>
               <th>
@@ -515,7 +681,7 @@ export default function CandidatesPage() {
                 />
               </th>
               <th>
-                Rate{' '}
+                Rate (&euro;/h){' '}
                 <NumberRangeFilterPopover
                   label="Rate"
                   min={getNumberFilter(colFilters, 'rate').min}
@@ -523,6 +689,7 @@ export default function CandidatesPage() {
                   onChange={(min, max) => setNumberFilter(setColFilters, 'rate', min, max)}
                 />
               </th>
+              <th style={{ textAlign: 'right' }}>Daily Rate (&euro;)</th>
               <th>
                 B2B Entity{' '}
                 <TextFilterPopover
@@ -546,7 +713,7 @@ export default function CandidatesPage() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={9} className="csp-td-empty">
+                <td colSpan={11} className="csp-td-empty">
                   No candidates match the current filters.
                 </td>
               </tr>
@@ -554,7 +721,8 @@ export default function CandidatesPage() {
               filtered.map(candidate => (
                 <tr
                   key={candidate.id}
-                  className={cn('csp-tr-clickable', statusRowColors[candidate.status])}
+                  className="csp-tr-clickable"
+                  style={{ backgroundColor: rowTint[candidate.status] || 'transparent' }}
                   onClick={() => openForm(candidate)}
                 >
                   <td className="csp-td-check" onClick={e => e.stopPropagation()}>
@@ -563,25 +731,27 @@ export default function CandidatesPage() {
                       onChange={c => toggleOne(candidate.id, c)}
                     />
                   </td>
-                  <td className="csp-td-mono">
-                    {candidate.candidateIdNumber || '\u2014'}
-                  </td>
                   <td className="csp-td-bold">
                     {candidate.firstName} {candidate.lastName}
                   </td>
+                  <td>{candidate.candidateRole || '\u2014'}</td>
                   <td>{candidate.email}</td>
+                  <td>{candidate.source || '\u2014'}</td>
                   <td>{candidate.path}</td>
                   <td>
                     &euro;{candidate.hourlyRateEur}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    {candidate.hourlyRateEur ? `\u20ac${(candidate.hourlyRateEur * 8).toFixed(0)}` : '\u2014'}
                   </td>
                   <td>
                     {candidate.b2bEntityName || '\u2014'}
                   </td>
                   <td>
-                    {formatDate(candidate.appliedDate)}
+                    {candidate.appliedDate ? candidate.appliedDate.substring(0, 10) : '—'}
                   </td>
                   <td>
-                    <StatusBadge status={candidate.status} />
+                    {renderCandidateBadge(candidate.status)}
                   </td>
                 </tr>
               ))
@@ -596,38 +766,49 @@ export default function CandidatesPage() {
         {selectedCandidate && (
           <>
             <div className="csp-sheet-header">
-              <div className="csp-sheet-title">
-                {isNew
-                  ? 'New Candidate'
-                  : `${formData.firstName || ''} ${formData.lastName || ''}`}
-                {!isNew && <StatusBadge status={formData.status} />}
+              <div className="csp-sheet-title" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 20, fontWeight: 700 }}>
+                  {isNew
+                    ? 'New Candidate'
+                    : `${formData.firstName || ''} ${formData.lastName || ''}`}
+                </span>
+                {!isNew && renderCandidateBadge(formData.status)}
               </div>
             </div>
 
-            <Tabs tabs={formTabs} activeTab={activeTab} onChange={setActiveTab}>
+            <div className="csp-tabs">
+              <div className="csp-tabs-list" style={{ display: 'flex', gap: 4, borderBottom: 'none', padding: '0 0 8px 0' }}>
+                {formTabs.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={cn('csp-tab-pill', activeTab === t.id && 'is-active')}
+                    onClick={() => setActiveTab(t.id)}
+                  >{t.label}</button>
+                ))}
+              </div>
+              <div className="csp-tab-content">
 
               {/* ── General Tab ─────────────────────────────── */}
 
               {activeTab === 'general' && (
                 <>
+                  {sourceToggleRow}
                   <div className="csp-form-grid-2">
                     <TextField
                       label="First Name"
                       value={formData.firstName}
                       onChange={v => updateField('firstName', v)}
-                      required
                     />
                     <TextField
                       label="Last Name"
                       value={formData.lastName}
                       onChange={v => updateField('lastName', v)}
-                      required
                     />
                     <EmailField
                       label="Email"
                       value={formData.email}
                       onChange={v => { updateField('email', v); setEmailError(''); }}
-                      required
                       externalError={emailError}
                     />
                     <TextField
@@ -639,13 +820,25 @@ export default function CandidatesPage() {
                       label="Path"
                       value={formData.path}
                       onChange={v => updateField('path', v)}
-                      required
                       options={pathOptions.map(p => ({ value: p, label: p }))}
                     />
                     <TextField
-                      label="Hourly Rate"
-                      value={String(formData.hourlyRateEur)}
-                      onChange={v => updateField('hourlyRateEur', Number(v) || 0)}
+                      label="Candidate Role"
+                      value={formData.candidateRole || ''}
+                      onChange={v => updateField('candidateRole', v)}
+                      placeholder="e.g. Senior Developer"
+                    />
+                    <TextField
+                      label="Hourly Rate (€)"
+                      value={formData.hourlyRateEur ? `€${formData.hourlyRateEur}` : ''}
+                      onChange={() => {}}
+                      readOnly
+                    />
+                    <TextField
+                      label="Daily Rate (€)"
+                      value={formData.hourlyRateEur ? `€${(Number(formData.hourlyRateEur) * 8).toFixed(0)}` : ''}
+                      onChange={() => {}}
+                      readOnly
                     />
                     {formData.path === 'B2B seeking Contracts' && (
                       <TextField
@@ -654,12 +847,96 @@ export default function CandidatesPage() {
                         onChange={v => updateField('b2bEntityName', v)}
                       />
                     )}
-                    <SelectField
-                      label="Currency"
-                      value={formData.currencyCode}
-                      onChange={v => updateField('currencyCode', v)}
-                      options={currencyOptions.map(c => ({ value: c, label: c }))}
+                    <TextField
+                      label="Applied Date"
+                      value={formData.appliedDate || (selectedCandidate?.appliedDate || '')}
+                      onChange={() => {}}
+                      readOnly
                     />
+                  </div>
+
+                  {/* ── Candidate CV upload (dropzone) ─────────────── */}
+                  <div style={{ marginTop: 16 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--primary))' }}>Candidate CV</label>
+                    <input
+                      ref={cvFileRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setCvFile(file);
+                        if (file && !formData.cvFileName) updateField('cvFileName', file.name);
+                      }}
+                    />
+                    {!(cvFile || (!isNew && formData.cvFileName)) && (
+                      <div
+                        onClick={() => cvFileRef.current?.click()}
+                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onDrop={(e) => {
+                          e.preventDefault(); e.stopPropagation();
+                          const file = e.dataTransfer?.files?.[0];
+                          if (file) {
+                            setCvFile(file);
+                            if (!formData.cvFileName) updateField('cvFileName', file.name);
+                          }
+                        }}
+                        style={{
+                          border: '2px dashed hsl(var(--border))',
+                          borderRadius: 8,
+                          padding: '24px 16px',
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          marginTop: 8,
+                          background: 'hsl(var(--muted) / 0.2)',
+                        }}
+                      >
+                        <div style={{ fontSize: 20, marginBottom: 8, color: 'hsl(var(--muted-foreground))' }}>⬆</div>
+                        <div style={{ fontSize: 13 }}>Click to upload candidate CV</div>
+                        <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))' }}>PDF, DOC, DOCX</div>
+                      </div>
+                    )}
+                    {(cvFile || (!isNew && formData.cvFileName)) && (
+                      <div
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 12,
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: 8, padding: '10px 12px', marginTop: 8,
+                          background: 'hsl(var(--background))',
+                        }}
+                      >
+                        <span style={{ fontSize: 18, color: 'hsl(215 15% 55%)' }}>📄</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {cvFile ? cvFile.name : formData.cvFileName}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))' }}>
+                            {cvFile ? `${cvFile.type} · ${(cvFile.size / 1024).toFixed(0)} KB` : 'Document'}
+                          </div>
+                        </div>
+                        {!isNew && formData.cvFileName && !cvFile && (
+                          <button
+                            type="button"
+                            className="csp-btn csp-btn-outline csp-btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const orgUrl = getOrgUrl();
+                              window.open(`${orgUrl}/api/data/v9.2/csp_candidates(${selectedCandidate?.id})/csp_candidatecv/$value`, '_blank');
+                            }}
+                          >View</button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCvFile(null);
+                            if (cvFileRef.current) cvFileRef.current.value = '';
+                            updateField('cvFileName', '');
+                          }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'hsl(var(--muted-foreground))' }}
+                        >×</button>
+                      </div>
+                    )}
                   </div>
 
                   {/* ── AI Fields (read-only, shown only when values exist) ── */}
@@ -704,6 +981,7 @@ export default function CandidatesPage() {
 
               {activeTab === 'scheduling' && (
                 <div className="csp-mt-4">
+                  {sourceToggleRow}
                   <LookupField
                     label="Assigned Interviewer"
                     value={formData.confirmedSlotId || ''}
@@ -712,24 +990,32 @@ export default function CandidatesPage() {
                     placeholder="Search and select an interviewer..."
                   />
                   {formData.confirmedSlotId && (
-                    <div className="csp-card csp-mt-4">
-                      <div className="csp-flex-between">
-                        <div>
-                          <div className="csp-flex-gap-2">
-                            <span className="csp-text-sm csp-text-bold">
-                              {getInterviewerName(formData.confirmedSlotId) !== formData.confirmedSlotId
-                                ? getInterviewerName(formData.confirmedSlotId)
-                                : (formData._slotInterviewerName || getInterviewerName(formData.confirmedSlotId))}
-                            </span>
-                            <StatusBadge status={formData._slotStatus === 725070001 ? 'Booked' : 'Scheduled'} />
-                          </div>
+                    <div style={{ marginTop: 12, border: '1px solid hsl(var(--border))', borderRadius: 8, padding: '10px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 16, color: 'hsl(var(--muted-foreground))' }}>👤</span>
+                        <span style={{ fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))' }}>
+                          {getInterviewerName(formData.confirmedSlotId) !== formData.confirmedSlotId
+                            ? getInterviewerName(formData.confirmedSlotId)
+                            : (formData._slotInterviewerName || getInterviewerName(formData.confirmedSlotId))}
+                        </span>
+                        {renderCandidateBadge(formData._slotStatus === 725070001 ? 'Booked' : 'Scheduled')}
+                        <div style={{ flex: 1 }} />
+                        <button
+                          type="button"
+                          className="csp-btn csp-btn-outline csp-btn-sm"
+                          onClick={handleRemoveInterviewer}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}
+                        >× Remove</button>
+                      </div>
+                      {(formData._slotDatetime || formData._slotTeamsLink) && (
+                        <div style={{ marginTop: 6, paddingLeft: 26, display: 'flex', flexDirection: 'column', gap: 2 }}>
                           {formData._slotDatetime && (
-                            <p className="csp-text-xs csp-text-muted" style={{ marginTop: '4px' }}>
+                            <span className="csp-text-xs csp-text-muted">
                               {new Date(formData._slotDatetime).toLocaleString('en-GB', {
                                 weekday: 'long', day: 'numeric', month: 'short', year: 'numeric',
                                 hour: '2-digit', minute: '2-digit',
                               })}
-                            </p>
+                            </span>
                           )}
                           {formData._slotTeamsLink && (
                             <a
@@ -737,19 +1023,11 @@ export default function CandidatesPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="csp-text-xs"
-                              style={{ color: '#6366f1', marginTop: '4px', display: 'inline-block' }}
-                            >
-                              Join Teams Meeting
-                            </a>
+                              style={{ color: '#6366f1' }}
+                            >Join Teams Meeting</a>
                           )}
                         </div>
-                        <button
-                          className="csp-btn csp-btn-outline csp-btn-sm"
-                          onClick={handleRemoveInterviewer}
-                        >
-                          Remove
-                        </button>
-                      </div>
+                      )}
                     </div>
                   )}
                   {!formData.confirmedSlotId && (
@@ -764,21 +1042,25 @@ export default function CandidatesPage() {
 
               {activeTab === 'review' && (
                 <div className="csp-mt-4">
+                  {sourceToggleRow}
                   <TextField
                     label="Reviewed By"
                     value={formData.reviewedBy || ''}
                     onChange={() => {}}
                     readOnly
                   />
-                  <TextAreaField
-                    label="Reviewer Notes"
-                    value={formData.reviewerNotes || ''}
-                    onChange={v => updateField('reviewerNotes', v)}
-                    rows={8}
-                  />
+                  <div className="csp-textarea-tinted">
+                    <TextAreaField
+                      label="Reviewer Notes"
+                      value={formData.reviewerNotes || ''}
+                      onChange={v => updateField('reviewerNotes', v)}
+                      rows={5}
+                    />
+                  </div>
                 </div>
               )}
-            </Tabs>
+              </div>
+            </div>
 
             <div className="csp-form-footer">
               <button className="csp-btn csp-btn-outline" onClick={closeForm}>
@@ -801,6 +1083,30 @@ export default function CandidatesPage() {
           </>
         )}
       </Sheet>
+
+      <SendCandidateProfilesDialog
+        open={sendProfilesOpen}
+        onOpenChange={setSendProfilesOpen}
+        candidates={candidates.filter(c => selectedIds.includes(c.id)) as any}
+        contacts={rawContacts as any}
+        accounts={oppAccounts}
+        prospects={oppProspects}
+      />
+
+      <RaiseOpportunityForm
+        open={raiseOppOpen}
+        onClose={() => setRaiseOppOpen(false)}
+        origin={selectedIds.length === 1
+          ? { kind: 'candidate', record: (candidates.find(c => c.id === selectedIds[0]) as any) }
+          : null}
+        onCreated={() => { setRaiseOppOpen(false); setSelectedIds([]); }}
+        accounts={oppAccounts}
+        prospects={oppProspects}
+        contacts={rawContacts as any}
+        candidates={candidates as any}
+        uoms={oppUoms}
+        currencies={oppCurrencies}
+      />
     </div>
   );
 }

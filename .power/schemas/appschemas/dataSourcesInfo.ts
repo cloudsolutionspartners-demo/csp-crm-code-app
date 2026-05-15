@@ -3523,6 +3523,34 @@ export const dataSourcesInfo = {
       }
     }
   },
+  "csp_candidates": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "csp_candidateid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "csp_companydocuments": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "csp_companydocumentid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "csp_contactcvs": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "csp_contactcvid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "csp_dividends": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "csp_dividendid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "csp_expenses": {
     "tableId": "",
     "version": "",
@@ -3534,6 +3562,34 @@ export const dataSourcesInfo = {
     "tableId": "",
     "version": "",
     "primaryKey": "csp_invoiceid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "csp_opportunities": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "csp_opportunityid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "csp_opportunityapplicants": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "csp_opportunityapplicantid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "csp_opportunitymaterials": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "csp_opportunitymaterialid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "csp_prospectmaterials": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "csp_prospectmaterialid",
     "dataSourceType": "Dataverse",
     "apis": {}
   },

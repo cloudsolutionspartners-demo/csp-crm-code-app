@@ -99,6 +99,21 @@ export interface Contact {
   isInterviewer?: boolean;
   lastIncreaseDate?: string;
   lastIncreaseAmount?: number;
+  /** Multiple CVs per contact — used when applying to opportunities. Exactly one may be marked primary. */
+  cvs?: ContactCv[];
+}
+
+export interface ContactCv {
+  id: string;
+  fileName: string;
+  /** Optional friendly label, e.g. "Backend focus", "EN translated" */
+  label?: string;
+  /** Data URL of the uploaded file (prototype only) */
+  document?: string;
+  mimeType?: string;
+  size?: number;
+  uploadedAt: string;
+  isPrimary?: boolean;
 }
 
 export interface Contract {
@@ -307,6 +322,7 @@ export interface PaymentDetail {
 // ===== ONBOARDING =====
 export type CandidatePath = 'CIM to B2B' | 'B2B seeking Contracts';
 export type CandidateStatus = 'Applied' | 'Scheduled' | 'Fit' | 'Not Fit';
+export type CandidateSource = 'Website' | 'Recruiter' | 'Referral';
 
 export interface OnboardingCandidate {
   id: string;
@@ -315,13 +331,18 @@ export interface OnboardingCandidate {
   email: string;
   phone?: string;
   path: CandidatePath;
+  candidateRole?: string;
   cvFileName: string;
+  cvDocument?: string; // data URL of the uploaded CV file
+  cvMimeType?: string;
+  cvSize?: number;
   hourlyRateEur: number;
   b2bEntityName?: string;
   selectedSlots: string[];
   confirmedSlotId?: string;
   reviewerNotes?: string;
   status: CandidateStatus;
+  source?: CandidateSource;
   appliedDate: string;
   reviewedBy?: string;
   createdContactId?: string;
@@ -403,6 +424,7 @@ export interface Prospect {
   // Existing-account variant
   prospectingContactId?: string; // lookup into contacts when kind = 'Existing Account'
   // Opportunity
+  title?: string;
   needDescription?: string;
   servicesDiscussed?: string;
   estimatedValue?: number;
@@ -454,6 +476,103 @@ export interface CompanyDocument {
   description?: string;
   instructions?: string;
   fileName?: string;
+}
+
+// ===== OPPORTUNITIES =====
+export type OpportunityStatus = 'New' | 'Interview Booked' | 'Won' | 'Lost';
+export type OpportunitySource = 'From Prospect' | 'From Existing Client' | 'From New Client' | 'From Existing Consultant';
+export type OpportunityClientLinkType = 'Account' | 'Prospect' | 'Free Text' | 'Contact';
+export type RateUnit = 'Hour' | 'Day';
+
+export interface OpportunityMaterial {
+  id: string;
+  opportunityId: string;
+  fileName: string;
+  sharedDate: string;
+  description?: string;
+  document?: string;
+  documentMimeType?: string;
+  documentSize?: number;
+}
+
+export type ApplicantStatus = 'Drafted' | 'Sent' | 'Accepted' | 'Rejected';
+
+export interface ContactRateLine {
+  contactId: string;
+  rate?: number;
+  unit: RateUnit;
+  /** Currency for this contact's rate. Defaults to the opportunity currency if not set. */
+  currency?: CurrencyCode;
+  /** Per-applicant status for this opportunity. Defaults to 'Applied' if not set. */
+  applicantStatus?: ApplicantStatus;
+}
+
+export interface ContactCvSelection {
+  contactId: string;
+  cvId: string;
+}
+
+export interface CandidateRateLine {
+  candidateId: string;
+  rate?: number;
+  unit: RateUnit;
+  /** Currency for this candidate's rate. Defaults to the opportunity currency if not set. */
+  currency?: CurrencyCode;
+  /** Per-applicant status for this opportunity. Defaults to 'Applied' if not set. */
+  applicantStatus?: ApplicantStatus;
+  /** Optional CV override for this opportunity. If absent, the candidate's primary CV (cvFileName/cvDocument) is used. */
+  cvOverrideFileName?: string;
+  cvOverrideDocument?: string;
+  cvOverrideMimeType?: string;
+}
+
+export interface Opportunity {
+  id: string;
+  opportunityNumber: string;
+  source: OpportunitySource;
+  clientLinkType: OpportunityClientLinkType;
+  accountId?: string;
+  prospectId?: string;
+  freeClientName?: string;
+  /** Contact id when source is 'From Existing Consultant' (opportunity referred by an existing consultant). */
+  sourceContactId?: string;
+  candidateIds: string[];
+  contactIds: string[];
+  role: string;
+  opportunityRate?: number;
+  opportunityRateUnit: RateUnit;
+  currencyCode: CurrencyCode;
+  candidateRate?: number;
+  candidateRateUnit: RateUnit;
+  /** Per-contact rate lines so each selected contact has its own cost and margin. */
+  contactRates?: ContactRateLine[];
+  /** Per-contact CV picked when applying to this opportunity. Defaults to the contact's primary CV if not set. */
+  contactCvSelections?: ContactCvSelection[];
+  /** Per-candidate rate lines + optional per-opportunity CV override. */
+  candidateRates?: CandidateRateLine[];
+  details?: string;
+  startDate?: string;
+  closingDate?: string;
+  status: OpportunityStatus;
+  outcomeComments?: string;
+  ownerContactId?: string;
+  createdAt: string;
+}
+
+// ===== CORPORATE ACTIONS =====
+export type CorporateActionStatus = 'New' | 'In Progress' | 'Closed' | 'Cancelled';
+export type CorporateActionPriority = 'Low' | 'Medium' | 'High';
+
+export interface CorporateAction {
+  id: string;
+  actionSummarizedTitle: string;
+  actionDetails: string;
+  closingComments?: string;
+  priority: CorporateActionPriority;
+  status: CorporateActionStatus;
+  dueDate?: string;
+  createdAt: string;
+  modifiedAt: string;
 }
 
 // ===== CURRENCY MAP =====

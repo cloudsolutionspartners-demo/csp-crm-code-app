@@ -21,7 +21,7 @@ import { fetchContracts } from '../services/contractService';
 import { fetchContacts } from '../services/contactService';
 import { fetchAccounts } from '../services/accountService';
 import type { Timesheet, TimesheetStatus, TimesheetEntry, Contract, Contact, Account } from '../types/crm';
-import { GroupedByAccountView, MonthlyTimelineView, ByConsultantView } from '../components/timesheet/TimesheetAlternativeViews';
+import { GroupedByAccountView, MonthlyTimelineView, ByConsultantView, hoursInRange } from '../components/timesheet/TimesheetAlternativeViews';
 import { SendTimesheetReportFlow } from '../components/timesheet/SendTimesheetReportFlow';
 
 const tsStatuses: TimesheetStatus[] = ['Draft', 'Submitted', 'Approved', 'Rejected'];
@@ -66,17 +66,12 @@ function isWeekday(date: Date): boolean {
   return day !== 0 && day !== 6;
 }
 
-function buildEntries(weekStartStr: string, dailyHours: number, targetMonth?: number, targetYear?: number): TimesheetEntry[] {
+function buildEntries(weekStartStr: string, dailyHours: number, _targetMonth?: number, _targetYear?: number): TimesheetEntry[] {
   const entries: TimesheetEntry[] = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStartStr);
     d.setDate(d.getDate() + i);
-    let hrs = dailyHours > 0 && isWeekday(d) ? dailyHours : 0;
-    if (targetMonth !== undefined && targetYear !== undefined) {
-      if (d.getMonth() !== targetMonth || d.getFullYear() !== targetYear) {
-        hrs = 0;
-      }
-    }
+    const hrs = dailyHours > 0 && isWeekday(d) ? dailyHours : 0;
     entries.push({ date: toLocalDateStr(d), hours: hrs });
   }
   return entries;
@@ -175,6 +170,13 @@ export default function TimesheetsPage() {
   }, [statusFilter, searchTerm, weekStartFilter, colFilters, timesheets, dvContacts]);
 
   const hasActiveFilters = !!searchTerm || !!statusFilter || weekStartFilter.type !== 'all';
+
+  const activeFilterRange = useMemo(() => {
+    if (weekStartFilter.type === 'all') return null;
+    const r = dateRangeFor(weekStartFilter);
+    const toStr = (d?: Date) => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : null;
+    return { from: toStr(r.from), to: toStr(r.to) };
+  }, [weekStartFilter]);
 
   const filteredIds = filtered.map(t => t.id);
   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
@@ -380,7 +382,7 @@ export default function TimesheetsPage() {
       const timer = setTimeout(() => {
         setGenSteps(prev => prev.map((s, i) => i === idx ? { ...s, status: 'waiting_input' } : s));
         setGenAskInput('8');
-      }, 600);
+      }, 50);
       genTimersRef.current.push(timer);
     } else {
       // Auto-process
@@ -397,12 +399,12 @@ export default function TimesheetsPage() {
 
         // Continue to next step or finalize
         if (idx + 1 < steps.length) {
-          const nextTimer = setTimeout(() => processGenStep(idx + 1, steps), 300);
+          const nextTimer = setTimeout(() => processGenStep(idx + 1, steps), 50);
           genTimersRef.current.push(nextTimer);
         } else {
           finalizeGeneration();
         }
-      }, 600);
+      }, 50);
       genTimersRef.current.push(timer);
     }
   }, [timesheets, genMonth, genYear]);
@@ -424,7 +426,7 @@ export default function TimesheetsPage() {
     setGenProgress(Math.round(((idx + 1) / updatedSteps.length) * 100));
 
     if (idx + 1 < updatedSteps.length) {
-      const timer = setTimeout(() => processGenStep(idx + 1, updatedSteps), 300);
+      const timer = setTimeout(() => processGenStep(idx + 1, updatedSteps), 50);
       genTimersRef.current.push(timer);
     } else {
       finalizeGeneration();
@@ -440,20 +442,22 @@ export default function TimesheetsPage() {
       const allNew = genNewTimesheetsRef.current;
       let savedCount = 0;
       if (allNew.length > 0) {
-        for (const ts of allNew) {
-          try {
-            await saveTimesheet({
+        const batchSize = 5;
+        for (let i = 0; i < allNew.length; i += batchSize) {
+          const batch = allNew.slice(i, i + batchSize);
+          const results = await Promise.allSettled(
+            batch.map(ts => saveTimesheet({
               reference: ts.reference,
               contactId: ts.contactId,
               contractId: ts.contractId,
               weekStart: ts.weekStart,
               status: ts.status,
               entries: ts.entries,
-            });
-            savedCount++;
-          } catch (err: any) {
-            console.error('Generate save failed for', ts.reference, ':', err?.message);
-          }
+            }))
+          );
+          savedCount += results.filter(r => r.status === 'fulfilled').length;
+          const failed = results.filter(r => r.status === 'rejected');
+          failed.forEach(f => console.error('[Generate] Save failed:', (f as any).reason?.message));
         }
         if (savedCount < allNew.length) {
           toast.error(`${allNew.length - savedCount} of ${allNew.length} timesheets failed to save`);
@@ -462,7 +466,7 @@ export default function TimesheetsPage() {
       }
       setGenResultCount(savedCount);
       setGenPhase('done');
-    }, 400);
+    }, 50);
     genTimersRef.current.push(timer);
   };
 
@@ -496,7 +500,7 @@ export default function TimesheetsPage() {
 
     // Start processing first step
     if (steps.length > 0) {
-      const timer = setTimeout(() => processGenStep(0, steps), 300);
+      const timer = setTimeout(() => processGenStep(0, steps), 50);
       genTimersRef.current.push(timer);
     } else {
       finalizeGeneration();
@@ -536,6 +540,40 @@ export default function TimesheetsPage() {
             toast.error(err?.message || 'Delete failed');
           }
         }}
+        onDownload={() => {
+          const selectedSet = new Set(selectedIds);
+          const selected = filtered.filter(t => selectedSet.has(t.id));
+          if (selected.length === 0) return;
+          const rows = selected.map(t => {
+            const con = dvContacts.find(c => c.id === t.contactId);
+            const ctr = dvContracts.find(c => c.id === t.contractId);
+            const acc = ctr ? dvAccounts.find(a => a.id === ctr.parentAccountId) : null;
+            const entries = t.entries || [];
+            return {
+              Reference: t.reference,
+              Consultant: con ? `${con.firstName} ${con.lastName}` : '',
+              Account: acc?.name ?? '',
+              Contract: ctr?.contractNumber ?? ctr?.name ?? '',
+              'Week Start': t.weekStart,
+              'Week End': getWeekEnd(t.weekStart),
+              Monday: entries[0]?.hours ?? 0,
+              Tuesday: entries[1]?.hours ?? 0,
+              Wednesday: entries[2]?.hours ?? 0,
+              Thursday: entries[3]?.hours ?? 0,
+              Friday: entries[4]?.hours ?? 0,
+              Saturday: entries[5]?.hours ?? 0,
+              Sunday: entries[6]?.hours ?? 0,
+              'Total Hours': t.totalHours,
+              Status: t.status,
+            };
+          }).sort((a, b) => a.Consultant.localeCompare(b.Consultant) || a['Week Start'].localeCompare(b['Week Start']));
+          const ws = XLSX.utils.json_to_sheet(rows);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Timesheets');
+          const today = new Date().toISOString().split('T')[0];
+          XLSX.writeFile(wb, `timesheets-${today}.xlsx`);
+          toast.success(`${rows.length} timesheet(s) exported`);
+        }}
         extraActions={selectedIds.length > 0 ? <button className="csp-btn csp-btn-primary csp-btn-sm" onClick={async () => {
           try {
             for (const id of selectedIds) await saveTimesheet({ status: 'Approved' }, id);
@@ -560,7 +598,13 @@ export default function TimesheetsPage() {
           <SearchPill value={searchTerm} onChange={setSearchTerm} placeholder="Search reference, consultant, contract..." />
           <SinglePill label="Status" value={statusFilter} onChange={setStatusFilter}
             options={tsStatuses.map(s => ({ value: s, label: s, count: timesheets.filter(t => t.status === s).length }))} />
-          <DatePill label="Week Start" value={weekStartFilter} onChange={setWeekStartFilter} dates={timesheets.map(t => t.weekStart).filter(Boolean) as string[]} />
+          <DatePill label="Week Date" value={weekStartFilter} onChange={setWeekStartFilter} weekMode dates={(() => {
+            const realDates = timesheets.map(t => t.weekStart).filter(Boolean) as string[];
+            const now = new Date();
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            const endStr = `${endOfMonth.getFullYear()}-${String(endOfMonth.getMonth() + 1).padStart(2, '0')}-${String(endOfMonth.getDate()).padStart(2, '0')}`;
+            return [...realDates, endStr];
+          })()} />
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
             <span style={{ fontSize: '11px', fontWeight: 500, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>View</span>
             {[
@@ -581,14 +625,14 @@ export default function TimesheetsPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11 }}>
             {searchTerm && <FilterChip label={`Search: "${searchTerm}"`} onRemove={() => setSearchTerm('')} />}
             {statusFilter && <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} />}
-            {weekStartFilter.type !== 'all' && <FilterChip label={`Week Start: ${relativeDateLabel(weekStartFilter)}`} onRemove={() => setWeekStartFilter({ type: 'all' })} />}
+            {weekStartFilter.type !== 'all' && <FilterChip label={`Week Date: ${relativeDateLabel(weekStartFilter)}`} onRemove={() => setWeekStartFilter({ type: 'all' })} />}
             <button className="csp-btn csp-btn-outline csp-btn-sm" onClick={() => { setSearchTerm(''); setStatusFilter(''); setWeekStartFilter({ type: 'all' }); }}>Clear all</button>
           </div>
         )}
       </div>
 
       {viewMode === 'account' && (
-        <GroupedByAccountView timesheets={filtered} onOpen={openForm} contracts={dvContracts} accounts={dvAccounts} contacts={dvContacts} />
+        <GroupedByAccountView timesheets={filtered} onOpen={openForm} contracts={dvContracts} accounts={dvAccounts} contacts={dvContacts} filterRange={activeFilterRange} />
       )}
       {viewMode === 'timeline' && (
         <MonthlyTimelineView timesheets={filtered} onOpen={openForm} />
@@ -600,6 +644,7 @@ export default function TimesheetsPage() {
           contracts={dvContracts}
           accounts={dvAccounts}
           contacts={dvContacts}
+          filterRange={activeFilterRange}
           selectedContractIds={selectedContractIds}
           onSelectionChange={setSelectedContractIds}
         />
@@ -683,7 +728,7 @@ export default function TimesheetsPage() {
                   <td>{con ? `${con.firstName} ${con.lastName}` : '\u2014'}</td>
                   <td style={{ fontSize: '0.75rem' }}>{ctr?.contractNumber}</td>
                   <td>{t.weekStart}</td>
-                  <td>{t.totalHours}</td>
+                  <td>{hoursInRange(t, activeFilterRange?.from ?? null, activeFilterRange?.to ?? null)}</td>
                   <td><StatusBadge status={t.status} /></td>
                 </tr>
               );

@@ -11,6 +11,8 @@ import { useDataverse } from '../services/useDataverse';
 import { fetchProspects, saveProspect, removeProspect } from '../services/prospectService';
 import { fetchAllInteractions, saveInteraction, removeInteraction } from '../services/prospectInteractionService';
 import { fetchAllMaterials, saveMaterial, removeMaterial } from '../services/prospectMaterialService';
+import { Csp_prospectmaterialsService } from '../generated/services/Csp_prospectmaterialsService';
+import { getOrgUrl } from '../services/dataverseService';
 import { fetchContacts } from '../services/contactService';
 import {
   ColumnFilters, TextFilterPopover, MultiSelectFilterPopover, NumberRangeFilterPopover, ClearColumnFiltersButton,
@@ -19,6 +21,11 @@ import {
 import { SearchPill, SinglePill, FilterChip } from '../components/FilterPills';
 import type { Prospect, ProspectInteraction, ProspectMaterial, ProspectStatus, ProspectSource, InteractionType, CurrencyCode, ProspectKind, Account } from '../types/crm';
 import { ConvertProspectDialog } from '../components/ConvertProspectDialog';
+import { RaiseOpportunityForm } from '../components/opportunity/RaiseOpportunityForm';
+import { fetchCandidates } from '../services/candidateService';
+import { fetchUnitsOfMeasure } from '../services/unitOfMeasureService';
+import { listRecords as listRec } from '../services/dataverseService';
+import type { OnboardingCandidate } from '../types/crm';
 import { ProspectAgingTimeline } from '../components/ProspectAgingTimeline';
 
 const STATUSES: ProspectStatus[] = ['New', 'Contacted', 'Discussing', 'Proposal', 'Won', 'Lost'];
@@ -117,6 +124,33 @@ export default function ProspectsPage() {
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [raiseOppOpen, setRaiseOppOpen] = useState(false);
+  const [oppCandidates, setOppCandidates] = useState<OnboardingCandidate[]>([]);
+  const [oppUoms, setOppUoms] = useState<{ id: string; name: string }[]>([]);
+  const [oppCurrencies, setOppCurrencies] = useState<{ id: string; code: string }[]>([]);
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const [cands, uomRecs, curRecs] = await Promise.all([
+          fetchCandidates(),
+          fetchUnitsOfMeasure(),
+          listRec('transactioncurrencies', 'transactioncurrencyid,isocurrencycode,currencyname', undefined, 'isocurrencycode asc'),
+        ]);
+        setOppCandidates(cands.map(c => ({
+          id: c.id, firstName: c.firstName, lastName: c.lastName, email: c.email, phone: c.phone,
+          path: (c.path as any) || 'B2B seeking Contracts',
+          candidateRole: c.candidateRole, cvFileName: c.cvFileName, hourlyRateEur: c.hourlyRateEur,
+          b2bEntityName: c.b2bEntityName, selectedSlots: [], status: c.status as any, appliedDate: c.appliedDate,
+        })));
+        setOppUoms(uomRecs.map(u => ({ id: u.id, name: u.name })));
+        setOppCurrencies(curRecs
+          .map(r => ({ id: String(r.transactioncurrencyid).replace(/[{}]/g, ''), code: (r.isocurrencycode || '').toUpperCase(), name: r.currencyname || '' }))
+          .filter(c => !!c.code));
+      } catch (err) {
+        console.error('[ProspectsPage] opp reference data load failed:', err);
+      }
+    })();
+  }, []);
 
   // Sheet state
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
@@ -128,6 +162,8 @@ export default function ProspectsPage() {
   const [intForm, setIntForm] = useState({ type: 'Call' as InteractionType, date: '', summary: '' });
   // Material form
   const [matForm, setMatForm] = useState({ fileName: '', sharedDate: '', description: '' });
+  const [matFile, setMatFile] = useState<File | null>(null);
+  const matFileRef = React.useRef<HTMLInputElement>(null);
   // Convert dialog
   const [showConvert, setShowConvert] = useState(false);
 
@@ -197,6 +233,7 @@ export default function ProspectsPage() {
       referredByContactId: p.referredByContactId || '',
       primaryContactName: p.primaryContactName, primaryContactRole: p.primaryContactRole || '',
       primaryContactEmail: p.primaryContactEmail, primaryContactPhone: p.primaryContactPhone || '',
+      title: (p as any).title || '',
       needDescription: p.needDescription || '', servicesDiscussed: p.servicesDiscussed || '',
       estimatedValue: p.estimatedValue != null ? String(p.estimatedValue) : '',
       currencyCode: p.currencyCode || 'EUR',
@@ -228,6 +265,7 @@ export default function ProspectsPage() {
       primaryContactRole: '',
       primaryContactEmail: '',
       primaryContactPhone: '',
+      title: '',
       needDescription: '',
       servicesDiscussed: '',
       estimatedValue: '',
@@ -266,6 +304,7 @@ export default function ProspectsPage() {
       primaryContactRole: formData.primaryContactRole || undefined,
       primaryContactEmail: formData.primaryContactEmail,
       primaryContactPhone: formData.primaryContactPhone || undefined,
+      ...({ title: formData.title || undefined } as any),
       needDescription: formData.needDescription || undefined,
       servicesDiscussed: formData.servicesDiscussed || undefined,
       estimatedValue: formData.estimatedValue ? Number(formData.estimatedValue) : undefined,
@@ -357,17 +396,76 @@ export default function ProspectsPage() {
     if (!matForm.fileName) { toast.error('File Name is required'); return; }
     if (!selectedProspect) return;
     try {
-      await saveMaterial({
+      const materialId = await saveMaterial({
         prospectId: selectedProspect.id,
         fileName: matForm.fileName,
         sharedDate: matForm.sharedDate || new Date().toISOString().substring(0, 10),
         description: matForm.description || undefined,
       });
+      if (matFile && materialId) {
+        try {
+          await Csp_prospectmaterialsService.upload(materialId, 'csp_document', matFile, matFile.name);
+          console.log('[Material] Document uploaded for', materialId);
+        } catch (uploadErr: any) {
+          console.error('[Material] Document upload failed:', uploadErr?.message);
+          toast.error('Material saved but file upload failed');
+        }
+      }
       await refetchMaterials();
       setMatForm({ fileName: '', sharedDate: new Date().toISOString().substring(0, 10), description: '' });
+      setMatFile(null);
+      if (matFileRef.current) matFileRef.current.value = '';
       toast.success('Material added');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to add material');
+    }
+  };
+
+  const previewMaterial = async (materialId: string, fileName: string) => {
+    const orgUrl = getOrgUrl();
+    const fileUrl = `${orgUrl}/api/data/v9.2/csp_prospectmaterials(${materialId})/csp_document/$value`;
+    try {
+      const ext = (fileName || '').split('.').pop()?.toLowerCase() || '';
+      const mimeMap: Record<string, string> = {
+        pdf: 'application/pdf',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        gif: 'image/gif',
+        webp: 'image/webp',
+        svg: 'image/svg+xml',
+        txt: 'text/plain',
+        html: 'text/html',
+        htm: 'text/html',
+        csv: 'text/csv',
+        json: 'application/json',
+        doc: 'application/msword',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xls: 'application/vnd.ms-excel',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+      const mimeType = mimeMap[ext] || 'application/octet-stream';
+      const { MicrosoftDataverseService } = await import('../generated/services/MicrosoftDataverseService');
+      const result = await MicrosoftDataverseService.GetEntityFileImageFieldContentWithOrganization(
+        'bytes=0-', orgUrl, 'csp_prospectmaterials', materialId, 'csp_document',
+      ) as any;
+      const base64 = result?.data ?? result;
+      if (typeof base64 !== 'string' || !base64) {
+        toast.error('Preview not available — opening file');
+        window.open(fileUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mimeType });
+      const blobUrl = URL.createObjectURL(blob);
+      const w = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      if (!w) toast.error('Unable to open preview — please allow pop-ups');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (err: any) {
+      console.error('[Material] Preview failed:', err?.message);
+      window.open(fileUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -449,6 +547,13 @@ export default function ProspectsPage() {
               </button>
             </div>
             <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
+            <button
+              className="csp-btn csp-btn-outline csp-btn-sm"
+              disabled={selectedIds.length !== 1}
+              onClick={() => setRaiseOppOpen(true)}
+              title={selectedIds.length === 1 ? 'Raise opportunity for the selected prospect' : 'Select a single prospect to enable'}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >💼 Raise Opportunity</button>
             <TutorialVideoButton moduleLabel="Prospecting" entityLabel="Prospects" />
             <button className="csp-btn csp-btn-primary" onClick={() => setKindDialogOpen(true)}>
               <Plus className="csp-icon-inline" />Add Prospect
@@ -596,6 +701,12 @@ export default function ProspectsPage() {
                       }}
                     >
                       <div className="csp-kanban-card-company">{p.companyName}</div>
+                      {(p as any).title && (
+                        <div
+                          title={(p as any).title}
+                          style={{ fontSize: 12, color: 'hsl(var(--foreground) / 0.8)', lineHeight: 1.3, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
+                        >{(p as any).title}</div>
+                      )}
                       <div className="csp-kanban-card-meta">
                         {[p.country, p.industry].filter(Boolean).join(' \u00B7 ') || '\u2014'}
                       </div>
@@ -718,6 +829,7 @@ export default function ProspectsPage() {
 
                   <h3 style={{ fontSize: '0.875rem', fontWeight: 600, margin: '1.5rem 0 0.75rem', color: 'hsl(var(--primary))' }}>Opportunity</h3>
                   <div className="csp-form-grid-2">
+                    <TextField label="Title" value={formData.title || ''} onChange={v => updateField('title', v)} placeholder="Short opportunity title (e.g. Q3 Data Platform Rollout)" className="csp-col-span-2" />
                     <TextAreaField label="Need Description" value={formData.needDescription} onChange={v => updateField('needDescription', v)} className="csp-col-span-2" />
                     <TextAreaField label="Services Discussed" value={formData.servicesDiscussed} onChange={v => updateField('servicesDiscussed', v)} className="csp-col-span-2" />
                     <TextField label="Estimated Value" value={formData.estimatedValue} onChange={v => updateField('estimatedValue', v)} type="number" />
@@ -775,8 +887,22 @@ export default function ProspectsPage() {
                     <div style={{ marginBottom: '0.75rem' }}>
                       <TextAreaField label="Description" value={matForm.description} onChange={v => setMatForm(prev => ({ ...prev, description: v }))} rows={2} />
                     </div>
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'hsl(var(--foreground))' }}>Document</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                        <button type="button" className="csp-btn csp-btn-primary csp-btn-sm" onClick={() => matFileRef.current?.click()}>Choose File</button>
+                        <span style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>{matFile ? matFile.name : 'No file chosen'}</span>
+                        <input ref={matFileRef} type="file" style={{ display: 'none' }} onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setMatFile(file);
+                          if (file && !matForm.fileName) {
+                            setMatForm(prev => ({ ...prev, fileName: file.name }));
+                          }
+                        }} />
+                      </div>
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                      <button className="csp-btn csp-btn-outline" onClick={() => setMatForm({ fileName: '', sharedDate: new Date().toISOString().substring(0, 10), description: '' })}>Clear</button>
+                      <button className="csp-btn csp-btn-outline" onClick={() => { setMatForm({ fileName: '', sharedDate: new Date().toISOString().substring(0, 10), description: '' }); setMatFile(null); if (matFileRef.current) matFileRef.current.value = ''; }}>Clear</button>
                       <button className="csp-btn csp-btn-primary" onClick={addMaterial}>
                         <Plus className="csp-icon-inline" /> Add material
                       </button>
@@ -794,12 +920,26 @@ export default function ProspectsPage() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         {prospectMaterials.map(m => (
                           <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid hsl(var(--border))' }}>
-                            <span style={{ flexShrink: 0, color: 'hsl(var(--primary))' }}><FileText className="csp-icon-inline" /></span>
+                            <button
+                              type="button"
+                              title="View document"
+                              onClick={() => {
+                                const orgUrl = getOrgUrl();
+                                window.open(`${orgUrl}/api/data/v9.2/csp_prospectmaterials(${m.id})/csp_document/$value`, '_blank');
+                              }}
+                              style={{ flexShrink: 0, color: 'hsl(var(--primary))', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                            ><FileText className="csp-icon-inline" /></button>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{m.fileName}</div>
                               {m.description && <div className="csp-text-muted" style={{ fontSize: '0.75rem' }}>{m.description}</div>}
                             </div>
                             <span className="csp-text-muted" style={{ fontSize: '0.75rem', flexShrink: 0 }}>{m.sharedDate}</span>
+                            <button
+                              type="button"
+                              className="csp-btn csp-btn-outline csp-btn-sm"
+                              style={{ fontSize: 11, padding: '2px 8px', flexShrink: 0 }}
+                              onClick={(e) => { e.stopPropagation(); previewMaterial(m.id, m.fileName); }}
+                            >Preview</button>
                             <button className="csp-btn csp-btn-ghost csp-btn-sm" style={{ color: 'hsl(0, 84%, 60%)', flexShrink: 0 }}
                               onClick={async () => {
                                 try {
@@ -870,6 +1010,21 @@ export default function ProspectsPage() {
         onClose={() => setKindDialogOpen(false)}
         onSelect={openNewForm}
         accounts={dvAccounts}
+      />
+
+      <RaiseOpportunityForm
+        open={raiseOppOpen}
+        onClose={() => setRaiseOppOpen(false)}
+        origin={selectedIds.length === 1
+          ? { kind: 'prospect', record: (prospects.find(p => p.id === selectedIds[0]) as Prospect) }
+          : null}
+        onCreated={() => { setRaiseOppOpen(false); setSelectedIds([]); }}
+        accounts={dvAccounts as any}
+        prospects={prospects as any}
+        contacts={dvContacts as any}
+        candidates={oppCandidates}
+        uoms={oppUoms}
+        currencies={oppCurrencies}
       />
     </div>
   );

@@ -5,15 +5,31 @@
 
 // Models
 export * as CommonModels from './models/CommonModels';
+export * as Csp_candidatesModel from './models/Csp_candidatesModel';
+export * as Csp_companydocumentsModel from './models/Csp_companydocumentsModel';
+export * as Csp_contactcvsModel from './models/Csp_contactcvsModel';
+export * as Csp_dividendsModel from './models/Csp_dividendsModel';
 export * as Csp_expensesModel from './models/Csp_expensesModel';
 export * as Csp_invoicesModel from './models/Csp_invoicesModel';
+export * as Csp_opportunitiesModel from './models/Csp_opportunitiesModel';
+export * as Csp_opportunityapplicantsModel from './models/Csp_opportunityapplicantsModel';
+export * as Csp_opportunitymaterialsModel from './models/Csp_opportunitymaterialsModel';
+export * as Csp_prospectmaterialsModel from './models/Csp_prospectmaterialsModel';
 export * as MedialibraryModel from './models/MedialibraryModel';
 export * as MicrosoftDataverseModel from './models/MicrosoftDataverseModel';
 export * as Office365OutlookModel from './models/Office365OutlookModel';
 
 // Services
+export * from './services/Csp_candidatesService';
+export * from './services/Csp_companydocumentsService';
+export * from './services/Csp_contactcvsService';
+export * from './services/Csp_dividendsService';
 export * from './services/Csp_expensesService';
 export * from './services/Csp_invoicesService';
+export * from './services/Csp_opportunitiesService';
+export * from './services/Csp_opportunityapplicantsService';
+export * from './services/Csp_opportunitymaterialsService';
+export * from './services/Csp_prospectmaterialsService';
 export * from './services/MedialibraryService';
 export * from './services/MicrosoftDataverseService';
 export * from './services/Office365OutlookService';

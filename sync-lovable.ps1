@@ -1,24 +1,43 @@
 # sync-lovable.ps1
-param([int]$Commits = 5)
+param([switch]$Full)
 
 $lovableRepo = "C:\DEV\partner-port-pro"
 $codeApp = "C:\DEV\CSPCRMApp"
 $refDir = "$codeApp\lovable-reference"
 $diffFile = "$codeApp\lovable-diff.txt"
+$lastSyncFile = "$codeApp\.last-lovable-sync"
 
 # STEP 1: Pull
 Write-Host "`n=== Step 1: Pull from GitHub ===" -ForegroundColor Cyan
 Push-Location $lovableRepo
+$beforePull = (git log --format="%H" -n 1)
 git pull origin main
+$afterPull = (git log --format="%H" -n 1)
 
-# STEP 2: Commits
-Write-Host "`n=== Step 2: Recent commits ===" -ForegroundColor Yellow
-git log --oneline -15
+# Determine base commit for diff
+if ($Full) {
+    # Show all commits (last 200)
+    $baseCommit = (git log --format="%H" -n 201 | Select-Object -Last 1)
+    Write-Host "  Mode: FULL (all history)" -ForegroundColor Yellow
+} elseif (Test-Path $lastSyncFile) {
+    $baseCommit = (Get-Content $lastSyncFile).Trim()
+    $commitCount = (git rev-list "$baseCommit..$afterPull" --count 2>$null)
+    Write-Host "  Mode: Since last sync ($commitCount commits)" -ForegroundColor Green
+} else {
+    # First run — default to last 15 commits
+    $baseCommit = (git log --format="%H" -n 16 | Select-Object -Last 1)
+    Write-Host "  Mode: First run (last 15 commits)" -ForegroundColor Yellow
+}
 
-$lastNCommit = (git log --format="%H" -n ($Commits + 1) | Select-Object -Last 1)
-$headCommit = (git log --format="%H" -n 1)
+# STEP 2: Commits since last sync
+Write-Host "`n=== Step 2: Commits since last sync ===" -ForegroundColor Yellow
+git log --oneline "$baseCommit..$afterPull" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  (could not compute range, showing last 15)" -ForegroundColor DarkYellow
+    git log --oneline -15
+}
 
-# STEP 3: Sync
+# STEP 3: Sync source files
 Write-Host "`n=== Step 3: Syncing ===" -ForegroundColor Green
 $folders = @("pages", "types", "components", "data")
 foreach ($f in $folders) {
@@ -34,6 +53,15 @@ if (Test-Path "src\lib") {
     if (!(Test-Path $dp)) { New-Item -ItemType Directory -Path $dp -Force | Out-Null }
     Copy-Item -Path "src\lib\*" -Destination "$dp\" -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host "  Synced: src\lib" -ForegroundColor Gray
+}
+
+# STEP 3b: Sync Business Logic folder
+Write-Host "" -ForegroundColor Gray
+if (Test-Path "Business Logic") {
+    $blDir = "$refDir\business-logic"
+    if (!(Test-Path $blDir)) { New-Item -ItemType Directory -Path $blDir -Force | Out-Null }
+    Copy-Item -Path "Business Logic\*" -Destination "$blDir\" -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "  Synced: Business Logic" -ForegroundColor Gray
 }
 
 # STEP 4: Compare pages
@@ -82,19 +110,41 @@ if ((Test-Path $lt) -and (Test-Path $ct)) {
     else { Write-Host "    All fields in sync" -ForegroundColor Green }
 }
 
-# STEP 7: Files changed
-Write-Host "`n=== Step 7: Files changed (last $Commits commits) ===" -ForegroundColor Cyan
-$changed = git diff "$lastNCommit..$headCommit" --name-only 2>$null
+# STEP 6b: Business Logic Changelog
+Write-Host "`n=== Step 5b: Business Logic Changelog ===" -ForegroundColor Magenta
+$changelog = "$refDir\business-logic\Changelog.md"
+if (Test-Path $changelog) {
+    Write-Host "  Latest entries from Changelog.md:" -ForegroundColor Cyan
+    $clContent = Get-Content $changelog -Raw
+    # Extract entries between --- separators (show first 3)
+    $entries = $clContent -split '---' | Where-Object { $_.Trim().StartsWith('##') } | Select-Object -First 5
+    foreach ($entry in $entries) {
+        $lines = ($entry.Trim() -split "`n") | Where-Object { $_.Trim() }
+        foreach ($ln in $lines) {
+            if ($ln.StartsWith('##')) { Write-Host "  $ln" -ForegroundColor Yellow }
+            elseif ($ln.StartsWith('**')) { Write-Host "  $ln" -ForegroundColor Gray }
+            elseif ($ln.StartsWith('-')) { Write-Host "  $ln" -ForegroundColor White }
+            else { Write-Host "  $ln" -ForegroundColor DarkGray }
+        }
+        Write-Host "" -ForegroundColor Gray
+    }
+} else {
+    Write-Host "  (no Changelog.md found)" -ForegroundColor DarkYellow
+}
+
+# STEP 7: Files changed since last sync
+Write-Host "`n=== Step 7: Files changed (since last sync) ===" -ForegroundColor Cyan
+$changed = git diff "$baseCommit..$afterPull" --name-only 2>$null
 if ($changed) { $changed | % { Write-Host "    $_" -ForegroundColor White } }
 else { Write-Host "    (no changes)" -ForegroundColor Gray }
 
 Write-Host "`n  Stat:" -ForegroundColor Gray
-git diff "$lastNCommit..$headCommit" --stat 2>$null
+git diff "$baseCommit..$afterPull" --stat 2>$null
 
 # STEP 8: Full diffs per file
 Write-Host "`n=== Step 8: Full diffs ===" -ForegroundColor Magenta
 
-$fullDiff = git diff "$lastNCommit..$headCommit" 2>$null
+$fullDiff = git diff "$baseCommit..$afterPull" 2>$null
 if ($fullDiff) {
     $fullDiff | Out-File -FilePath $diffFile -Encoding utf8 -Force
     Write-Host "  Full diff saved to: $diffFile" -ForegroundColor Green
@@ -103,7 +153,7 @@ if ($fullDiff) {
 if ($changed) {
     foreach ($file in $changed) {
         Write-Host "`n  --- $file ---" -ForegroundColor White
-        $fd = git diff "$lastNCommit..$headCommit" -- $file 2>$null
+        $fd = git diff "$baseCommit..$afterPull" -- $file 2>$null
         if (!$fd) { continue }
         $lines = $fd -split "`n"
         $total = $lines.Count
@@ -131,10 +181,15 @@ if ($changed) {
     }
 }
 
+# STEP 9: Save sync point
+$afterPull | Out-File -FilePath $lastSyncFile -Encoding utf8 -Force
+Write-Host "`n  Sync point saved: $($afterPull.Substring(0,7))" -ForegroundColor Green
+
 Pop-Location
 
 Write-Host "`n=== Done ===" -ForegroundColor Green
 Write-Host "  Lovable ref: $refDir" -ForegroundColor Green
 Write-Host "  Code App:    $codeApp\src" -ForegroundColor Green
+Write-Host "  Business Logic: $refDir\business-logic" -ForegroundColor Green
 if (Test-Path $diffFile) { Write-Host "  Full diff:   $diffFile" -ForegroundColor Green }
 Write-Host ""

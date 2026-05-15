@@ -24,6 +24,7 @@ import PaymentDetailsPage from './pages/PaymentDetailsPage';
 import JDSkillsPage from './pages/JDSkillsPage';
 import JDPlatformsPage from './pages/JDPlatformsPage';
 import ProspectsPage from './pages/ProspectsPage';
+import OpportunitiesPage from './pages/OpportunitiesPage';
 // Pipeline and Interactions are background features, not shown in Code App
 // import ProspectPipelinePage from './pages/ProspectPipelinePage';
 // import ProspectInteractionsPage from './pages/ProspectInteractionsPage';
@@ -50,6 +51,7 @@ const pageComponents: Partial<Record<PageId, React.FC>> = {
   'jd-skills': JDSkillsPage,
   'jd-platforms': JDPlatformsPage,
   prospects: ProspectsPage,
+  opportunities: OpportunitiesPage,
   // Pipeline and Interactions are background features, not shown in Code App
   // 'prospect-interactions': ProspectInteractionsPage,
   // 'prospect-pipeline': ProspectPipelinePage,

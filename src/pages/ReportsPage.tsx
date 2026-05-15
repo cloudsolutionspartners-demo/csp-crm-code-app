@@ -242,50 +242,28 @@ export default function ReportsPage() {
   ]), [window]);
 
   const monthData = useMemo(() => {
-    return months.map((c, idx) => {
-      if (idx === 0) {
-        // Rule 1: Last month uses invoices + expenses for actuals
-        const byCurrencyCountry = buildLastMonthProfitFromInvoices(c.m, invoices, expenses, businessUnits);
-        return { byCurrencyCountry, lines: [] as ContractMonthLine[] };
-      }
-      // Rules 2 & 3: Current month = timesheet actuals, future = forecast
-      return buildBillingForMonth(c.m, contracts, timesheets, businessUnits, dvAccounts);
-    });
-  }, [months, contracts, timesheets, invoices, expenses, businessUnits, dvAccounts]);
-  const lastMonthInvoiceProfit = useMemo(
-    () => buildLastMonthProfitFromInvoices(window.lastMonth, invoices, expenses, businessUnits),
-    [window.lastMonth, invoices, expenses, businessUnits],
-  );
+    // All months (last, current, forecast) use the same timesheet × rate calculation
+    return months.map(c => buildBillingForMonth(c.m, contracts, timesheets, businessUnits, dvAccounts));
+  }, [months, contracts, timesheets, businessUnits, dvAccounts]);
 
   const headlineRows = useMemo(() => {
     const allKeys = new Set<string>();
     monthData.forEach(d => d.byCurrencyCountry.forEach((_, k) => allKeys.add(k)));
     return Array.from(allKeys).map(key => {
       const [country, currency] = key.split('|');
-      const cells = monthData.map((d, i) => {
+      const cells = monthData.map(d => {
         const bucket = d.byCurrencyCountry.get(key);
-        const billing = bucket?.billing ?? 0;
-        let profit = bucket?.profit ?? 0;
-        if (months[i].key === 'last') {
-          const actual = lastMonthInvoiceProfit.get(key);
-          if (actual) profit = actual.profit;
-        }
-        return { billing, profit };
+        return { billing: bucket?.billing ?? 0, profit: bucket?.profit ?? 0 };
       });
       return { key, country, currency: currency as CurrencyCode, cells };
     }).sort((a, b) => a.country.localeCompare(b.country) || a.currency.localeCompare(b.currency));
-  }, [monthData, lastMonthInvoiceProfit, months]);
+  }, [monthData]);
 
   const chartData = useMemo(() => months.map((c, i) => {
     let billing = 0, profit = 0;
     monthData[i].byCurrencyCountry.forEach(v => { billing += v.billing; profit += v.profit; });
-    if (c.key === 'last') {
-      let actualProfit = 0;
-      lastMonthInvoiceProfit.forEach(v => { actualProfit += v.profit; });
-      if (lastMonthInvoiceProfit.size > 0) profit = actualProfit;
-    }
     return { label: c.m.label, billing: Math.round(billing), profit: Math.round(profit) };
-  }), [months, monthData, lastMonthInvoiceProfit]);
+  }), [months, monthData]);
 
   if (loading) return <PageLoading message="Loading reports..." />;
 
@@ -306,14 +284,9 @@ export default function ReportsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
         {months.map((c, i) => {
           const byCountry = new Map<string, Array<{ currency: string; billing: number; profit: number }>>();
-          monthData[i].byCurrencyCountry.forEach((v, key) => {
+          monthData[i].byCurrencyCountry.forEach(v => {
             const arr = byCountry.get(v.country) ?? [];
-            let profit = v.profit;
-            if (c.key === 'last') {
-              const actual = lastMonthInvoiceProfit.get(key);
-              if (actual) profit = actual.profit;
-            }
-            arr.push({ currency: v.currency, billing: v.billing, profit });
+            arr.push({ currency: v.currency, billing: v.billing, profit: v.profit });
             byCountry.set(v.country, arr);
           });
           const countries = Array.from(byCountry.entries()).sort((a, b) => a[0].localeCompare(b[0]));
@@ -411,8 +384,8 @@ export default function ReportsPage() {
         {activeTab === 'profit' && (
           <>
             <p className="csp-text-muted" style={{ fontSize: '0.75rem', marginBottom: '0.5rem' }}>
-              Last month profit uses <strong>invoices − expenses</strong>. This/next/+2 months use timesheet hours × contract rates
-              (forecasted from the last 2 months for active contracts).
+              All months use <strong>timesheet hours × contract rates</strong>
+              (forecasted from the last 2 months for active contracts when no actuals exist).
             </p>
             <div className="csp-table-wrapper">
               <table className="csp-table">

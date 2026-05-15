@@ -138,6 +138,77 @@ function buFromBusinessUnit(bu: BusinessUnit): BusinessEntity {
 
 import { useConfirm } from '../components/ConfirmDialog';
 
+type BuCountryCode = 'RO' | 'BG' | 'US';
+
+function countryToCode(country: string): BuCountryCode | null {
+  if (country === 'Romania') return 'RO';
+  if (country === 'Bulgaria') return 'BG';
+  if (country === 'US') return 'US';
+  return null;
+}
+
+/**
+ * Build the OData PATCH payload for a Business Unit update.
+ * Each country has different csp_* columns in Dataverse; we explicitly map
+ * only what exists per the verified schema. Fields with no target column
+ * are silently dropped (e.g. iban/swift on US — schema has no csp_usiban).
+ */
+function buildBuPayload(country: BuCountryCode, form: Record<string, string>): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  const nullable = (v: string | undefined | null) => (v && String(v).trim() !== '' ? String(v).trim() : null);
+
+  if (country === 'RO') {
+    payload.csp_rolegalname = nullable(form.name);
+    payload.csp_rovatnumber = nullable(form.vatNumber);
+    payload.csp_roaddress = nullable(form.address);
+    payload.csp_rophone = nullable(form.phone);
+    payload.csp_roemail = nullable(form.email);
+    payload.csp_roaccountantemail = nullable(form.accountantEmail);
+    payload.csp_robankname = nullable(form.bankName);
+    payload.csp_roiban = nullable(form.iban);
+    payload.csp_roswiftbic = nullable(form.swift);
+    payload.csp_roinvoicefooter = nullable(form.invoiceFooter);
+    // No intermediaryBic column for RO — skip
+  } else if (country === 'BG') {
+    payload.csp_bglegalname = nullable(form.name);
+    payload.csp_bgvatnumber = nullable(form.vatNumber);
+    payload.csp_bgaddress = nullable(form.address);
+    payload.csp_bgphone = nullable(form.phone);
+    payload.csp_bgemail = nullable(form.email);
+    payload.csp_bgaccountantemail = nullable(form.accountantEmail);
+    payload.csp_bginvoicefooter = nullable(form.invoiceFooter);
+    // BG EU bank (the "always" bank fields)
+    payload.csp_bgeubankname = nullable(form.bankName);
+    payload.csp_bgeuiban = nullable(form.iban);
+    payload.csp_bgeuswiftbic = nullable(form.swift);
+    // BG UK secondary bank
+    payload.csp_bgukbankname = nullable(form.ukBankName);
+    payload.csp_bgukiban = nullable(form.ukIban);
+    payload.csp_bgukswiftbic = nullable(form.ukSwift);
+    payload.csp_bgukaccountnumber = nullable(form.ukAccountNumber);
+    payload.csp_bguksortcode = nullable(form.ukSortCode);
+    payload.csp_bgukintermediarybic = nullable(form.ukIntermediaryBic);
+  } else if (country === 'US') {
+    payload.csp_uslegalname = nullable(form.name);
+    payload.csp_usvatnumber = nullable(form.vatNumber);
+    payload.csp_usaddress = nullable(form.address);
+    payload.csp_usphone = nullable(form.phone);
+    payload.csp_usemail = nullable(form.email);
+    payload.csp_usaccountantemail = nullable(form.accountantEmail);
+    payload.csp_usinvoicefooter = nullable(form.invoiceFooter);
+    // US uses bankName + ACH/Wire — no IBAN, no SWIFT, no intermediaryBIC in schema
+    payload.csp_usbankname = nullable(form.bankName);
+    payload.csp_usaccountnumber = nullable(form.usAccountNumber);
+    payload.csp_usachroutingnumber = nullable(form.usAchRoutingNumber);
+    payload.csp_uswireroutingnumber = nullable(form.usWireRoutingNumber);
+    // form.iban / form.swift / form.intermediaryBic — SILENTLY DROPPED for US.
+  } else {
+    throw new Error(`buildBuPayload: unknown country "${country}"`);
+  }
+
+  return payload;
+}
+
 export default function SettingsPage() {
   const { toast } = useToast();
   const confirm = useConfirm();
@@ -241,47 +312,57 @@ export default function SettingsPage() {
   const updateField = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
 
   const saveEntity = async () => {
-    if (!editEntity) return;
+    console.log('[SettingsBU] Save clicked');
+    console.log('[SettingsBU] editEntity BEFORE save:', JSON.stringify(editEntity, null, 2));
+    console.log('[SettingsBU] form BEFORE save:', JSON.stringify(form, null, 2));
+    if (!editEntity) {
+      console.warn('[SettingsBU] aborting: editEntity is null');
+      return;
+    }
     const country = editEntity.country;
-    const prefix = country === 'Bulgaria' ? 'csp_bg' : country === 'US' ? 'csp_us' : 'csp_ro';
-
-    const record: Record<string, unknown> = {};
-    record[`${prefix}legalname`] = form.name || null;
-    record[`${prefix}vatnumber`] = form.vatNumber || null;
-    record[`${prefix}address`] = form.address || null;
-    record[`${prefix}email`] = form.email || null;
-    record[`${prefix}phone`] = form.phone || null;
-    record[`${prefix}accountantemail`] = form.accountantEmail || null;
-    record[`${prefix}invoicefooter`] = form.invoiceFooter || null;
-
-    if (country === 'Bulgaria') {
-      record.csp_bgeubankname = form.bankName || null;
-      record.csp_bgeuiban = form.iban || null;
-      record.csp_bgeuswiftbic = form.swift || null;
-      record.csp_bgukbankname = form.ukBankName || null;
-      record.csp_bgukaccountnumber = form.ukAccountNumber || null;
-      record.csp_bguksortcode = form.ukSortCode || null;
-      record.csp_bgukiban = form.ukIban || null;
-      record.csp_bgukswiftbic = form.ukSwift || null;
-      record.csp_bgukintermediarybic = form.ukIntermediaryBic || null;
-    } else if (country === 'US') {
-      record.csp_usbankname = form.bankName || null;
-      record.csp_usaccountnumber = form.usAccountNumber || null;
-      record.csp_usachroutingnumber = form.usAchRoutingNumber || null;
-      record.csp_uswireroutingnumber = form.usWireRoutingNumber || null;
-    } else {
-      record.csp_robankname = form.bankName || null;
-      record.csp_roiban = form.iban || null;
-      record.csp_roswiftbic = form.swift || null;
+    const code = countryToCode(country);
+    console.log('[SettingsBU] country:', country, 'code:', code);
+    if (!code) {
+      console.error('[SettingsBU] aborting: unsupported country', country);
+      toast.error(`Unsupported country: ${country}`);
+      return;
     }
 
+    if (code === 'US' && (form.iban?.trim() || form.swift?.trim() || form.intermediaryBic?.trim())) {
+      console.warn('[SettingsBU] US does not support IBAN/SWIFT/IntermediaryBIC — these values will not be saved.');
+      toast.error("US business unit doesn't use IBAN/SWIFT; only Bank Name / Account / ACH / Wire fields will be saved.");
+    }
+
+    const record = buildBuPayload(code, form);
+
+    console.log('[SettingsBU] OData payload:', JSON.stringify(record, null, 2));
+    console.log('[SettingsBU] target table: businessunits');
+    console.log('[SettingsBU] target record id:', editEntity.id);
+
     try {
-      await updateBusinessUnit(editEntity.id, record);
-      toast.success(`${country} entity saved to Dataverse`);
+      const result = await updateBusinessUnit(editEntity.id, record);
+      console.log('[SettingsBU] SUCCESS — updateBusinessUnit returned:', result);
+      console.log('[SettingsBU] reading back after save...');
       const bus = await fetchBusinessUnits();
+      const saved = bus.find(b => b.id === editEntity.id);
+      console.log('[SettingsBU] readback — full BU record:', JSON.stringify(saved, null, 2));
+      if (saved) {
+        const keysOfInterest = Object.keys(record);
+        const readbackValues: Record<string, unknown> = {};
+        keysOfInterest.forEach(k => { readbackValues[k] = saved.raw?.[k]; });
+        console.log('[SettingsBU] readback — fields we just wrote:', JSON.stringify(readbackValues, null, 2));
+      } else {
+        console.warn('[SettingsBU] readback — could not find BU with id', editEntity.id);
+      }
+      toast.success(`${country} entity saved to Dataverse`);
       setEntities(bus.filter(b => !b.isRoot).map(buFromBusinessUnit));
       setEditEntity(null);
     } catch (err: any) {
+      console.error('[SettingsBU] ERROR:', err);
+      console.error('[SettingsBU] err.message:', err?.message);
+      console.error('[SettingsBU] err.response:', err?.response);
+      console.error('[SettingsBU] err.status:', err?.status, 'err.statusCode:', err?.statusCode);
+      try { console.error('[SettingsBU] err JSON:', JSON.stringify(err, Object.getOwnPropertyNames(err))); } catch {}
       toast.error(err?.message || 'Failed to save');
     }
   };

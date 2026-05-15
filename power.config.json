@@ -52,6 +52,38 @@
         "expenses": {
           "entitySetName": "csp_expenses",
           "logicalName": "csp_expense"
+        },
+        "companydocuments": {
+          "entitySetName": "csp_companydocuments",
+          "logicalName": "csp_companydocument"
+        },
+        "dividends": {
+          "entitySetName": "csp_dividends",
+          "logicalName": "csp_dividend"
+        },
+        "prospectmaterials": {
+          "entitySetName": "csp_prospectmaterials",
+          "logicalName": "csp_prospectmaterial"
+        },
+        "candidates": {
+          "entitySetName": "csp_candidates",
+          "logicalName": "csp_candidate"
+        },
+        "opportunities": {
+          "entitySetName": "csp_opportunities",
+          "logicalName": "csp_opportunity"
+        },
+        "opportunityapplicants": {
+          "entitySetName": "csp_opportunityapplicants",
+          "logicalName": "csp_opportunityapplicant"
+        },
+        "opportunitymaterials": {
+          "entitySetName": "csp_opportunitymaterials",
+          "logicalName": "csp_opportunitymaterial"
+        },
+        "contactcvs": {
+          "entitySetName": "csp_contactcvs",
+          "logicalName": "csp_contactcv"
         }
       },
       "environmentVariableName": ""

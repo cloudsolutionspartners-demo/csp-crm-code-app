@@ -7,6 +7,8 @@ import { Plus, FileText, FileStack, Upload, X, Download } from '../components/Ic
 import { useDataverse } from '../services/useDataverse';
 import { fetchDocuments, saveDocument, uploadDocumentFile, downloadDocumentFile } from '../services/documentService';
 import { fetchAccounts } from '../services/accountService';
+import { Csp_companydocumentsService } from '../generated/services/Csp_companydocumentsService';
+import { getOrgUrl } from '../services/dataverseService';
 import { formatDate } from '../lib/utils';
 import { matchDateRange } from '../components/ColumnFilters';
 import { SearchPill, MultiPill, FilterChip, DatePill, dateRangeFor, relativeDateLabel, type RelativeDateValue } from '../components/FilterPills';
@@ -114,7 +116,8 @@ export default function DocumentsPage() {
       const recordId = await saveDocument(formData, editId || undefined);
       if (pendingFile && recordId) {
         try {
-          await uploadDocumentFile(recordId, pendingFile);
+          await Csp_companydocumentsService.upload(recordId, 'csp_maindocument', pendingFile, pendingFile.name);
+          console.log('[Documents] File uploaded for', recordId);
         } catch (err: any) {
           console.error('Upload failed:', err);
           toast.error(err?.message || 'File upload failed');
@@ -225,9 +228,22 @@ export default function DocumentsPage() {
                 <FileText className="csp-icon-sm csp-text-muted" />
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formData.fileName}</span>
                 {editId && !pendingFile && (
-                  <button className="csp-btn csp-btn-ghost csp-btn-icon-sm" onClick={handleDownload} title="Download">
-                    <Download className="csp-icon-sm" />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="csp-btn csp-btn-outline csp-btn-sm"
+                      style={{ fontSize: 11, padding: '2px 8px' }}
+                      onClick={() => {
+                        const orgUrl = getOrgUrl();
+                        const url = `${orgUrl}/api/data/v9.2/csp_companydocuments(${editId})/csp_maindocument/$value`;
+                        window.open(url, '_blank');
+                      }}
+                      title="View file"
+                    >View File</button>
+                    <button className="csp-btn csp-btn-ghost csp-btn-icon-sm" onClick={handleDownload} title="Download">
+                      <Download className="csp-icon-sm" />
+                    </button>
+                  </>
                 )}
                 <button onClick={clearFile} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} title="Remove">
                   <X className="csp-icon-sm" />

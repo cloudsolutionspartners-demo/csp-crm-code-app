@@ -14,6 +14,19 @@ export function formatCurrency(amount: number, currency: CurrencyCode): string {
   return `${symbol}${formatted}`;
 }
 
+/**
+ * Format a Dataverse opportunity primary id for display.
+ * Converts "OPPORTUNITY-0000000003" → "OPP-0003". Falls back to original string
+ * if format unrecognized. Underlying storage value is never modified — display only.
+ */
+export function formatOppNumber(raw: string | undefined | null): string {
+  if (!raw) return '';
+  const match = String(raw).match(/OPPORTUNITY-0*(\d+)/i);
+  if (!match) return String(raw);
+  const n = parseInt(match[1], 10);
+  return `OPP-${String(n).padStart(4, '0')}`;
+}
+
 export function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-GB', {
     day: '2-digit',

@@ -42,16 +42,28 @@ function mapFromDataverse(r: any): Timesheet {
     contactId: norm(r._csp_contact_value),
     contractId: norm(r._csp_contract_value),
     weekStart: r.csp_weekstartdate ? String(r.csp_weekstartdate).substring(0, 10) : '',
+    weekEnd: r.csp_weekenddate ? String(r.csp_weekenddate).substring(0, 10) : '',
     totalHours,
     status: STATUS_REVERSE[r.statuscode] || 'Draft',
     entries,
-  };
+  } as Timesheet & { weekEnd: string };
 }
 
 function mapToDataverse(data: Record<string, any>): any {
   const record: any = {};
   if (data.reference !== undefined) record.csp_timesheetreference = data.reference;
   if (data.weekStart !== undefined) record.csp_weekstartdate = data.weekStart || null;
+  if (data.weekEnd !== undefined) record.csp_weekenddate = data.weekEnd || null;
+  if (data.weekStart && !data.weekEnd) {
+    const d = new Date(data.weekStart);
+    if (!isNaN(d.getTime())) {
+      d.setDate(d.getDate() + 6);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      record.csp_weekenddate = `${y}-${m}-${day}`;
+    }
+  }
 
   // Day hours
   if (data.entries && Array.isArray(data.entries)) {

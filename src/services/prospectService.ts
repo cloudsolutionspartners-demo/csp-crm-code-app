@@ -62,7 +62,8 @@ function mapFromDataverse(r: any): Prospect {
     lastActivityDate: r.modifiedon ? String(r.modifiedon).substring(0, 10) : '',
     convertedAccountId: norm(r._csp_linkedaccount_value),
     convertedDate: r.csp_conversiondate ? String(r.csp_conversiondate).substring(0, 10) : '',
-  };
+    title: r.csp_title || '',
+  } as Prospect & { title: string };
 }
 
 function isGuid(id: string): boolean {
@@ -81,6 +82,7 @@ function mapToDataverse(data: Partial<Prospect>): Record<string, unknown> {
   if (data.primaryContactEmail !== undefined) record.csp_prospectingcontactemail = data.primaryContactEmail;
   if (data.primaryContactPhone !== undefined) record.csp_prospectingcontactphone = data.primaryContactPhone;
   if (data.primaryContactRole !== undefined) record.csp_prospectingcontactrole = data.primaryContactRole;
+  if ((data as any).title !== undefined) record.csp_title = (data as any).title || null;
   if (data.needDescription !== undefined) record.csp_needdescription = data.needDescription;
   if (data.servicesDiscussed !== undefined) record.csp_servicesdiscussed = data.servicesDiscussed;
   if (data.estimatedValue !== undefined) record.csp_estimatedvalue = data.estimatedValue;
@@ -103,7 +105,7 @@ function mapToDataverse(data: Partial<Prospect>): Record<string, unknown> {
   return record;
 }
 
-const SELECT = 'csp_prospectid,csp_prospectprimaryid,csp_companyname,csp_country,csp_industry,csp_website,csp_companysize,csp_source,csp_prospectingcontactname,csp_prospectingcontactemail,csp_prospectingcontactphone,csp_prospectingcontactrole,csp_needdescription,csp_servicesdiscussed,csp_estimatedvalue,csp_expectedclosedate,csp_firstcontactdate,csp_conversiondate,csp_converted,statecode,statuscode,modifiedon,_csp_linkedcontact_value,_csp_referredby_value,_csp_linkedaccount_value,_csp_currency_value,_owningbusinessunit_value';
+const SELECT = 'csp_prospectid,csp_prospectprimaryid,csp_companyname,csp_country,csp_industry,csp_website,csp_companysize,csp_source,csp_prospectingcontactname,csp_prospectingcontactemail,csp_prospectingcontactphone,csp_prospectingcontactrole,csp_title,csp_needdescription,csp_servicesdiscussed,csp_estimatedvalue,csp_expectedclosedate,csp_firstcontactdate,csp_conversiondate,csp_converted,statecode,statuscode,modifiedon,_csp_linkedcontact_value,_csp_referredby_value,_csp_linkedaccount_value,_csp_currency_value,_owningbusinessunit_value';
 
 export async function fetchProspects(): Promise<Prospect[]> {
   const records = await listRecords('csp_prospects', SELECT);

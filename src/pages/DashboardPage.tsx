@@ -3,13 +3,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { PageHeader, KpiCard, StatusBadge, PageLoading } from '../components/Shared';
 import { Users, UserCheck, UserX, Target, TrendingUp, Receipt, AlertCircle, Calendar, Plane } from '../components/Icons';
 import { formatCurrency } from '../lib/utils';
-import type { CurrencyCode, Expense, Invoice, Contract, Prospect, Account, Contact } from '../types/crm';
+import type { CurrencyCode, Expense, Invoice, Contract, Prospect, Account, Contact, Timesheet } from '../types/crm';
 import { ExpenseFormSheet } from '../components/ExpenseFormSheet';
 import { fetchCandidates } from '../services/candidateService';
 import type { CandidateRecord } from '../services/candidateService';
 import { fetchInvoices } from '../services/invoiceService';
 import { fetchExpenses } from '../services/expenseService';
 import { fetchContracts } from '../services/contractService';
+import { fetchTimesheets } from '../services/timesheetService';
 import { fetchLeaveRequests } from '../services/leaveService';
 import { fetchProspects } from '../services/prospectService';
 import { fetchAccounts } from '../services/accountService';
@@ -34,6 +35,16 @@ function inMonth(dateStr: string, year: number, month: number): boolean {
 }
 function startOfMonth(year: number, month: number) { return new Date(year, month, 1); }
 function endOfMonth(year: number, month: number) { return new Date(year, month + 1, 0); }
+function startOfMonthStr(year: number, month: number): string {
+  return `${year}-${String(month + 1).padStart(2, '0')}-01`;
+}
+function endOfMonthStr(year: number, month: number): string {
+  const d = new Date(year, month + 1, 0);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function dateToStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 // ===== CSS-only stacked bar chart =====
 function StackedBarChart({ data, height = 120 }: { data: { label: string; segments: { value: number; color: string }[] }[]; height?: number }) {
@@ -140,6 +151,7 @@ export default function DashboardPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -150,7 +162,7 @@ export default function DashboardPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [cands, invs, exps, ctrs, leaves, prosps, accs, conts] = await Promise.all([
+        const [cands, invs, exps, ctrs, leaves, prosps, accs, conts, tses] = await Promise.all([
           fetchCandidates().catch(() => []),
           fetchInvoices().catch(() => []),
           fetchExpenses().catch(() => []),
@@ -159,6 +171,7 @@ export default function DashboardPage() {
           fetchProspects().catch(() => []),
           fetchAccounts().catch(() => []),
           fetchContacts().catch(() => []),
+          fetchTimesheets().catch(() => []),
         ]);
         if (cancelled) return;
         setOnboardingCandidates(cands as CandidateRecord[]);
@@ -169,6 +182,7 @@ export default function DashboardPage() {
         setProspects(prosps as Prospect[]);
         setAccounts(accs as Account[]);
         setContacts(conts as Contact[]);
+        setTimesheets(tses as Timesheet[]);
       } catch (err) {
         console.error('[Dashboard] Failed to load data:', err);
       } finally {
@@ -222,15 +236,28 @@ export default function DashboardPage() {
       ? inv.subtotal
       : Math.max(0, (inv.total || 0) - (inv.vatAmount || 0));
     const ms = startOfMonth(y, m); const me = endOfMonth(y, m);
+    const msStr = startOfMonthStr(y, m); const meStr = endOfMonthStr(y, m);
     const toEur: Record<CurrencyCode, number> = { EUR: 1, USD: 0.92, GBP: 1.17, RON: 0.2 };
-    const incoming = invoices.filter(inv => (inv.status === 'Sent' || inv.status === 'Overdue') && new Date(inv.dueDate) >= ms && new Date(inv.dueDate) <= me);
+    const incoming = invoices.filter(inv => (inv.status === 'Sent' || inv.status === 'Overdue') && inv.dueDate >= msStr && inv.dueDate <= meStr);
+    // Profit per invoice = sum(timesheet hours) × (sellHourly − buyHourly) for the
+    // invoice's contract within its period. Status of the contract is ignored.
+    const profitForInvoice = (inv: Invoice): number => {
+      if (!inv.contractId) return 0;
+      const c = contracts.find(cc => cc.id === inv.contractId);
+      if (!c) return 0;
+      const sellHourly = c.sellHourlyRate || (c.unitOfMeasure === 'Day' ? c.sellRate / 8 : c.sellRate);
+      const buyHourly = c.buyHourlyRate || (c.unitOfMeasure === 'Day' ? c.buyRate / 8 : c.buyRate);
+      const periodKey = `${inv.periodYear}-${String(inv.periodMonth).padStart(2, '0')}`;
+      const hours = timesheets
+        .filter(t => t.contractId === inv.contractId && (t.weekStart || '').startsWith(periodKey))
+        .reduce((s, t) => s + (t.totalHours || 0), 0);
+      return hours * (sellHourly - buyHourly);
+    };
     let totalBillingEur = 0; let totalProfitEur = 0;
     const byCurrency = new Map<CurrencyCode, { billing: number; profit: number; count: number }>();
     for (const inv of incoming) {
       const billing = subtotalOf(inv);
-      let estCost = billing * 0.78;
-      if (inv.contractId) { const c = contracts.find(cc => cc.id === inv.contractId); if (c && c.sellRate > 0) estCost = billing * (c.buyRate / c.sellRate); }
-      const profit = billing - estCost;
+      const profit = profitForInvoice(inv);
       const cur = byCurrency.get(inv.currencyCode) ?? { billing: 0, profit: 0, count: 0 };
       cur.billing += billing; cur.profit += profit; cur.count += 1; byCurrency.set(inv.currencyCode, cur);
       totalBillingEur += billing * (toEur[inv.currencyCode] ?? 1);
@@ -241,44 +268,41 @@ export default function DashboardPage() {
     while (cursor <= me) {
       const weekEnd = new Date(cursor); weekEnd.setDate(weekEnd.getDate() + 6);
       const cap = weekEnd > me ? me : weekEnd;
-      const inWeek = incoming.filter(inv => { const d = new Date(inv.dueDate); return d >= cursor && d <= cap; });
+      const cursorStr = dateToStr(cursor); const capStr = dateToStr(cap);
+      const inWeek = incoming.filter(inv => inv.dueDate >= cursorStr && inv.dueDate <= capStr);
       weeks.push({
         label: `W${weekIdx} (${cursor.getDate()}-${cap.getDate()})`,
         billing: Math.round(inWeek.reduce((s, inv) => s + subtotalOf(inv) * (toEur[inv.currencyCode] ?? 1), 0)),
-        profit: Math.round(inWeek.reduce((s, inv) => {
-          const sub = subtotalOf(inv);
-          let ec = sub * 0.78;
-          if (inv.contractId) { const c = contracts.find(cc => cc.id === inv.contractId); if (c && c.sellRate > 0) ec = sub * (c.buyRate / c.sellRate); }
-          return s + (sub - ec) * (toEur[inv.currencyCode] ?? 1);
-        }, 0)),
+        profit: Math.round(inWeek.reduce((s, inv) => s + profitForInvoice(inv) * (toEur[inv.currencyCode] ?? 1), 0)),
       });
       cursor = new Date(cap); cursor.setDate(cursor.getDate() + 1); weekIdx++;
     }
     return { byCurrency: Array.from(byCurrency.entries()), totalBillingEur, totalProfitEur, weeks };
-  }, [invoices, contracts, y, m]);
+  }, [invoices, contracts, timesheets, y, m]);
 
   // ============ EXPENSES ============
   const expenseDue = useMemo(() => {
-    const me = endOfMonth(y, m);
+    const meStr = endOfMonthStr(y, m);
+    const todayStr = dateToStr(now);
     const toEur: Record<CurrencyCode, number> = { EUR: 1, USD: 0.92, GBP: 1.17, RON: 0.2 };
-    const unpaid = expenses.filter(e => e.status !== 'Paid' && new Date(e.dueDate) <= me);
+    const unpaid = expenses.filter(e => e.status !== 'Paid' && e.dueDate <= meStr);
     const byCurrency = new Map<CurrencyCode, { amount: number; count: number }>();
     let totalEur = 0; let overdueCount = 0;
     for (const e of unpaid) {
       const cur = byCurrency.get(e.currencyCode) ?? { amount: 0, count: 0 };
       cur.amount += e.totalAmount; cur.count += 1; byCurrency.set(e.currencyCode, cur);
       totalEur += e.totalAmount * (toEur[e.currencyCode] ?? 1);
-      if (new Date(e.dueDate) < now) overdueCount++;
+      if (e.dueDate < todayStr) overdueCount++;
     }
-    const top = [...unpaid].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()).slice(0, 6);
+    const top = [...unpaid].sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '')).slice(0, 6);
     return { byCurrency: Array.from(byCurrency.entries()), totalEur, overdueCount, top };
   }, [expenses, y, m, now]);
 
   // ============ LEAVE ============
   const leaveStats = useMemo(() => {
     const overlaps = (l: { startDate: string; endDate: string }, yy: number, mm: number) => {
-      const ms = new Date(yy, mm, 1); const me = new Date(yy, mm + 1, 0);
-      return new Date(l.endDate) >= ms && new Date(l.startDate) <= me;
+      const msStr = startOfMonthStr(yy, mm); const meStr = endOfMonthStr(yy, mm);
+      return l.endDate >= msStr && l.startDate <= meStr;
     };
     return [
       { key: 'last', y: prevY, m: prevM, label: monthLbl(prevY, prevM) },
@@ -286,7 +310,7 @@ export default function DashboardPage() {
       { key: 'next', y: nextY, m: nextM, label: monthLbl(nextY, nextM) },
     ].map(b => ({
       ...b,
-      list: leaveRequests.filter(l => l.status !== 'Rejected' && overlaps(l, b.y, b.m)).sort((a, b2) => new Date(a.startDate).getTime() - new Date(b2.startDate).getTime()),
+      list: leaveRequests.filter(l => l.status !== 'Rejected' && overlaps(l, b.y, b.m)).sort((a, b2) => (a.startDate || '').localeCompare(b2.startDate || '')),
     }));
   }, [leaveRequests, prevY, prevM, y, m, nextY, nextM]);
 
@@ -478,7 +502,7 @@ export default function DashboardPage() {
                 <div>
                   {expenseDue.top.map(e => {
                     const acct = accounts.find(a => a.id === e.accountId);
-                    const overdue = new Date(e.dueDate) < now;
+                    const overdue = (e.dueDate || '') < dateToStr(now);
                     return (
                       <button
                         key={e.id}

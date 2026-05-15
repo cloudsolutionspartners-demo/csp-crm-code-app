@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, FileText, Trophy, MessageSquare, FileStack, ArrowRightCircle, CheckCircle2, Building2, Sparkles, Link2, Trash2 } from 'lucide-react';
+import { Plus, FileText, Trophy, MessageSquare, FileStack, ArrowRightCircle, CheckCircle2, Building2, Sparkles, Link2, Trash2, Briefcase } from 'lucide-react';
 import { prospects as mockProspects, prospectInteractions as mockInteractions, prospectMaterials as mockMaterials, contacts, accounts, getContactById, getAccountById } from '@/data/mock-data';
 import type { Prospect, ProspectStatus, ProspectSource, ProspectInteraction, ProspectMaterial, InteractionType, CurrencyCode, ProspectKind } from '@/types/crm';
 import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ConvertProspectDialog } from '@/components/prospect/ConvertProspectDialog';
 import { ProspectAgingTimeline } from '@/components/prospect/ProspectAgingTimeline';
+import { RaiseOpportunityForm } from '@/components/opportunity/RaiseOpportunityForm';
 import { TutorialVideoButton } from '@/components/TutorialVideoDialog';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
@@ -86,6 +87,7 @@ export default function ProspectsPage() {
   const [newInteraction, setNewInteraction] = useState<{ type: InteractionType; date: string; summary: string }>({ type: 'Call', date: format(new Date(), 'yyyy-MM-dd'), summary: '' });
   const [newMaterial, setNewMaterial] = useState<{ fileName: string; sharedDate: string; description: string; document?: string; documentMimeType?: string; documentSize?: number }>({ fileName: '', sharedDate: format(new Date(), 'yyyy-MM-dd'), description: '' });
   const materialFileInputRef = useRef<HTMLInputElement>(null);
+  const [oppWizardOpen, setOppWizardOpen] = useState(false);
 
   // Open from query param (e.g. from interactions page)
   useEffect(() => {
@@ -196,6 +198,42 @@ export default function ProspectsPage() {
     toast.success('Material removed');
   };
 
+  const previewMaterial = (m: ProspectMaterial) => {
+    try {
+      let blob: Blob;
+      if (m.document) {
+        const [meta, b64] = m.document.split(',');
+        const mime = m.documentMimeType || /data:(.*?);base64/.exec(meta)?.[1] || 'application/octet-stream';
+        const byteString = atob(b64);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+        blob = new Blob([ab], { type: mime });
+      } else {
+        // Mock material with no real file — render a simple HTML preview
+        const html = `<!doctype html><html><head><meta charset="utf-8"><title>${m.fileName}</title>
+<style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#f3f4f6;color:#0f172a}
+.page{max-width:800px;margin:32px auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:48px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+h1{font-size:20px;margin:0 0 8px}.muted{color:#64748b;font-size:13px}
+.banner{margin-top:24px;padding:12px 16px;border:1px dashed #cbd5e1;border-radius:6px;color:#475569;font-size:13px}
+.body{margin-top:24px;line-height:1.6;font-size:14px}</style></head><body>
+<div class="page"><h1>${m.fileName}</h1>
+<div class="muted">Shared on ${m.sharedDate}</div>
+${m.description ? `<div class="body">${m.description}</div>` : ''}
+<div class="banner">Preview placeholder — this prototype item does not have a real file attached. Uploaded files will preview inline in the browser.</div>
+</div></body></html>`;
+        blob = new Blob([html], { type: 'text/html' });
+      }
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!w) toast.error('Unable to open preview — please allow pop-ups');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      console.error(err);
+      toast.error('Could not preview file');
+    }
+  };
+
   const handleMaterialFile = (file: File | null) => {
     if (!file) return;
     const reader = new FileReader();
@@ -288,9 +326,26 @@ export default function ProspectsPage() {
               }]}
             />
             <Button onClick={() => setKindDialogOpen(true)}><Plus className="h-4 w-4 mr-1" /> Add Prospect</Button>
+            <Button variant="secondary" disabled={selectedIds.length !== 1}
+              title={selectedIds.length === 1 ? 'Raise an opportunity for the selected prospect' : 'Select a single prospect to enable'}
+              onClick={() => setOppWizardOpen(true)}>
+              <Briefcase className="h-4 w-4 mr-2" /> Raise Opportunity
+            </Button>
           </div>
         }
       />
+
+      {(() => {
+        const p = items.find(x => x.id === selectedIds[0]);
+        return (
+          <RaiseOpportunityForm
+            open={oppWizardOpen}
+            onOpenChange={setOppWizardOpen}
+            origin={p ? { kind: 'prospect', record: p } : null}
+            onCreated={() => setSelectedIds([])}
+          />
+        );
+      })()}
 
       <div className="space-y-3 mb-3">
         <div className="flex items-center gap-3 flex-wrap">
@@ -382,6 +437,8 @@ export default function ProspectsPage() {
                       linkedAccount={accountByProspectId.get(p.id)}
                       isHidden={draggingId === p.id}
                       onOpen={() => openForm(p)}
+                      isSelected={selectedIds.includes(p.id)}
+                      onToggleSelect={(c) => toggleOne(p.id, c)}
                     />
                   );
                 })}
@@ -539,6 +596,7 @@ export default function ProspectsPage() {
               <div className="pt-2">
                 <h4 className="text-sm font-semibold text-primary mb-2">Opportunity</h4>
                 <div className="grid grid-cols-2 gap-3">
+                  <TextField label="Title" value={form.title || ''} onChange={(v) => updateField('title', v)} className="col-span-2" placeholder="Short opportunity title (e.g. Q3 Data Platform Rollout)" />
                   <TextAreaField label="Need Description" value={form.needDescription || ''} onChange={(v) => updateField('needDescription', v)} className="col-span-2" rows={2} />
                   <TextAreaField label="Services Discussed" value={form.servicesDiscussed || ''} onChange={(v) => updateField('servicesDiscussed', v)} className="col-span-2" rows={2} />
                   <TextField label="Estimated Value" value={form.estimatedValue?.toString() || ''} onChange={(v) => updateField('estimatedValue', Number(v) || 0)} type="number" />
@@ -634,14 +692,16 @@ export default function ProspectsPage() {
                 {myMaterials.map(m => (
                   <div key={m.id} className="rounded-md border p-3 flex items-start justify-between">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        {m.document ? (
-                          <a href={m.document} download={m.fileName} className="font-medium text-sm text-primary hover:underline">{m.fileName}</a>
-                        ) : (
-                          <span className="font-medium text-sm">{m.fileName}</span>
-                        )}
-                      </div>
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <button
+                            type="button"
+                            onClick={() => previewMaterial(m)}
+                            className="font-medium text-sm text-primary hover:underline text-left"
+                          >
+                            {m.fileName}
+                          </button>
+                        </div>
                       {m.description && <p className="text-xs text-muted-foreground mt-1">{m.description}</p>}
                     </div>
                     <div className="flex items-center gap-2">
@@ -813,7 +873,7 @@ function KanbanColumn({ stage, count, totalValue, isDragActive, children }: { st
   );
 }
 
-function KanbanCard({ prospect, tone, bucketDot, days, closed, ownerLabel, contactLabel, linkedAccount, isHidden, onOpen }: { prospect: Prospect; tone: string; bucketDot?: string; days: number; closed: boolean; ownerLabel: string; contactLabel: string; linkedAccount?: { id: string; name: string }; isHidden: boolean; onOpen: () => void }) {
+function KanbanCard({ prospect, tone, bucketDot, days, closed, ownerLabel, contactLabel, linkedAccount, isHidden, onOpen, isSelected, onToggleSelect }: { prospect: Prospect; tone: string; bucketDot?: string; days: number; closed: boolean; ownerLabel: string; contactLabel: string; linkedAccount?: { id: string; name: string }; isHidden: boolean; onOpen: () => void; isSelected: boolean; onToggleSelect: (c: boolean) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: prospect.id });
   return (
     <div
@@ -821,16 +881,31 @@ function KanbanCard({ prospect, tone, bucketDot, days, closed, ownerLabel, conta
       {...attributes}
       {...listeners}
       onClick={(e) => { if (!isDragging) onOpen(); }}
-      className={`${tone} rounded-md border p-2.5 cursor-grab active:cursor-grabbing hover:shadow-sm hover:border-primary/40 transition-all ${isHidden || isDragging ? 'opacity-30' : ''}`}
+      className={`${tone} rounded-md border p-2.5 cursor-grab active:cursor-grabbing hover:shadow-sm hover:border-primary/40 transition-all ${isHidden || isDragging ? 'opacity-30' : ''} ${isSelected ? 'ring-2 ring-primary border-primary' : ''}`}
     >
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <div className="font-medium text-sm leading-tight">{prospect.companyName}</div>
-        {prospect.kind === 'Existing Account' && (
-          <span title="Existing account opportunity" className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary bg-primary/10 rounded px-1 py-0.5 shrink-0">
-            <Link2 className="h-2.5 w-2.5" />
-          </span>
-        )}
+      <div className="flex items-start gap-2 mb-0.5">
+        <span
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onToggleSelect(!isSelected); }}
+          className="mt-0.5 inline-flex"
+          role="button"
+          aria-label={isSelected ? 'Deselect prospect' : 'Select prospect'}
+        >
+          <Checkbox checked={isSelected} className="pointer-events-none" />
+        </span>
+        <div className="flex-1 flex items-start justify-between gap-2">
+          <div className="font-medium text-sm leading-tight">{prospect.companyName}</div>
+          {prospect.kind === 'Existing Account' && (
+            <span title="Existing account opportunity" className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary bg-primary/10 rounded px-1 py-0.5 shrink-0">
+              <Link2 className="h-2.5 w-2.5" />
+            </span>
+          )}
+        </div>
       </div>
+      {prospect.title && (
+        <div className="text-[12px] text-foreground/80 leading-tight mb-1 line-clamp-2" title={prospect.title}>{prospect.title}</div>
+      )}
       <div className="text-[11px] text-muted-foreground mb-2">
         {prospect.country}{prospect.industry ? ` · ${prospect.industry}` : ''}
       </div>

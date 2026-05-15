@@ -9,8 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
-import { Plus, FileText, Eye, Trash2, Send, ExternalLink, ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, FileText, Eye, Trash2, Send, ExternalLink, ChevronRight, ChevronDown, Briefcase } from 'lucide-react';
 import { SendInvoiceFlow } from '@/components/invoice/SendInvoiceFlow';
+import { RaiseOpportunityForm } from '@/components/opportunity/RaiseOpportunityForm';
 import { TutorialVideoButton } from '@/components/TutorialVideoDialog';
 import type { CompanyDocument, Contract, Invoice, InvoiceLine } from '@/types/crm';
 import { accounts, entities, contracts, invoices, contacts, getEntityById, getAccountById, getContactById, getContractById, paymentDetails } from '@/data/mock-data';
@@ -72,6 +73,7 @@ export default function AccountsPage() {
   const [viewContract, setViewContract] = useState<Contract | null>(null);
   const [viewInvoice, setViewInvoice] = useState<Invoice | null>(null);
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+  const [oppWizardOpen, setOppWizardOpen] = useState(false);
 
   // Map of parentId -> child accounts (single-level hierarchy)
   const childrenByParent = useMemo(() => {
@@ -238,6 +240,11 @@ export default function AccountsPage() {
         action={<div className="flex items-center gap-2">
           <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
           <Button onClick={openNewForm}><Plus className="h-4 w-4 mr-2" />Add Account</Button>
+          <Button variant="secondary" disabled={selectedIds.length !== 1}
+            title={selectedIds.length === 1 ? 'Raise an opportunity for the selected account' : 'Select a single account to enable'}
+            onClick={() => setOppWizardOpen(true)}>
+            <Briefcase className="h-4 w-4 mr-2" /> Raise Opportunity
+          </Button>
           <TutorialVideoButton
             entityLabel="Accounts"
             videos={[
@@ -258,6 +265,18 @@ export default function AccountsPage() {
             ]}
           />
         </div>} />
+
+      {(() => {
+        const a = accounts.find(x => x.id === selectedIds[0]);
+        return (
+          <RaiseOpportunityForm
+            open={oppWizardOpen}
+            onOpenChange={setOppWizardOpen}
+            origin={a ? { kind: 'account', record: a } : null}
+            onCreated={() => setSelectedIds([])}
+          />
+        );
+      })()}
 
       <div className="space-y-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">

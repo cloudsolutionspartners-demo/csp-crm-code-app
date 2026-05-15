@@ -7,9 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Briefcase, Upload, Trash2, Star, FileText } from 'lucide-react';
+import { RaiseOpportunityForm } from '@/components/opportunity/RaiseOpportunityForm';
+
 import { contacts, contracts, timesheets, getAccountById, jdSkills, jdPlatforms } from '@/data/mock-data';
-import type { Contact, ContactType } from '@/types/crm';
+import type { Contact, ContactType, ContactCv } from '@/types/crm';
 import { HeaderSelectionBar } from '@/components/HeaderSelectionBar';
 import { TextField, SelectField, SwitchField, EmailField, LookupField } from '@/components/FormField';
 import { toast } from 'sonner';
@@ -33,6 +35,9 @@ export default function ContactsPage() {
   const [contactSkills, setContactSkills] = useState<{ skillId: string; platformId: string }[]>([]);
   const [addSkillId, setAddSkillId] = useState('');
   const [addPlatformId, setAddPlatformId] = useState('');
+  const [oppWizardOpen, setOppWizardOpen] = useState(false);
+  
+  const [contactCvs, setContactCvs] = useState<ContactCv[]>([]);
 
   const openForm = (contact: Contact) => {
     setIsNew(false);
@@ -48,6 +53,7 @@ export default function ContactsPage() {
     });
     // Mock: derive skills from contact.skillset
     setContactSkills((contact.skillset || []).map((s, i) => ({ skillId: jdSkills.find(sk => sk.name === s)?.id || '', platformId: jdPlatforms[i % jdPlatforms.length]?.id || '' })));
+    setContactCvs([...(contact.cvs || [])]);
     setAddSkillId(''); setAddPlatformId('');
   };
 
@@ -60,11 +66,47 @@ export default function ContactsPage() {
       available: true, isInterviewer: false, availableForWork: true, summary: '',
     });
     setContactSkills([]);
+    setContactCvs([]);
     setAddSkillId(''); setAddPlatformId('');
   };
 
   const closeForm = () => { setSelectedContact(null); setIsNew(false); };
-  const saveForm = () => { toast.success(isNew ? `Contact "${formData.firstName} ${formData.lastName}" created` : `Contact "${formData.firstName} ${formData.lastName}" saved`); closeForm(); };
+  const saveForm = () => {
+    // Persist CVs to the underlying mock contact so other screens (Opportunities) see them
+    if (selectedContact && !isNew) {
+      const idx = contacts.findIndex(c => c.id === selectedContact.id);
+      if (idx >= 0) contacts[idx] = { ...contacts[idx], cvs: contactCvs };
+    }
+    toast.success(isNew ? `Contact "${formData.firstName} ${formData.lastName}" created` : `Contact "${formData.firstName} ${formData.lastName}" saved`);
+    closeForm();
+  };
+
+  const handleCvUpload = (file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const cv: ContactCv = {
+        id: `cv-${Date.now()}`,
+        fileName: file.name,
+        document: reader.result as string,
+        mimeType: file.type,
+        size: file.size,
+        uploadedAt: new Date().toISOString().split('T')[0],
+        isPrimary: contactCvs.length === 0,
+      };
+      setContactCvs(prev => [...prev, cv]);
+    };
+    reader.readAsDataURL(file);
+  };
+  const setPrimaryCv = (id: string) => setContactCvs(prev => prev.map(cv => ({ ...cv, isPrimary: cv.id === id })));
+  const removeCv = (id: string) => setContactCvs(prev => {
+    const next = prev.filter(cv => cv.id !== id);
+    // If we removed the primary, promote the first remaining to primary
+    if (next.length > 0 && !next.some(cv => cv.isPrimary)) next[0].isPrimary = true;
+    return next;
+  });
+  const updateCvLabel = (id: string, label: string) => setContactCvs(prev => prev.map(cv => cv.id === id ? { ...cv, label } : cv));
+
   const updateField = (key: string, value: any) => setFormData(prev => ({ ...prev, [key]: value }));
 
   const filtered = useMemo(() => {
@@ -101,7 +143,24 @@ export default function ContactsPage() {
         action={<div className="flex items-center gap-2">
           <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
           <Button onClick={openNewForm}><Plus className="h-4 w-4 mr-2" />Add Contact</Button>
+          <Button variant="secondary" disabled={selectedIds.length !== 1}
+            title={selectedIds.length === 1 ? 'Raise an opportunity for the selected contact' : 'Select a single contact to enable'}
+            onClick={() => setOppWizardOpen(true)}>
+            <Briefcase className="h-4 w-4 mr-2" /> Raise Opportunity
+          </Button>
         </div>} />
+
+      {(() => {
+        const c = contacts.find(x => x.id === selectedIds[0]);
+        return (
+          <RaiseOpportunityForm
+            open={oppWizardOpen}
+            onOpenChange={setOppWizardOpen}
+            origin={c ? { kind: 'contact', record: c } : null}
+            onCreated={() => setSelectedIds([])}
+          />
+        );
+      })()}
 
       <div className="space-y-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
@@ -184,6 +243,7 @@ export default function ContactsPage() {
                       <TabsTrigger value="general">General</TabsTrigger>
                       {isConsultantOrEmployee && <TabsTrigger value="professional">Professional</TabsTrigger>}
                       {isConsultantOrEmployee && <TabsTrigger value="skills">Skills ({contactSkills.length})</TabsTrigger>}
+                      {isConsultantOrEmployee && <TabsTrigger value="cvs">CVs ({contactCvs.length})</TabsTrigger>}
                       {showAccount && <TabsTrigger value="contracts">Contracts ({contactContracts.length})</TabsTrigger>}
                       {isConsultantOrEmployee && <TabsTrigger value="timesheets">Timesheets ({contactTimesheets.length})</TabsTrigger>}
                     </TabsList>
@@ -248,6 +308,64 @@ export default function ContactsPage() {
                                 <TableCell>
                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setContactSkills(prev => prev.filter((_, i) => i !== idx))}>
                                     <X className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TabsContent>
+                    )}
+                    {isConsultantOrEmployee && (
+                      <TabsContent value="cvs" className="mt-4 space-y-3">
+                        <div className="rounded-md border bg-muted/20 p-3">
+                          <p className="text-xs text-muted-foreground mb-2">
+                            Upload one or more CVs for this contact. Mark one as <strong>primary</strong> — that's the default chosen when applying to opportunities. You can override the choice per opportunity.
+                          </p>
+                          <label className="inline-flex">
+                            <input type="file" hidden onChange={(e) => { handleCvUpload(e.target.files?.[0] || null); e.currentTarget.value = ''; }} />
+                            <span className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm cursor-pointer hover:bg-muted">
+                              <Upload className="h-3.5 w-3.5" /> Upload CV
+                            </span>
+                          </label>
+                        </div>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>File</TableHead>
+                              <TableHead>Label</TableHead>
+                              <TableHead>Uploaded</TableHead>
+                              <TableHead className="w-24">Primary</TableHead>
+                              <TableHead className="w-12"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {contactCvs.length === 0 ? (
+                              <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground text-sm">No CVs uploaded yet.</TableCell></TableRow>
+                            ) : contactCvs.map(cv => (
+                              <TableRow key={cv.id}>
+                                <TableCell className="text-sm flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-muted-foreground" />{cv.fileName}</TableCell>
+                                <TableCell>
+                                  <input
+                                    value={cv.label || ''}
+                                    onChange={(e) => updateCvLabel(cv.id, e.target.value)}
+                                    placeholder="Optional label…"
+                                    className="w-full rounded border border-input bg-background px-2 py-1 text-xs"
+                                  />
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">{cv.uploadedAt}</TableCell>
+                                <TableCell>
+                                  {cv.isPrimary ? (
+                                    <Badge variant="secondary" className="gap-1 text-xs"><Star className="h-3 w-3 fill-current" /> Primary</Badge>
+                                  ) : (
+                                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setPrimaryCv(cv.id)}>
+                                      <Star className="h-3 w-3 mr-1" /> Set primary
+                                    </Button>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeCv(cv.id)}>
+                                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
                                   </Button>
                                 </TableCell>
                               </TableRow>

@@ -1,5 +1,6 @@
 import { listRecords, createRecord, updateRecord, deleteRecord } from './dataverseService';
 import { getTeamIdForBU } from './businessUnitService';
+import { currencyGuidToCode, currencyCodeToGuid } from './currencyMap';
 import type { Expense, ExpenseType, ExpenseStatus } from '../types/crm';
 
 function norm(val: any): string {
@@ -36,7 +37,7 @@ function mapFromDataverse(r: any): Expense {
     accountId: norm(r._csp_account_value),
     expenseType: EXPENSE_TYPE_REVERSE[r.csp_expensetype] || 'Operating Cost',
     contractId: norm(r._csp_contract_value),
-    currencyCode: 'EUR',
+    currencyCode: (currencyGuidToCode(r._transactioncurrencyid_value) || 'EUR') as any,
     totalAmount: total,
     vatAmount: vat,
     netAmount: total - vat,
@@ -47,7 +48,8 @@ function mapFromDataverse(r: any): Expense {
     status: STATUS_REVERSE[r.statuscode] || 'Pending',
     periodMonth: r.csp_periodmonth || 0,
     periodYear: r.csp_periodyear || 0,
-  };
+    documentName: r.csp_document_name || '',
+  } as Expense & { documentName: string };
 }
 
 function mapToDataverse(data: Record<string, any>): any {
@@ -57,7 +59,12 @@ function mapToDataverse(data: Record<string, any>): any {
   if (data.dateIssued !== undefined) record.csp_dateissued = data.dateIssued || null;
   if (data.dueDate !== undefined) record.csp_duedate = data.dueDate || null;
   if (data.paymentDate !== undefined) record.csp_paymentdate = data.paymentDate || null;
-  if (data.totalAmount !== undefined) record.csp_totalamount = Number(data.totalAmount) || null;
+  if (data.totalAmount !== undefined) {
+    console.log('[Expense] totalAmount raw:', data.totalAmount, 'type:', typeof data.totalAmount);
+    console.log('[Expense] totalAmount Number():', Number(data.totalAmount));
+    record.csp_totalamount = Number(data.totalAmount) || null;
+    console.log('[Expense] csp_totalamount saved as:', record.csp_totalamount);
+  }
   if (data.vatAmount !== undefined) record.csp_vat = Number(data.vatAmount) || null;
   if (data.vendorInvoiceNumber !== undefined) record.csp_vendorinvoicenumber = data.vendorInvoiceNumber || null;
   if (data.status !== undefined) {
@@ -81,10 +88,16 @@ function mapToDataverse(data: Record<string, any>): any {
     const v = Number(data.periodYear);
     if (!isNaN(v) && v >= 2000 && v <= 2100) record.csp_periodyear = v;
   }
+  if (data.currencyCode) {
+    const guid = currencyCodeToGuid(data.currencyCode);
+    if (guid) {
+      record['transactioncurrencyid@odata.bind'] = `/transactioncurrencies(${guid})`;
+    }
+  }
   return record;
 }
 
-const SELECT = 'csp_expenseid,csp_name,_csp_account_value,_csp_contract_value,csp_expensetype,csp_dateissued,csp_duedate,csp_paymentdate,csp_totalamount,csp_vat,csp_vendorinvoicenumber,csp_periodmonth,csp_periodyear,statecode,statuscode,createdon,_owningbusinessunit_value';
+const SELECT = 'csp_expenseid,csp_name,_csp_account_value,_csp_contract_value,csp_expensetype,csp_dateissued,csp_duedate,csp_paymentdate,csp_totalamount,csp_vat,csp_vendorinvoicenumber,csp_periodmonth,csp_periodyear,statecode,statuscode,createdon,_owningbusinessunit_value,csp_document_name,_transactioncurrencyid_value';
 
 export async function fetchExpenses(): Promise<Expense[]> {
   const records = await listRecords('csp_expenses', SELECT, undefined, 'createdon desc');

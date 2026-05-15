@@ -83,7 +83,8 @@ export function actualMonthlyHoursForContract(
 }
 
 function contractActiveInMonth(c: Contract, m: { year: number; month: number }): boolean {
-  if (c.status !== 'Active' && c.status !== 'Draft') return false;
+  // Date-range only — status is intentionally ignored. Inactive contracts can
+  // still have timesheets whose hours must be counted using the contract rates.
   const monthStart = new Date(m.year, m.month - 1, 1);
   const monthEnd = new Date(m.year, m.month, 0);
   if (!c.startDate) return false;

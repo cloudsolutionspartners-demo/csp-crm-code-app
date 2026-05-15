@@ -27,7 +27,8 @@ const BILLING_TYPE_FORWARD: Record<string, number> = {
 };
 
 const STATUS_REVERSE: Record<number, ContractStatus> = {
-  0: 'Active', 1: 'Completed',
+  0: 'Active',
+  1: 'Inactive' as ContractStatus,
 };
 
 function mapFromDataverse(r: any): Contract {
@@ -125,6 +126,7 @@ function mapToDataverse(data: Record<string, any>): any {
   }
   // Status: statecode 0=Active, 1=Inactive
   if (data.status === 'Active' || data.status === 'Draft') { record.statecode = 0; record.statuscode = 1; }
+  else if (data.status === 'Inactive') { record.statecode = 1; record.statuscode = 2; }
   else if (data.status === 'Completed' || data.status === 'Terminated' || data.status === 'On Hold') { record.statecode = 1; record.statuscode = 2; }
   return record;
 }

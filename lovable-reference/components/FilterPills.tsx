@@ -214,27 +214,47 @@ export function relativeDateLabel(v: RelativeDateValue): string {
   }
 }
 
-function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
+function snapToMondayBack(d: Date) {
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const r = new Date(d); r.setDate(d.getDate() + diff); return r;
+}
+function snapToSundayFwd(d: Date) {
+  const day = d.getDay();
+  const diff = day === 0 ? 0 : 7 - day;
+  const r = new Date(d); r.setDate(d.getDate() + diff); return r;
+}
+function endOfMonthSunday(d: Date) {
+  const eom = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return snapToSundayFwd(eom);
+}
+
+function HistogramRangeSlider({ dates, fromDay, toDay, onChange, futureDays = 0, weekMode = false }: {
   dates: (string | Date)[]; fromDay: number; toDay: number;
   onChange: (fromDay: number, toDay: number) => void;
+  futureDays?: number; weekMode?: boolean;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
   const BUCKETS = 52;
   const bucketDays = WINDOW_DAYS / BUCKETS;
+  const totalDays = WINDOW_DAYS + futureDays;
+  const extraBuckets = Math.max(0, Math.ceil(futureDays / bucketDays));
+  const totalBuckets = BUCKETS + extraBuckets;
 
   const counts = useMemo(() => {
-    const arr = new Array(BUCKETS).fill(0);
+    const arr = new Array(totalBuckets).fill(0);
     for (const raw of dates) {
       const d = typeof raw === 'string'
         ? fromISO(raw.length > 10 ? raw.slice(0, 10) : raw)
         : startOfDay(raw);
       const ageDays = Math.floor((today.getTime() - d.getTime()) / DAY_MS);
-      if (ageDays < 0 || ageDays > WINDOW_DAYS) continue;
-      const bucket = Math.min(BUCKETS - 1, Math.floor((WINDOW_DAYS - ageDays) / bucketDays));
+      if (ageDays > WINDOW_DAYS || ageDays < -futureDays) continue;
+      const offset = WINDOW_DAYS - ageDays; // 0..totalDays
+      const bucket = Math.min(totalBuckets - 1, Math.max(0, Math.floor(offset / bucketDays)));
       arr[bucket]++;
     }
     return arr;
-  }, [dates, today]);
+  }, [dates, today, totalBuckets, futureDays]);
 
   const maxCount = Math.max(1, ...counts);
   const sliderFrom = WINDOW_DAYS - toDay;
@@ -278,11 +298,21 @@ function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
 
         <SliderPrimitive.Root
           className="relative z-10 flex w-full touch-none select-none items-center mt-3"
-          min={0} max={WINDOW_DAYS} step={1} minStepsBetweenThumbs={7}
+          min={0} max={totalDays} step={1} minStepsBetweenThumbs={7}
           value={[sliderFrom, sliderTo]}
           onValueChange={(vals) => {
-            const [a, b] = vals;
-            onChange(WINDOW_DAYS - b, WINDOW_DAYS - a);
+            let [a, b] = vals;
+            let newFromDay = WINDOW_DAYS - b;
+            let newToDay = WINDOW_DAYS - a;
+            if (weekMode) {
+              const fromDate = new Date(today.getTime() - newToDay * DAY_MS);
+              const toDate = new Date(today.getTime() - newFromDay * DAY_MS);
+              const snappedFrom = snapToMondayBack(fromDate);
+              const snappedTo = snapToSundayFwd(toDate);
+              newFromDay = Math.floor((today.getTime() - snappedTo.getTime()) / DAY_MS);
+              newToDay = Math.floor((today.getTime() - snappedFrom.getTime()) / DAY_MS);
+            }
+            onChange(newFromDay, newToDay);
           }}
         >
           <SliderPrimitive.Track className="relative h-[2px] w-full grow overflow-hidden rounded-full bg-muted">
@@ -293,34 +323,49 @@ function HistogramRangeSlider({ dates, fromDay, toDay, onChange }: {
         </SliderPrimitive.Root>
 
         <div className="absolute left-0 right-0 bottom-0 flex justify-between text-[10px] text-muted-foreground pointer-events-none">
-          <span>1 yr ago</span><span>9 mo</span><span>6 mo</span><span>3 mo</span><span>Today</span>
+          <span>1 yr ago</span><span>9 mo</span><span>6 mo</span><span>3 mo</span>
+          <span>Today</span>{futureDays > 0 && <span>End of month</span>}
         </div>
       </div>
     </div>
   );
 }
 
-export function DatePill({ label, value, onChange, dates = [] }:
-  { label: string; value: RelativeDateValue; onChange: (v: RelativeDateValue) => void; dates?: (string | Date)[] }) {
+export function DatePill({ label, value, onChange, dates = [], weekMode = false }:
+  { label: string; value: RelativeDateValue; onChange: (v: RelativeDateValue) => void; dates?: (string | Date)[]; weekMode?: boolean }) {
   const [open, setOpen] = useState(false);
   const isActive = value.type !== 'all';
 
+  const today = startOfDay(new Date());
+  const futureDays = weekMode
+    ? Math.max(0, Math.floor((endOfMonthSunday(today).getTime() - today.getTime()) / DAY_MS))
+    : 0;
+  const minFromDay = -futureDays;
+
   const computeInitial = (): { fromDay: number; toDay: number } => {
-    const today = startOfDay(new Date());
     if (value.type === 'custom') {
       return {
-        fromDay: Math.max(0, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - fromISO(value.to).getTime()) / DAY_MS))),
-        toDay: Math.max(0, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - fromISO(value.from).getTime()) / DAY_MS))),
+        fromDay: Math.max(minFromDay, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - fromISO(value.to).getTime()) / DAY_MS))),
+        toDay: Math.max(minFromDay, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - fromISO(value.from).getTime()) / DAY_MS))),
       };
     }
     if (value.type !== 'all') {
       const r = dateRangeFor(value);
       if (r.from && r.to) {
         return {
-          fromDay: Math.max(0, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - r.to.getTime()) / DAY_MS))),
-          toDay: Math.max(0, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - r.from.getTime()) / DAY_MS))),
+          fromDay: Math.max(minFromDay, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - r.to.getTime()) / DAY_MS))),
+          toDay: Math.max(minFromDay, Math.min(WINDOW_DAYS, Math.floor((today.getTime() - r.from.getTime()) / DAY_MS))),
         };
       }
+    }
+    if (weekMode) {
+      // Default: this week (Mon..Sun)
+      const mon = snapToMondayBack(today);
+      const sun = snapToSundayFwd(today);
+      return {
+        fromDay: Math.floor((today.getTime() - sun.getTime()) / DAY_MS),
+        toDay: Math.floor((today.getTime() - mon.getTime()) / DAY_MS),
+      };
     }
     return { fromDay: 0, toDay: 90 };
   };
@@ -339,12 +384,17 @@ export function DatePill({ label, value, onChange, dates = [] }:
   ];
 
   const applyRange = () => {
-    const today = startOfDay(new Date());
     const from = new Date(today.getTime() - range.toDay * DAY_MS);
     const to = new Date(today.getTime() - range.fromDay * DAY_MS);
     onChange({ type: 'custom', from: toISO(from), to: toISO(to) });
     setOpen(false);
   };
+
+  const presetsToShow = weekMode
+    ? [{ type: 'this_week' }, { type: 'last_week' }, { type: 'this_month' }, { type: 'last_month' },
+       { type: 'last_n_weeks', n: 4 }, { type: 'last_n_weeks', n: 8 },
+       { type: 'last_n_months', n: 3 }, { type: 'last_n_months', n: 6 }] as RelativeDateValue[]
+    : presets;
 
   return (
     <Popover open={open} onOpenChange={handleOpen}>
@@ -378,7 +428,7 @@ export function DatePill({ label, value, onChange, dates = [] }:
           >
             All time
           </button>
-          {presets.map((p, i) => (
+          {presetsToShow.map((p, i) => (
             <button
               key={i}
               onClick={() => { onChange(p); setOpen(false); }}
@@ -395,6 +445,8 @@ export function DatePill({ label, value, onChange, dates = [] }:
             dates={dates}
             fromDay={range.fromDay}
             toDay={range.toDay}
+            futureDays={futureDays}
+            weekMode={weekMode}
             onChange={(fromDay, toDay) => setRange({ fromDay, toDay })}
           />
           <div className="flex justify-end mt-2">

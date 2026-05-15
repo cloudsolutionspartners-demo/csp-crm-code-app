@@ -187,6 +187,36 @@ export async function getRecord(entityName: string, id: string, select?: string)
   return null;
 }
 
+// Convert a Dataverse entity SET name (e.g. "csp_opportunities") to its
+// logical/singular name used in the row's primary-key field (e.g. "csp_opportunity").
+// Handles the English plural rule `ies → y` that bit us in production: previously
+// "csp_opportunities".slice(0, -1) yielded "csp_opportunitie" → "csp_opportunitieid"
+// which doesn't exist on the row, so the new GUID was silently dropped from the
+// response → empty string returned to caller → orphaned child records.
+function entityLogicalName(setName: string): string {
+  if (/ies$/i.test(setName)) return setName.slice(0, -3) + 'y';
+  if (/sses$|ses$/i.test(setName)) return setName.slice(0, -2);
+  if (/s$/i.test(setName)) return setName.slice(0, -1);
+  return setName;
+}
+
+function extractCreatedId(data: any, entityName: string): string {
+  if (!data) return '';
+  if (typeof data === 'string') return data;
+  const guessed = entityLogicalName(entityName) + 'id';
+  // Primary strategies in order of likelihood
+  const direct = data.id || data.itemId || data[guessed];
+  if (direct) return String(direct);
+  // Defensive scan: pick any GUID-looking property whose key ends in 'id'
+  for (const k of Object.keys(data)) {
+    if (/id$/i.test(k) && typeof data[k] === 'string'
+        && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data[k])) {
+      return data[k];
+    }
+  }
+  return '';
+}
+
 export async function createRecord(entityName: string, data: Record<string, unknown>): Promise<string> {
   console.log(`[Dataverse] CreateRecord("${entityName}")`, JSON.stringify(data).substring(0, 500));
   // Try WithOrg
@@ -197,13 +227,11 @@ export async function createRecord(entityName: string, data: Record<string, unkn
     console.log(`[Dataverse] CreateRecord("${entityName}") result:`, result?.success, result?.error?.message || 'no error');
     if (result?.success !== false && !result?.error) {
       console.log(`[Dataverse] CreateRecord("${entityName}") success, full data:`, JSON.stringify(result?.data).substring(0, 500));
-      // Try multiple possible ID locations
-      const id = result?.data?.id
-        || result?.data?.itemId
-        || result?.data?.[entityName.slice(0, -1) + 'id']  // e.g. csp_invoiceid from csp_invoices
-        || (typeof result?.data === 'string' ? result.data : '')
-        || '';
+      const id = extractCreatedId(result?.data, entityName);
       console.log(`[Dataverse] CreateRecord("${entityName}") resolved id:`, id);
+      if (!id) {
+        console.error(`[Dataverse] CreateRecord("${entityName}") COULD NOT EXTRACT ID. Response keys:`, Object.keys(result?.data || {}));
+      }
       return id;
     }
     if (!isTokenError(result)) throw new Error(result?.error?.message || 'Create failed');
@@ -217,11 +245,10 @@ export async function createRecord(entityName: string, data: Record<string, unkn
     'return=representation', 'application/json', entityName, data,
   ) as any;
   if (result?.success === false) throw new Error(result?.error?.message || 'Create failed');
-  const id = result?.data?.id
-    || result?.data?.itemId
-    || result?.data?.[entityName.slice(0, -1) + 'id']
-    || (typeof result?.data === 'string' ? result.data : '')
-    || '';
+  const id = extractCreatedId(result?.data, entityName);
+  if (!id) {
+    console.error(`[Dataverse] CreateRecord fallback("${entityName}") COULD NOT EXTRACT ID. Response keys:`, Object.keys(result?.data || {}));
+  }
   return id;
 }
 

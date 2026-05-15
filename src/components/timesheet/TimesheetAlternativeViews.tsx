@@ -2,12 +2,15 @@ import { useMemo, useState } from 'react';
 import { ChevronRight, ChevronDown } from '../Icons';
 import { StatusBadge } from '../Shared';
 
+type FilterRange = { from: string | null; to: string | null } | null | undefined;
+
 type Props = {
   timesheets: any[];
   onOpen: (ts: any) => void;
   contracts?: any[];
   accounts?: any[];
   contacts?: any[];
+  filterRange?: FilterRange;
 };
 
 type ByConsultantProps = Props & {
@@ -18,6 +21,46 @@ type ByConsultantProps = Props & {
 const fmtDate = (s: string) => s ? new Date(s).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const fmtMonth = (m: string) => new Date(m + '-01').toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
 const fmtMonthLong = (m: string) => new Date(m + '-01').toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+// For split weeks (Mon-Sun spanning two months), only count days that fall within targetMonth ('YYYY-MM').
+function hoursForMonth(ts: any, targetMonth: string): number {
+  if (!ts.entries || ts.entries.length === 0) return ts.totalHours || 0;
+  return ts.entries
+    .filter((e: any) => e.date && String(e.date).startsWith(targetMonth))
+    .reduce((sum: number, e: any) => sum + (e.hours || 0), 0);
+}
+
+// Hours for a timesheet within an arbitrary [from, to] (YYYY-MM-DD) range.
+// When both bounds are null/undefined, returns the full week total — keeps "All time" behavior.
+export function hoursInRange(ts: any, from: string | null | undefined, to: string | null | undefined): number {
+  if (!from && !to) return ts.totalHours || 0;
+  if (!ts.entries || ts.entries.length === 0) return ts.totalHours || 0;
+  return ts.entries
+    .filter((e: any) => {
+      if (!e.date) return false;
+      if (from && e.date < from) return false;
+      if (to && e.date > to) return false;
+      return true;
+    })
+    .reduce((sum: number, e: any) => sum + (e.hours || 0), 0);
+}
+
+// Hours within a specific month bucket AND within an optional [from, to] range.
+// When range is not set, falls back to hoursForMonth (full month split).
+function hoursForMonthInRange(ts: any, monthKey: string, from: string | null | undefined, to: string | null | undefined): number {
+  if (!ts.entries || ts.entries.length === 0) {
+    return (!from && !to) ? (ts.totalHours || 0) : 0;
+  }
+  return ts.entries
+    .filter((e: any) => {
+      if (!e.date) return false;
+      if (!String(e.date).startsWith(monthKey)) return false;
+      if (from && e.date < from) return false;
+      if (to && e.date > to) return false;
+      return true;
+    })
+    .reduce((sum: number, e: any) => sum + (e.hours || 0), 0);
+}
 
 const cardStyle: React.CSSProperties = {
   border: '1px solid hsl(var(--border))',
@@ -52,7 +95,9 @@ const subRowStyle: React.CSSProperties = {
 // ============================================================
 // 1. GROUPED BY ACCOUNT (Parent → Child → Consultant)
 // ============================================================
-export function GroupedByAccountView({ timesheets, onOpen, contracts = [], accounts = [], contacts = [] }: Props) {
+export function GroupedByAccountView({ timesheets, onOpen, contracts = [], accounts = [], contacts = [], filterRange }: Props) {
+  const from = filterRange?.from ?? null;
+  const to = filterRange?.to ?? null;
   const hierarchy = useMemo(() => {
     type TSItem = (typeof timesheets)[number];
     const parentMap = new Map<string, Map<string, Map<string, TSItem[]>>>();
@@ -80,7 +125,7 @@ export function GroupedByAccountView({ timesheets, onOpen, contracts = [], accou
         const consultants = Array.from(consultantMap.entries()).map(([conId, tsList]) => {
           const con = contacts.find(c => c.id === conId);
           const conName = con ? `${con.firstName} ${con.lastName}` : 'Unknown';
-          const totalHours = tsList.reduce((s, t) => s + (t.totalHours || 0), 0);
+          const totalHours = tsList.reduce((s, t) => s + hoursInRange(t, from, to), 0);
           return { conId, conName, timesheets: tsList, totalHours };
         }).sort((a, b) => a.conName.localeCompare(b.conName));
         const totalHours = consultants.reduce((s, c) => s + c.totalHours, 0);
@@ -91,7 +136,7 @@ export function GroupedByAccountView({ timesheets, onOpen, contracts = [], accou
       const allTs = children.flatMap(c => c.consultants.flatMap(co => co.timesheets));
       return { parentId, parentName, children, totalHours, count: allTs.length, approved: allTs.filter(t => t.status === 'Approved').length };
     }).sort((a, b) => a.parentName.localeCompare(b.parentName));
-  }, [timesheets, contracts, accounts, contacts]);
+  }, [timesheets, contracts, accounts, contacts, from, to]);
 
   const [openParents, setOpenParents] = useState<Set<string>>(new Set(hierarchy.slice(0, 3).map(h => h.parentId)));
   const [openChildren, setOpenChildren] = useState<Set<string>>(new Set());
@@ -156,7 +201,7 @@ export function GroupedByAccountView({ timesheets, onOpen, contracts = [], accou
                               <span className="csp-td-mono" style={{ width: 100, flexShrink: 0, fontSize: '0.75rem' }}>{ts.reference}</span>
                               <span className="csp-text-muted" style={{ flex: 1, minWidth: 0, fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ctr?.contractNumber || '—'}</span>
                               <span style={{ width: 130, flexShrink: 0, fontSize: '0.75rem' }}>Week {fmtDate(ts.weekStart)}</span>
-                              <span style={{ width: 60, flexShrink: 0, textAlign: 'right', fontWeight: 500 }}>{ts.totalHours}h</span>
+                              <span style={{ width: 60, flexShrink: 0, textAlign: 'right', fontWeight: 500 }}>{hoursInRange(ts, from, to)}h</span>
                               <span style={{ width: 90, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}><StatusBadge status={ts.status} /></span>
                             </div>
                           );
@@ -181,18 +226,43 @@ export function MonthlyTimelineView({ timesheets, onOpen }: Props) {
   const { months, statuses, matrix, monthTotals } = useMemo(() => {
     const sts = ['Draft', 'Submitted', 'Approved', 'Rejected'] as const;
     const monthsSet = new Set<string>();
-    timesheets.forEach(t => { if (t.weekStart) monthsSet.add(t.weekStart.slice(0, 7)); });
+    timesheets.forEach(t => {
+      if (t.weekStart) {
+        monthsSet.add(t.weekStart.slice(0, 7));
+        const endDate = new Date(t.weekStart);
+        endDate.setDate(endDate.getDate() + 6);
+        monthsSet.add(`${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}`);
+      }
+    });
     const months = Array.from(monthsSet).sort();
     const matrix: Record<string, Record<string, any[]>> = {};
     const monthTotals: Record<string, number> = {};
     months.forEach(m => { matrix[m] = {}; sts.forEach(s => matrix[m][s] = []); monthTotals[m] = 0; });
     timesheets.forEach(t => {
-      const m = (t.weekStart || '').slice(0, 7);
-      if (!matrix[m]) return;
-      const bucket = matrix[m][t.status] || (matrix[m][t.status] = []);
-      bucket.push(t);
-      monthTotals[m] = (monthTotals[m] || 0) + (t.totalHours || 0);
+      const startMonth = (t.weekStart || '').slice(0, 7);
+      const weekEndDate = new Date(t.weekStart);
+      weekEndDate.setDate(weekEndDate.getDate() + 6);
+      const endMonth = `${weekEndDate.getFullYear()}-${String(weekEndDate.getMonth() + 1).padStart(2, '0')}`;
+
+      if (matrix[startMonth]) {
+        const bucket = matrix[startMonth][t.status] || (matrix[startMonth][t.status] = []);
+        bucket.push(t);
+        monthTotals[startMonth] = (monthTotals[startMonth] || 0) + hoursForMonth(t, startMonth);
+      }
+
+      if (endMonth !== startMonth) {
+        if (!matrix[endMonth]) {
+          matrix[endMonth] = {};
+          sts.forEach(s => matrix[endMonth][s] = []);
+          monthTotals[endMonth] = 0;
+          months.push(endMonth);
+        }
+        const bucket2 = matrix[endMonth][t.status] || (matrix[endMonth][t.status] = []);
+        bucket2.push(t);
+        monthTotals[endMonth] = (monthTotals[endMonth] || 0) + hoursForMonth(t, endMonth);
+      }
     });
+    months.sort();
     return { months, statuses: sts, matrix, monthTotals };
   }, [timesheets]);
 
@@ -224,7 +294,7 @@ export function MonthlyTimelineView({ timesheets, onOpen }: Props) {
               <td style={{ fontWeight: 500 }}>{fmtMonth(m)}</td>
               {statuses.map(s => {
                 const cell = matrix[m][s] || [];
-                const hours = cell.reduce((sum, t) => sum + (t.totalHours || 0), 0);
+                const hours = cell.reduce((sum, t) => sum + hoursForMonth(t, m), 0);
                 return (
                   <td key={s} style={{ textAlign: 'center', padding: '0.25rem' }}>
                     {cell.length > 0 ? (
@@ -254,9 +324,11 @@ export function MonthlyTimelineView({ timesheets, onOpen }: Props) {
 // ============================================================
 // 3. BY CONSULTANT (Consultant -> Account -> Month/Year)
 // ============================================================
-export function ByConsultantView({ timesheets, onOpen, contracts = [], accounts = [], contacts = [], selectedContractIds, onSelectionChange }: ByConsultantProps) {
+export function ByConsultantView({ timesheets, onOpen, contracts = [], accounts = [], contacts = [], filterRange, selectedContractIds, onSelectionChange }: ByConsultantProps) {
   const selection = selectedContractIds ?? new Set<string>();
   const setSelection = onSelectionChange ?? (() => {});
+  const from = filterRange?.from ?? null;
+  const to = filterRange?.to ?? null;
 
   const toggleContracts = (ids: string[], checked: boolean) => {
     const n = new Set(selection);
@@ -290,16 +362,25 @@ export function ByConsultantView({ timesheets, onOpen, contracts = [], accounts 
       const accountList = Array.from(am.entries()).map(([aid, aitems]) => {
         const mm = new Map<string, any[]>();
         aitems.forEach(t => {
-          const k = (t.weekStart || '').slice(0, 7);
-          if (!mm.has(k)) mm.set(k, []);
-          mm.get(k)!.push(t);
+          const startMonth = (t.weekStart || '').slice(0, 7);
+          if (!mm.has(startMonth)) mm.set(startMonth, []);
+          mm.get(startMonth)!.push(t);
+          if (t.weekStart) {
+            const weekEndDate = new Date(t.weekStart);
+            weekEndDate.setDate(weekEndDate.getDate() + 6);
+            const endMonth = `${weekEndDate.getFullYear()}-${String(weekEndDate.getMonth() + 1).padStart(2, '0')}`;
+            if (endMonth !== startMonth) {
+              if (!mm.has(endMonth)) mm.set(endMonth, []);
+              mm.get(endMonth)!.push(t);
+            }
+          }
         });
         const months = Array.from(mm.entries())
           .sort((a, b) => b[0].localeCompare(a[0]))
           .map(([mk, mitems]) => ({
             monthKey: mk,
             items: mitems.sort((a, b) => (a.weekStart || '').localeCompare(b.weekStart || '')),
-            totalHours: mitems.reduce((s, t) => s + (t.totalHours || 0), 0),
+            totalHours: mitems.reduce((s, t) => s + hoursForMonthInRange(t, mk, from, to), 0),
           }));
         const acc = accounts.find(a => a.id === aid);
         const fallbackContract = aitems[0] && contracts.find(c => c.id === aitems[0].contractId);
@@ -311,7 +392,7 @@ export function ByConsultantView({ timesheets, onOpen, contracts = [], accounts 
             : (acc?.name || fallbackContract?.parentAccountName || 'Unknown'),
           months,
           contractIds,
-          totalHours: aitems.reduce((s, t) => s + (t.totalHours || 0), 0),
+          totalHours: aitems.reduce((s, t) => s + hoursInRange(t, from, to), 0),
           count: aitems.length,
         };
       }).sort((a, b) => a.accountName.localeCompare(b.accountName));
@@ -323,11 +404,11 @@ export function ByConsultantView({ timesheets, onOpen, contracts = [], accounts 
         name,
         accounts: accountList,
         allContractIds,
-        totalHours: items.reduce((s, t) => s + (t.totalHours || 0), 0),
+        totalHours: items.reduce((s, t) => s + hoursInRange(t, from, to), 0),
         count: items.length,
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [timesheets, contracts, accounts, contacts]);
+  }, [timesheets, contracts, accounts, contacts, from, to]);
 
   const [openConsultants, setOpenConsultants] = useState<Set<string>>(new Set(consultantGroups.slice(0, 2).map(c => c.id)));
   const [openAccounts, setOpenAccounts] = useState<Set<string>>(new Set());
@@ -409,7 +490,7 @@ export function ByConsultantView({ timesheets, onOpen, contracts = [], accounts 
                                     <span className="csp-td-mono" style={{ width: 100, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.reference}</span>
                                     <span className="csp-text-muted" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ctr?.contractNumber || '—'}</span>
                                     <span style={{ width: 140, flexShrink: 0 }}>Week {fmtDate(t.weekStart)}</span>
-                                    <span style={{ width: 60, flexShrink: 0, textAlign: 'right', fontWeight: 500 }}>{t.totalHours}h</span>
+                                    <span style={{ width: 60, flexShrink: 0, textAlign: 'right', fontWeight: 500 }}>{hoursForMonthInRange(t, mo.monthKey, from, to)}h</span>
                                     <span style={{ width: 90, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}><StatusBadge status={t.status} /></span>
                                   </div>
                                 );

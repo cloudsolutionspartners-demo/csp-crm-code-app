@@ -14,6 +14,8 @@ import { Plus, Upload, FileText, Download, X } from '../components/Icons';
 import { dividends as mockDividends } from '../data/mock-data';
 import { useDataverse } from '../services/useDataverse';
 import { fetchDividends, saveDividend, removeDividend, uploadDividendFile, downloadDividendFile } from '../services/dividendService';
+import { Csp_dividendsService } from '../generated/services/Csp_dividendsService';
+import { getOrgUrl } from '../services/dataverseService';
 import { fetchBusinessUnits } from '../services/businessUnitService';
 import type { BusinessUnit } from '../services/businessUnitService';
 import { formatCurrency, formatDate } from '../lib/utils';
@@ -120,7 +122,8 @@ export default function DividendsPage() {
       const recordId = await saveDividend(formData, isNew ? undefined : selectedDividend?.id);
       if (pendingFile && recordId) {
         try {
-          await uploadDividendFile(recordId, pendingFile);
+          await Csp_dividendsService.upload(recordId, 'csp_document', pendingFile, pendingFile.name);
+          console.log('[Dividend] File uploaded for', recordId);
         } catch (err: any) {
           console.error('Upload failed:', err);
           toast.error(err?.message || 'File upload failed');
@@ -317,9 +320,22 @@ export default function DividendsPage() {
                   <FileText className="csp-icon-sm csp-text-muted" />
                   <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formData.fileName}</span>
                   {!isNew && !pendingFile && selectedDividend?.id && (
-                    <button className="csp-btn csp-btn-ghost csp-btn-icon-sm" onClick={handleDownload} title="Download">
-                      <Download className="csp-icon-sm" />
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="csp-btn csp-btn-outline csp-btn-sm"
+                        style={{ fontSize: 11, padding: '2px 8px' }}
+                        onClick={() => {
+                          const orgUrl = getOrgUrl();
+                          const url = `${orgUrl}/api/data/v9.2/csp_dividends(${selectedDividend.id})/csp_document/$value`;
+                          window.open(url, '_blank');
+                        }}
+                        title="View file"
+                      >View File</button>
+                      <button className="csp-btn csp-btn-ghost csp-btn-icon-sm" onClick={handleDownload} title="Download">
+                        <Download className="csp-icon-sm" />
+                      </button>
+                    </>
                   )}
                   <button onClick={clearFile} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} title="Remove">
                     <X className="csp-icon-sm" />

@@ -27,7 +27,7 @@ import { cn, formatCurrency, formatDate, formatPercent } from '../lib/utils';
 import type { Contract, ContractStatus, ContractType, BillingType, CurrencyCode, MilestoneStatus } from '../types/crm';
 
 // ===== Constants =====
-const CONTRACT_STATUSES: ContractStatus[] = ['Draft', 'Active', 'On Hold', 'Completed', 'Terminated'];
+const CONTRACT_STATUSES: ContractStatus[] = ['Draft', 'Active', 'Inactive' as ContractStatus, 'On Hold', 'Completed', 'Terminated'];
 const CONTRACT_TYPES: ContractType[] = ['Standard Contracting', 'Permanent Employee', 'Fixed Price'];
 const BILLING_TYPES: BillingType[] = ['Time & Material', 'Fixed Price', 'Monthly Salary', 'Standard Contracting'];
 const CURRENCY_OPTIONS: { value: string; label: string }[] = [
@@ -426,6 +426,28 @@ export default function ContractsPage() {
         showDeactivate={true}
         showDelete={true}
         showDownload={true}
+        onActivate={async () => {
+          const ids = Array.from(selectedIds);
+          try {
+            for (const id of ids) {
+              await saveContractToDataverse({ status: 'Active' } as any, id);
+            }
+            toast.success(`${ids.length} contract(s) activated`);
+            setSelectedIds(new Set());
+            await refetch();
+          } catch (err: any) { toast.error('Activate failed'); }
+        }}
+        onDeactivate={async () => {
+          const ids = Array.from(selectedIds);
+          try {
+            for (const id of ids) {
+              await saveContractToDataverse({ status: 'Inactive' } as any, id);
+            }
+            toast.success(`${ids.length} contract(s) deactivated`);
+            setSelectedIds(new Set());
+            await refetch();
+          } catch (err: any) { toast.error('Deactivate failed'); }
+        }}
         onDelete={async () => {
           const ids = Array.from(selectedIds);
           const ok = await confirm({ title: 'Delete contract(s)', description: `Are you sure you want to delete ${ids.length} selected contract(s)? This action cannot be undone.` });
@@ -437,6 +459,57 @@ export default function ContractsPage() {
             setSelectedIds(new Set());
             await refetch();
           } catch (err: any) { toast.error('Delete failed'); }
+        }}
+        onDownload={() => {
+          const selected = filtered.filter(c => selectedIds.has(c.id));
+          if (selected.length === 0) return;
+          const rows = selected.map(c => {
+            const parentAcc = dvAccounts.find(a => a.id === c.parentAccountId);
+            const childAcc = c.childAccountId ? dvAccounts.find(a => a.id === c.childAccountId) : null;
+            const consultant = dvContacts.find(ct => ct.id === c.contactId);
+            return {
+              'Contract Number': c.contractNumber || c.name || '',
+              'Contract Type': c.contractType,
+              'Billing Type': c.billingType,
+              'Parent Account': parentAcc?.name ?? '',
+              'Child Account': childAcc?.name ?? '',
+              'Consultant': consultant ? `${consultant.firstName} ${consultant.lastName}` : '',
+              'Sell Day Rate': c.sellRate ?? '',
+              'Sell Hourly Rate': c.sellHourlyRate ?? '',
+              'Buy Day Rate': c.buyRate ?? '',
+              'Buy Hourly Rate': c.buyHourlyRate ?? '',
+              'Sell Currency': c.sellCurrency ?? '',
+              'Buy Currency': c.buyCurrency ?? '',
+              'Margin': c.margin ?? '',
+              'Margin %': c.marginPercent ?? '',
+              'Monthly Salary': c.monthlySalary ?? '',
+              'Start Date': c.startDate ?? '',
+              'End Date': c.endDate ?? '',
+              'Has Timesheet': c.hasTimesheet ? 'Yes' : 'No',
+              'Has Milestones': c.hasMilestones ? 'Yes' : 'No',
+              'Status': c.status,
+            } as Record<string, any>;
+          }).sort((a, b) => String(a['Contract Number']).localeCompare(String(b['Contract Number'])));
+          const headers = Object.keys(rows[0]);
+          const csvContent = [
+            headers.join(','),
+            ...rows.map(row => headers.map(h => {
+              const val = String(row[h] ?? '');
+              return val.includes(',') || val.includes('"') || val.includes('\n')
+                ? `"${val.replace(/"/g, '""')}"`
+                : val;
+            }).join(',')),
+          ].join('\n');
+          const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `contracts-${new Date().toISOString().slice(0, 10)}.csv`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          toast.success(`${rows.length} contract(s) exported`);
         }}
       />
 

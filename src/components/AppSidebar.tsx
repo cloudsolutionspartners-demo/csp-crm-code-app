@@ -5,13 +5,14 @@ import {
   LayoutDashboard, Building2, Users, FileText, Receipt, Wallet,
   Clock, CalendarDays, BadgeDollarSign, Landmark, BarChart3, Settings,
   ChevronLeft, ChevronRight, ChevronDown, FileStack, UserPlus, CalendarClock,
-  Milestone, Target, MessagesSquare, KanbanSquare,
+  Milestone, Target, MessagesSquare, KanbanSquare, Briefcase,
 } from './Icons';
 
 export type PageId =
   | 'dashboard' | 'accounts' | 'contacts' | 'contracts' | 'documents'
   | 'candidates' | 'interviewers' | 'availability'
   | 'prospects' | 'prospect-interactions' | 'prospect-pipeline'
+  | 'opportunities'
   | 'timesheets' | 'leave'
   | 'invoices' | 'expenses' | 'milestones' | 'dividends' | 'bank-reconciliation'
   | 'payment-details' | 'jd-skills' | 'jd-platforms'
@@ -43,6 +44,7 @@ const groups = [
     label: 'Prospecting',
     items: [
       { title: 'Prospects', id: 'prospects' as PageId, icon: Target },
+      { title: 'Opportunities', id: 'opportunities' as PageId, icon: Briefcase },
       // Pipeline and Interactions are background features, not shown in Code App
       // { title: 'Interactions', id: 'prospect-interactions' as PageId, icon: MessagesSquare },
       // { title: 'Pipeline', id: 'prospect-pipeline' as PageId, icon: KanbanSquare },

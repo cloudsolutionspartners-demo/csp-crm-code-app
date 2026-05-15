@@ -5,14 +5,14 @@ import {
   LayoutDashboard, Building2, Users, FileText, Receipt, Wallet,
   Clock, CalendarDays, BadgeDollarSign, Landmark, BarChart3, Settings,
   ChevronLeft, ChevronRight, FileStack, ChevronDown, UserPlus, CalendarClock,
-  Milestone, CreditCard, Wrench, Monitor, Target, MessagesSquare, KanbanSquare,
+  Milestone, CreditCard, Wrench, Monitor, Target, MessagesSquare, KanbanSquare, Briefcase,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const standaloneTop = [
-  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
+  { title: 'Corporate Actions', url: '/', icon: KanbanSquare },
 ];
 
 const groups = [
@@ -37,6 +37,7 @@ const groups = [
     label: 'Prospecting',
     items: [
       { title: 'Prospects', url: '/prospecting/prospects', icon: Target },
+      { title: 'Opportunities', url: '/prospecting/opportunities', icon: Briefcase },
     ],
   },
   {

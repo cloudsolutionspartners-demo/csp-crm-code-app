@@ -5,7 +5,126 @@ import {
   ReportingSnapshot, PaymentDetail, OnboardingCandidate, AvailabilitySlot,
   ContractMilestone, JDSkill, JDPlatform,
   Prospect, ProspectInteraction, ProspectMaterial,
+  Opportunity, OpportunityMaterial,
+  CorporateAction,
 } from '@/types/crm';
+
+export const corporateActions: CorporateAction[] = [
+  {
+    id: 'ca-001',
+    actionSummarizedTitle: 'Invoice INV-2025-0142 overdue by 18 days',
+    actionDetails: 'AI scan detected that invoice INV-2025-0142 issued to Acme Holdings on 2026-04-12 for €24,500 has been in "Sent" status for 47 days, exceeding the 30-day payment terms by 18 days. No matching credit was found in the latest bank statement reconciliation. Recommended: send a payment reminder and validate banking details on file.',
+    priority: 'High',
+    status: 'New',
+    dueDate: '2026-05-22',
+    createdAt: '2026-05-14T08:12:00Z',
+    modifiedAt: '2026-05-14T08:12:00Z',
+  },
+  {
+    id: 'ca-002',
+    actionSummarizedTitle: 'Contract CT-088 ends in 12 days, no renewal in pipeline',
+    actionDetails: 'Contract CT-088 (Consultant: Petar Ivanov, Client: Northwind Logistics) has an end date of 2026-05-27 and no follow-on opportunity has been raised. Average margin on this contract is 27%. Recommended: contact the account manager and confirm renewal intent.',
+    priority: 'High',
+    status: 'In Progress',
+    dueDate: '2026-05-20',
+    createdAt: '2026-05-12T09:45:00Z',
+    modifiedAt: '2026-05-13T14:02:00Z',
+  },
+  {
+    id: 'ca-003',
+    actionSummarizedTitle: '3 candidates marked Fit but no interview slot booked',
+    actionDetails: 'Candidates Maria Stoyanova, James O\'Connor and Lucia Marin have been marked Fit for over 5 days with no Booked availability slot. Hiring velocity drops by ~40% when slots are not confirmed within 7 days of Fit decision.',
+    priority: 'Medium',
+    status: 'New',
+    dueDate: '2026-05-19',
+    createdAt: '2026-05-13T11:30:00Z',
+    modifiedAt: '2026-05-13T11:30:00Z',
+  },
+  {
+    id: 'ca-004',
+    actionSummarizedTitle: 'Exchange rate for EUR→RON missing for May 2026',
+    actionDetails: 'No ExchangeRate record exists for EUR→RON with effective date in May 2026. Reports and invoice snapshots will fall back to April 2026 rate (4.9772). Recommended: import the BNR official monthly rate.',
+    priority: 'Low',
+    status: 'New',
+    dueDate: '2026-05-31',
+    createdAt: '2026-05-10T07:00:00Z',
+    modifiedAt: '2026-05-10T07:00:00Z',
+  },
+  {
+    id: 'ca-005',
+    actionSummarizedTitle: 'Bank statement BG-Apr-2026 has 4 unmatched credits',
+    actionDetails: 'Smart Match for the BG entity April 2026 statement left 4 credit lines unreconciled (total €18,420). Two are within ±0.01 of open invoices but outside the ±30 day window. Recommended: review manually and confirm matches.',
+    priority: 'Medium',
+    status: 'In Progress',
+    dueDate: '2026-05-18',
+    createdAt: '2026-05-08T15:20:00Z',
+    modifiedAt: '2026-05-13T09:10:00Z',
+  },
+  {
+    id: 'ca-006',
+    actionSummarizedTitle: 'Public holidays for 2026 not loaded for Bulgaria',
+    actionDetails: 'Settings → Public Holidays contains 0 records with country=Bulgaria and year=2026. Working day calculations on Reports and Leave will be inaccurate.',
+    priority: 'Medium',
+    status: 'Closed',
+    closingComments: 'Imported the official 2026 BG holiday calendar (12 entries) on 2026-05-09. Verified Reports working-day counts for May refreshed correctly.',
+    dueDate: '2026-05-15',
+    createdAt: '2026-05-05T10:00:00Z',
+    modifiedAt: '2026-05-09T16:40:00Z',
+  },
+  {
+    id: 'ca-007',
+    actionSummarizedTitle: 'Duplicate Account suspected: "Globex" vs "Globex Corp"',
+    actionDetails: 'Two Account records share the same VAT number (DE811234567) with slightly different names: Globex (acc-117) and Globex Corp (acc-204). Likely duplicates, with 3 contracts and 14 invoices spread across both.',
+    priority: 'High',
+    status: 'In Progress',
+    dueDate: '2026-05-25',
+    createdAt: '2026-05-11T13:15:00Z',
+    modifiedAt: '2026-05-14T08:55:00Z',
+  },
+  {
+    id: 'ca-008',
+    actionSummarizedTitle: 'Timesheet TS-0421 submitted with 0 entries',
+    actionDetails: 'Consultant Andrei Popescu submitted timesheet TS-0421 for week 19/2026 with 0 logged entries. Either an erroneous submission or full leave week — flagged for verification.',
+    priority: 'Low',
+    status: 'Cancelled',
+    closingComments: 'Confirmed with consultant — full week of approved annual leave already on record. Timesheet legitimately empty. No action needed.',
+    dueDate: '2026-05-12',
+    createdAt: '2026-05-09T09:00:00Z',
+    modifiedAt: '2026-05-10T11:25:00Z',
+  },
+  {
+    id: 'ca-009',
+    actionSummarizedTitle: 'Opportunity OPP-073 has no profiles sent for 21 days',
+    actionDetails: 'Opportunity OPP-073 (Account: Stark Industries, raised 2026-04-23) is in Discussing stage with 0 candidate profiles sent. Average win rate drops below 5% when no profiles are sent within 14 days.',
+    priority: 'Medium',
+    status: 'New',
+    dueDate: '2026-05-21',
+    createdAt: '2026-05-14T07:30:00Z',
+    modifiedAt: '2026-05-14T07:30:00Z',
+  },
+  {
+    id: 'ca-010',
+    actionSummarizedTitle: 'Dividend DIV-014 missing AGA document',
+    actionDetails: 'Dividend payment DIV-014 (CSP-RO, €45,000, paid 2026-04-18) has no documentFile attached. Required for compliance and audit trail.',
+    priority: 'High',
+    status: 'New',
+    dueDate: '2026-05-17',
+    createdAt: '2026-05-13T16:00:00Z',
+    modifiedAt: '2026-05-13T16:00:00Z',
+  },
+  {
+    id: 'ca-011',
+    actionSummarizedTitle: 'Contract CT-091 buy/sell currencies differ — FX not pinned',
+    actionDetails: 'Contract CT-091 has sellCurrency=GBP and buyCurrency=EUR with no exchange rate snapshot recorded for the active month. Profit forecast may be inaccurate.',
+    priority: 'Low',
+    status: 'Closed',
+    closingComments: 'FX rate pinned manually for May 2026 (GBP→EUR 1.1732). Will revisit when monthly rate is loaded automatically.',
+    dueDate: '2026-05-14',
+    createdAt: '2026-05-07T08:45:00Z',
+    modifiedAt: '2026-05-11T10:30:00Z',
+  },
+];
+
 
 // ===== BUSINESS ENTITIES =====
 export const entities: BusinessEntity[] = [
@@ -72,14 +191,26 @@ export const accounts: Account[] = [
 
 // ===== CONTACTS =====
 export const contacts: Contact[] = [
-  { id: 'con-1', firstName: 'Ion', lastName: 'Popescu', email: 'ion@popescu.ro', phone: '+40721000001', accountId: 'acc-6', contactType: 'Consultant', nationality: 'Romanian', country: 'Romania', skillset: ['React', 'TypeScript', 'Node.js'], jobRole: 'Senior Full-Stack Developer', available: false, isInterviewer: true },
-  { id: 'con-2', firstName: 'Maria', lastName: 'Ivanova', email: 'maria@ivanova.bg', phone: '+359888000002', accountId: 'acc-7', contactType: 'Consultant', nationality: 'Bulgarian', country: 'Bulgaria', skillset: ['Java', 'Spring Boot', 'AWS'], jobRole: 'Backend Developer', available: false },
+  { id: 'con-1', firstName: 'Ion', lastName: 'Popescu', email: 'ion@popescu.ro', phone: '+40721000001', accountId: 'acc-6', contactType: 'Consultant', nationality: 'Romanian', country: 'Romania', skillset: ['React', 'TypeScript', 'Node.js'], jobRole: 'Senior Full-Stack Developer', available: false, isInterviewer: true, cvs: [
+    { id: 'cv-con1-1', fileName: 'Ion-Popescu-CV.pdf', label: 'Full-stack focus', uploadedAt: '2025-09-12', isPrimary: true },
+    { id: 'cv-con1-2', fileName: 'Ion-Popescu-Backend.pdf', label: 'Backend focus', uploadedAt: '2025-10-01' },
+  ] },
+  { id: 'con-2', firstName: 'Maria', lastName: 'Ivanova', email: 'maria@ivanova.bg', phone: '+359888000002', accountId: 'acc-7', contactType: 'Consultant', nationality: 'Bulgarian', country: 'Bulgaria', skillset: ['Java', 'Spring Boot', 'AWS'], jobRole: 'Backend Developer', available: false, cvs: [
+    { id: 'cv-con2-1', fileName: 'Maria-Ivanova-CV.pdf', label: 'Default', uploadedAt: '2025-08-21', isPrimary: true },
+  ] },
   { id: 'con-3', firstName: 'John', lastName: 'Smith', email: 'john@smithdev.com', phone: '+12125550003', accountId: 'acc-8', contactType: 'Consultant', nationality: 'American', country: 'US', skillset: ['Python', 'ML', 'Data Engineering'], jobRole: 'Data Engineer', available: false },
-  { id: 'con-4', firstName: 'Elena', lastName: 'Dragomir', email: 'elena.d@email.com', phone: '+40721000004', contactType: 'Consultant', nationality: 'Romanian', country: 'Romania', skillset: ['Azure', 'DevOps', 'Terraform'], jobRole: 'Cloud Architect', available: true, isInterviewer: true },
+  { id: 'con-4', firstName: 'Elena', lastName: 'Dragomir', email: 'elena.d@email.com', phone: '+40721000004', contactType: 'Consultant', nationality: 'Romanian', country: 'Romania', skillset: ['Azure', 'DevOps', 'Terraform'], jobRole: 'Cloud Architect', available: true, isInterviewer: true, cvs: [
+    { id: 'cv-con4-1', fileName: 'Elena-Dragomir-Cloud-CV.pdf', label: 'Cloud architect', uploadedAt: '2025-07-04', isPrimary: true },
+    { id: 'cv-con4-2', fileName: 'Elena-Dragomir-DevOps-CV.pdf', label: 'DevOps focus', uploadedAt: '2025-09-30' },
+    { id: 'cv-con4-3', fileName: 'Elena-Dragomir-EN.pdf', label: 'EN translated', uploadedAt: '2025-11-15' },
+  ] },
   { id: 'con-5', firstName: 'Georgi', lastName: 'Petrov', email: 'georgi.p@email.com', phone: '+359888000005', contactType: 'Consultant', nationality: 'Bulgarian', country: 'Bulgaria', skillset: ['Angular', 'C#', '.NET'], jobRole: 'Full-Stack Developer', available: true },
   { id: 'con-6', firstName: 'Sarah', lastName: 'Johnson', email: 'sarah.j@techcorp.de', phone: '+49170000006', company: 'TechCorp International', accountId: 'acc-1', contactType: 'Client Contact', country: 'Germany' },
   { id: 'con-7', firstName: 'Michael', lastName: 'Brown', email: 'michael.b@dataflow.com', phone: '+12125550007', company: 'DataFlow Systems', accountId: 'acc-4', contactType: 'Client Contact', country: 'US' },
-  { id: 'con-8', firstName: 'Ana', lastName: 'Georgescu', email: 'ana.g@email.com', phone: '+40721000008', contactType: 'Consultant', nationality: 'Romanian', country: 'Romania', skillset: ['React', 'Vue.js', 'UX Design'], jobRole: 'Frontend Developer', available: false, isInterviewer: true },
+  { id: 'con-8', firstName: 'Ana', lastName: 'Georgescu', email: 'ana.g@email.com', phone: '+40721000008', contactType: 'Consultant', nationality: 'Romanian', country: 'Romania', skillset: ['React', 'Vue.js', 'UX Design'], jobRole: 'Frontend Developer', available: false, isInterviewer: true, cvs: [
+    { id: 'cv-con8-1', fileName: 'Ana-Georgescu-Frontend-CV.pdf', label: 'Frontend', uploadedAt: '2025-06-18', isPrimary: true },
+    { id: 'cv-con8-2', fileName: 'Ana-Georgescu-UX-CV.pdf', label: 'UX-focused', uploadedAt: '2025-10-12' },
+  ] },
   { id: 'con-9', firstName: 'Dimitar', lastName: 'Kolev', email: 'dimitar.k@email.com', phone: '+359888000009', contactType: 'Consultant', nationality: 'Bulgarian', country: 'Bulgaria', skillset: ['Kubernetes', 'Docker', 'Go'], jobRole: 'Platform Engineer', available: true },
   { id: 'con-10', firstName: 'Robert', lastName: 'Davis', email: 'robert.d@globaltech.com', phone: '+12125550010', company: 'GlobalTech Inc', accountId: 'acc-11', contactType: 'Finance Contact', country: 'US' },
   { id: 'con-11', firstName: 'Lars', lastName: 'Andersson', email: 'lars.a@nordicstaffing.se', phone: '+46855501142', company: 'Nordic Staffing AB', accountId: 'acc-2', contactType: 'Client Contact', country: 'Sweden' },
@@ -408,6 +539,51 @@ export const prospectMaterials: ProspectMaterial[] = [
 ];
 
 export function getProspectById(id: string) { return prospects.find(p => p.id === id); }
+
+// ===== OPPORTUNITIES =====
+export const opportunities: Opportunity[] = [
+  {
+    id: 'opp-1', opportunityNumber: 'OPP-0001', source: 'From Prospect', clientLinkType: 'Prospect', prospectId: 'pro-1',
+    candidateIds: ['cand-1'], contactIds: [], role: 'Senior .NET Developer',
+    opportunityRate: 65, opportunityRateUnit: 'Hour', currencyCode: 'EUR',
+    candidateRate: 45, candidateRateUnit: 'Hour',
+    details: 'Helix Bank looking for a senior .NET dev to lead modernization.',
+    startDate: '2026-05-01', closingDate: '2026-06-15', status: 'Interview Booked',
+    outcomeComments: '', createdAt: '2026-04-12',
+  },
+  {
+    id: 'opp-2', opportunityNumber: 'OPP-0002', source: 'From Existing Client', clientLinkType: 'Account', accountId: 'acc-1',
+    candidateIds: ['cand-2'], contactIds: [], role: 'React Engineer',
+    opportunityRate: 600, opportunityRateUnit: 'Day', currencyCode: 'EUR',
+    candidateRate: 480, candidateRateUnit: 'Day',
+    details: 'Frontend reinforcement for Q3 release.',
+    startDate: '2026-05-15', closingDate: '2026-05-30', status: 'New',
+    createdAt: '2026-04-20',
+  },
+  {
+    id: 'opp-3', opportunityNumber: 'OPP-0003', source: 'From New Client', clientLinkType: 'Free Text', freeClientName: 'Innova Health (new lead)',
+    candidateIds: [], contactIds: ['con-1'], role: 'Cloud Architect',
+    opportunityRate: 750, opportunityRateUnit: 'Day', currencyCode: 'EUR',
+    candidateRate: 600, candidateRateUnit: 'Day',
+    details: 'Inbound enquiry — not yet qualified as a Prospect.',
+    closingDate: '2026-06-30', status: 'New',
+    createdAt: '2026-04-25',
+  },
+];
+
+export const opportunityMaterials: OpportunityMaterial[] = [
+  { id: 'om-1', opportunityId: 'opp-1', fileName: 'Helix_Role_Spec.pdf', sharedDate: '2026-04-12', description: 'Role description from client' },
+];
+
+let _opportunitySeq = opportunities.length;
+export function nextOpportunityNumber() {
+  _opportunitySeq += 1;
+  return `OPP-${String(_opportunitySeq).padStart(4, '0')}`;
+}
+export function addOpportunity(o: Opportunity) {
+  opportunities.unshift(o);
+}
+
 
 // Helper lookups
 export function getEntityById(id: string) { return entities.find(e => e.id === id); }

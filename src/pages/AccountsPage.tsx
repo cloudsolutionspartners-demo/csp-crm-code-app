@@ -31,6 +31,12 @@ const accountStatuses: AccountStatus[] = ['Active', 'Inactive'];
 const paymentTermsOptions = ['15 Days', '30 Days', '45 Days', '60 Days'];
 
 import { useConfirm } from '../components/ConfirmDialog';
+import { RaiseOpportunityForm } from '../components/opportunity/RaiseOpportunityForm';
+import { fetchProspects } from '../services/prospectService';
+import { fetchCandidates } from '../services/candidateService';
+import { fetchUnitsOfMeasure } from '../services/unitOfMeasureService';
+import { listRecords as listRec } from '../services/dataverseService';
+import type { Prospect, OnboardingCandidate } from '../types/crm';
 
 export default function AccountsPage() {
   const { toast } = useToast();
@@ -40,6 +46,36 @@ export default function AccountsPage() {
   const { data: dvContracts } = useDataverse<Contract>(fetchContracts, mockContracts);
   const { data: dvInvoices } = useDataverse<Invoice>(fetchInvoices, mockInvoices);
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
+  const [raiseOppOpen, setRaiseOppOpen] = useState(false);
+  const [oppProspects, setOppProspects] = useState<Prospect[]>([]);
+  const [oppCandidates, setOppCandidates] = useState<OnboardingCandidate[]>([]);
+  const [oppUoms, setOppUoms] = useState<{ id: string; name: string }[]>([]);
+  const [oppCurrencies, setOppCurrencies] = useState<{ id: string; code: string }[]>([]);
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const [props, cands, uomRecs, curRecs] = await Promise.all([
+          fetchProspects(),
+          fetchCandidates(),
+          fetchUnitsOfMeasure(),
+          listRec('transactioncurrencies', 'transactioncurrencyid,isocurrencycode,currencyname', undefined, 'isocurrencycode asc'),
+        ]);
+        setOppProspects(props);
+        setOppCandidates(cands.map(c => ({
+          id: c.id, firstName: c.firstName, lastName: c.lastName, email: c.email, phone: c.phone,
+          path: (c.path as any) || 'B2B seeking Contracts',
+          candidateRole: c.candidateRole, cvFileName: c.cvFileName, hourlyRateEur: c.hourlyRateEur,
+          b2bEntityName: c.b2bEntityName, selectedSlots: [], status: c.status as any, appliedDate: c.appliedDate,
+        })));
+        setOppUoms(uomRecs.map(u => ({ id: u.id, name: u.name })));
+        setOppCurrencies(curRecs
+          .map(r => ({ id: String(r.transactioncurrencyid).replace(/[{}]/g, ''), code: (r.isocurrencycode || '').toUpperCase(), name: r.currencyname || '' }))
+          .filter(c => !!c.code));
+      } catch (err) {
+        console.error('[AccountsPage] opp reference data load failed:', err);
+      }
+    })();
+  }, []);
   React.useEffect(() => { fetchBusinessUnits().then(setBusinessUnits).catch(() => {}); }, []);
   const buLookupOptions = useMemo(() => businessUnits.map(bu => ({ value: bu.id, label: bu.name })), [businessUnits]);
   const childBUs = businessUnits;
@@ -62,6 +98,10 @@ export default function AccountsPage() {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [showNewContact, setShowNewContact] = useState(false);
   const [newContactData, setNewContactData] = useState<Record<string, any>>({});
+  const [showQuickCreateParent, setShowQuickCreateParent] = useState(false);
+  const [quickParentName, setQuickParentName] = useState('');
+  const [quickParentType, setQuickParentType] = useState<string>('Direct Customer');
+  const [isCreatingParent, setIsCreatingParent] = useState(false);
   const [assignProgress, setAssignProgress] = useState<{ active: boolean; value: number; label: string }>({ active: false, value: 0, label: '' });
   const [activeTab, setActiveTab] = useState('general');
   const [isSaving, setIsSaving] = useState(false);
@@ -349,6 +389,13 @@ export default function AccountsPage() {
       <PageHeader title="Accounts" subtitle={`${filtered.length} of ${accounts.length} accounts`}
         action={<div className="csp-flex-gap-2">
           <ClearColumnFiltersButton filters={colFilters} setFilters={setColFilters} />
+          <button
+            className="csp-btn csp-btn-outline csp-btn-sm"
+            disabled={selectedIds.length !== 1}
+            onClick={() => setRaiseOppOpen(true)}
+            title={selectedIds.length === 1 ? 'Raise opportunity for the selected account' : 'Select a single account to enable'}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >💼 Raise Opportunity</button>
           <TutorialVideoButton moduleLabel="Accounts" entityLabel="Accounts" />
           <button className="csp-btn csp-btn-primary" onClick={openNewForm}><Plus className="csp-icon-inline" />Add Account</button>
         </div>} />
@@ -540,8 +587,69 @@ export default function AccountsPage() {
                   <TextField label="Name" value={formData.name} onChange={v => updateField('name', v)} required />
                   <SelectField label="Type" value={formData.accountType} onChange={v => updateField('accountType', v)} required options={accountTypes.map(t => ({ value: t, label: t }))} />
                   <LookupField label="Business Unit" value={formData.entityId} onChange={v => updateField('entityId', v)} options={buLookupOptions} />
-                  <LookupField label="Primary Contact" value={formData.primaryContactId} onChange={v => updateField('primaryContactId', v)} options={contactLookupOptions} />
-                  <LookupField label="Parent Account" value={formData.parentAccountId} onChange={v => updateField('parentAccountId', v)} options={accounts.filter(a => !a.parentAccountId && a.id !== selectedAccount?.id).map(a => ({ value: a.id, label: a.name }))} />
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                    <div style={{ flex: 1 }}>
+                      <LookupField label="Primary Contact" value={formData.primaryContactId} onChange={v => updateField('primaryContactId', v)} options={contactLookupOptions} />
+                    </div>
+                    <button
+                      type="button"
+                      className="csp-btn csp-btn-outline"
+                      title="Create new contact"
+                      onClick={openNewContactDialog}
+                      style={{ height: 36, width: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                    >+</button>
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                      <div style={{ flex: 1 }}>
+                        <LookupField label="Parent Account" value={formData.parentAccountId} onChange={v => updateField('parentAccountId', v)} options={accounts.filter(a => !a.parentAccountId && a.id !== selectedAccount?.id).map(a => ({ value: a.id, label: a.name }))} />
+                      </div>
+                      <button
+                        type="button"
+                        className="csp-btn csp-btn-outline"
+                        title="Create new parent account"
+                        onClick={() => setShowQuickCreateParent(true)}
+                        style={{ height: 36, width: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                      >+</button>
+                    </div>
+                    {showQuickCreateParent && (
+                      <div style={{ border: '1px solid hsl(var(--border))', borderRadius: 8, padding: 12, marginTop: 8, backgroundColor: 'hsl(var(--muted) / 0.3)' }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, marginTop: 0, marginBottom: 8 }}>Quick Create Parent Account</p>
+                        <TextField label="Name" value={quickParentName} onChange={v => setQuickParentName(v)} required />
+                        <SelectField label="Type" value={quickParentType} onChange={v => setQuickParentType(v)} options={accountTypes.map(t => ({ value: t, label: t }))} />
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+                          <button
+                            type="button"
+                            className="csp-btn csp-btn-outline csp-btn-sm"
+                            disabled={isCreatingParent}
+                            onClick={() => { setShowQuickCreateParent(false); setQuickParentName(''); }}
+                          >Cancel</button>
+                          <button
+                            type="button"
+                            className="csp-btn csp-btn-primary csp-btn-sm"
+                            disabled={!quickParentName.trim() || isCreatingParent}
+                            onClick={async () => {
+                              if (isCreatingParent) return;
+                              setIsCreatingParent(true);
+                              try {
+                                const newId = await saveAccount({ name: quickParentName.trim(), accountType: quickParentType, status: 'Active' });
+                                await refetch();
+                                if (newId) updateField('parentAccountId', newId);
+                                toast.success(`Account "${quickParentName.trim()}" created`);
+                                setShowQuickCreateParent(false);
+                                setQuickParentName('');
+                              } catch (err: any) {
+                                console.error('Quick create parent failed:', err);
+                                toast.error(err?.message || 'Failed to create account');
+                              } finally {
+                                setIsCreatingParent(false);
+                              }
+                            }}
+                          >{isCreatingParent ? 'Creating...' : 'Create & Select'}</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <TextField label="VAT Number" value={formData.vatNumber} onChange={v => updateField('vatNumber', v)} />
                   <TextField label="Registration Number" value={formData.registrationNumber} onChange={v => updateField('registrationNumber', v)} />
                   <SelectField label="Payment Terms" value={formData.paymentTerms} onChange={v => updateField('paymentTerms', v)} required options={paymentTermsOptions.map(p => ({ value: p, label: p }))} />
@@ -803,6 +911,21 @@ export default function AccountsPage() {
           <button className="csp-btn csp-btn-primary" onClick={saveNewContact} disabled={isSavingContact}>{isSavingContact ? 'Saving...' : 'Create Contact'}</button>
         </div>
       </Dialog>
+
+      <RaiseOpportunityForm
+        open={raiseOppOpen}
+        onClose={() => setRaiseOppOpen(false)}
+        origin={selectedIds.length === 1
+          ? { kind: 'account', record: (accounts.find(a => a.id === selectedIds[0]) as Account) }
+          : null}
+        onCreated={() => { setRaiseOppOpen(false); setSelectedIds([]); }}
+        accounts={accounts as any}
+        prospects={oppProspects}
+        contacts={contacts as any}
+        candidates={oppCandidates}
+        uoms={oppUoms}
+        currencies={oppCurrencies}
+      />
     </div>
   );
 }

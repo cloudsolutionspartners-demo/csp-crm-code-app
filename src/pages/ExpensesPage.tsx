@@ -16,6 +16,7 @@ import { Plus } from '../components/Icons';
 import { expenses as mockExpenses, accounts as mockAccounts } from '../data/mock-data';
 import { useDataverse } from '../services/useDataverse';
 import { fetchExpenses, saveExpense, removeExpense } from '../services/expenseService';
+import { getOrgUrl } from '../services/dataverseService';
 import { Csp_expensesService } from '../generated/services/Csp_expensesService';
 import { ByVendorView, ByTypeView, ByContractView } from '../components/expense/ExpenseAlternativeViews';
 import { fetchAccounts } from '../services/accountService';
@@ -133,6 +134,7 @@ interface FormState {
   status: ExpenseStatus;
   periodMonth: string;
   periodYear: string;
+  documentName: string;
 }
 
 function expenseToForm(exp: Expense): FormState {
@@ -154,6 +156,7 @@ function expenseToForm(exp: Expense): FormState {
     status: exp.status,
     periodMonth: String(exp.periodMonth),
     periodYear: String(exp.periodYear),
+    documentName: (exp as any).documentName || '',
   };
 }
 
@@ -177,6 +180,7 @@ function emptyForm(): FormState {
     status: 'Approved',
     periodMonth: String(now.getMonth() + 1),
     periodYear: String(now.getFullYear()),
+    documentName: '',
   };
 }
 
@@ -301,20 +305,20 @@ export default function ExpensesPage() {
 
       // column filters
       const ref = getTextFilter(columnFilters, 'reference');
-      if (ref && !exp.reference.toLowerCase().includes(ref.toLowerCase())) return false;
+      if (ref && !(exp.reference || '').toLowerCase().includes(ref.toLowerCase())) return false;
 
       const vendor = getTextFilter(columnFilters, 'vendor');
       if (vendor) {
-        const name = getAccountName(exp.accountId);
+        const name = getAccountName(exp.accountId) || '';
         if (!name.toLowerCase().includes(vendor.toLowerCase())) return false;
       }
 
       const typeCol = getTextFilter(columnFilters, 'type');
-      if (typeCol && !exp.expenseType.toLowerCase().includes(typeCol.toLowerCase())) return false;
+      if (typeCol && !(exp.expenseType || '').toLowerCase().includes(typeCol.toLowerCase())) return false;
 
       const countryCol = getTextFilter(columnFilters, 'country');
       if (countryCol) {
-        const c = getCountryFromEntity(exp.entityId);
+        const c = getCountryFromEntity(exp.entityId) || '';
         if (!c.toLowerCase().includes(countryCol.toLowerCase())) return false;
       }
 
@@ -589,7 +593,12 @@ export default function ExpensesPage() {
                     const consultant = dvContacts.find(c => c.id === contract.contactId);
                     if (consultant) parts.push(`${consultant.firstName} ${consultant.lastName}`);
                     const childAcc = contract.childAccountId ? dvAccounts.find(a => a.id === contract.childAccountId) : null;
-                    if (childAcc) parts.push(childAcc.name);
+                    if (childAcc) {
+                      parts.push(childAcc.name);
+                    } else {
+                      const parentAcc = contract.parentAccountId ? dvAccounts.find(a => a.id === contract.parentAccountId) : null;
+                      if (parentAcc) parts.push(parentAcc.name);
+                    }
                     return parts.join(' — ');
                   })()}</td>
                   <td style={{ padding: '10px 12px' }}>{exp.currencyCode}</td>
@@ -661,11 +670,6 @@ export default function ExpensesPage() {
           <h3 style={{ color: 'hsl(var(--foreground))', fontWeight: 600, fontSize: 15, marginBottom: 8 }}>Financials</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <TextField label="Total Amount" value={form.totalAmount} onChange={v => updateForm({ totalAmount: v })} type="number" required />
-            <TextField label="VAT" value={form.vatAmount} onChange={v => updateForm({ vatAmount: v })} type="number" />
-            <div>
-              <TextField label="Net Amount" value={form.netAmount} onChange={v => updateForm({ netAmount: v })} type="number" readOnly />
-              <p style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 4 }}>{'Calculated as Total − VAT'}</p>
-            </div>
             <SelectField label="Currency" value={form.currencyCode} onChange={v => updateForm({ currencyCode: v as CurrencyCode })} options={ALL_CURRENCIES.map(c => ({ value: c, label: c }))} required />
           </div>
         </div>
@@ -723,6 +727,25 @@ export default function ExpensesPage() {
             <p style={{ fontSize: 12, color: 'hsl(var(--foreground))', marginTop: 8, fontWeight: 500 }}>
               Selected: {evidenceFile.name}
             </p>
+          )}
+          {!evidenceFile && form.documentName && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <span style={{ fontSize: 12, color: 'hsl(var(--foreground))', fontWeight: 500 }}>
+                Current: {form.documentName}
+              </span>
+              <button
+                type="button"
+                className="csp-btn csp-btn-outline csp-btn-sm"
+                style={{ fontSize: 11, padding: '2px 8px' }}
+                onClick={() => {
+                  const orgUrl = getOrgUrl();
+                  const url = `${orgUrl}/api/data/v9.2/csp_expenses(${form.id})/csp_document/$value`;
+                  window.open(url, '_blank');
+                }}
+              >
+                View PDF
+              </button>
+            </div>
           )}
         </div>
 
