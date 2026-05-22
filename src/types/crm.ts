@@ -542,6 +542,22 @@ export interface Opportunity {
   materials?: OpportunityMaterial[];
 }
 
+// ===== CORPORATE ACTIONS =====
+export type CorporateActionStatus = 'New' | 'In Progress' | 'Closed' | 'Cancelled';
+export type CorporateActionPriority = 'Low' | 'Medium' | 'High';
+
+export interface CorporateAction {
+  id: string;
+  actionSummarizedTitle: string;
+  actionDetails: string;
+  closingComments?: string;
+  priority: CorporateActionPriority;
+  status: CorporateActionStatus;
+  dueDate?: string;          // ISO date 'YYYY-MM-DD'
+  createdAt: string;         // ISO datetime
+  modifiedAt: string;        // ISO datetime
+}
+
 // ===== CURRENCY MAP =====
 export const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = {
   USD: '$',

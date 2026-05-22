@@ -647,6 +647,11 @@ function CandidatesEditor({ form, updateField }: { form: any; updateField: (k: s
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{c.firstName} {c.lastName} <span className="text-muted-foreground font-normal">· {c.candidateRole || '—'}</span></span>
                   <div className="flex items-center gap-2">
+                    {line.rate != null && (
+                      <span className="text-xs text-muted-foreground">
+                        Rate <strong className="text-foreground">{(line.unit === 'Hour' ? line.rate : line.rate / 8).toFixed(2)}</strong>/h · <strong className="text-foreground">{(line.unit === 'Day' ? line.rate : line.rate * 8).toFixed(2)}</strong>/d
+                      </span>
+                    )}
                     {m.hour != null ? (
                       <span className={`text-xs ${m.hour < 0 ? 'text-destructive' : 'text-emerald-600'}`}>
                         Margin <strong>{m.hour.toFixed(2)}</strong>/h · <strong>{m.day!.toFixed(2)}</strong>/d

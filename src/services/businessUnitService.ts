@@ -27,7 +27,7 @@ const CUSTOM_FIELDS = [
 export async function fetchBusinessUnits(): Promise<BusinessUnit[]> {
   const buRecords = await listRecords('businessunits', `businessunitid,name,${CUSTOM_FIELDS}`, undefined, 'name asc');
 
-  const teamRecords = await listRecords('teams', 'teamid,name,_businessunitid_value', 'teamtype eq 0');
+  const teamRecords = await listRecords('teams', 'teamid,name,_businessunitid_value', 'teamtype eq 0 and isdefault eq true');
 
   const teamByBu: Record<string, string> = {};
   teamRecords.forEach(t => {

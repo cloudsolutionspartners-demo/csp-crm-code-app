@@ -128,7 +128,11 @@ export default function CandidatesPage() {
   const interviewerOptions = useMemo(
     () => rawContacts
       .filter((c: any) => c.isInterviewer)
-      .map((c: any) => ({ value: c.id, label: `${c.firstName} ${c.lastName}` })),
+      .map((c: any) => ({
+        value: c.id,
+        label: `${c.firstName} ${c.lastName}`,
+        sublabel: c.company || '',
+      })),
     [rawContacts],
   );
 
@@ -830,9 +834,11 @@ export default function CandidatesPage() {
                     />
                     <TextField
                       label="Hourly Rate (€)"
-                      value={formData.hourlyRateEur ? `€${formData.hourlyRateEur}` : ''}
-                      onChange={() => {}}
-                      readOnly
+                      value={formData.hourlyRateEur != null ? String(formData.hourlyRateEur) : ''}
+                      onChange={v => updateField('hourlyRateEur', v)}
+                      type="number"
+                      min="0"
+                      placeholder="0"
                     />
                     <TextField
                       label="Daily Rate (€)"

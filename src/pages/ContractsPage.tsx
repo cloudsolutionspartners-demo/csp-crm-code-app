@@ -13,10 +13,13 @@ import { SearchPill, SinglePill, FilterChip, DatePill, dateRangeFor, relativeDat
 import { Plus } from '../components/Icons';
 import {
   contracts as mockContracts, accounts as mockAccounts, contacts as mockContacts,
-  entities, invoices, expenses, timesheets,
+  entities, invoices as mockInvoices, expenses, timesheets as mockTimesheets,
   contractMilestones, getMilestonesByContractId, getEntityById, getContactById,
 } from '../data/mock-data';
 import { fetchContracts, saveContract as saveContractToDataverse } from '../services/contractService';
+import { fetchInvoices } from '../services/invoiceService';
+import { fetchTimesheets } from '../services/timesheetService';
+import { saveMilestone as saveMilestoneToDataverse } from '../services/milestoneService';
 import { fetchAccounts } from '../services/accountService';
 import { fetchContacts } from '../services/contactService';
 import { fetchBusinessUnits } from '../services/businessUnitService';
@@ -88,6 +91,8 @@ export default function ContractsPage() {
   const { data: dvContracts, loading, refetch, isLive } = useDataverse(fetchContracts, mockContracts);
   const { data: dvAccounts, refetch: refetchAccounts } = useDataverse<Account>(fetchAccounts, mockAccounts);
   const { data: dvContacts } = useDataverse<Contact>(fetchContacts, mockContacts);
+  const { data: invoices } = useDataverse(fetchInvoices, mockInvoices);
+  const { data: timesheets } = useDataverse(fetchTimesheets, mockTimesheets);
   const [contractsList, setContractsList] = useState<Contract[]>(mockContracts);
   React.useEffect(() => { setContractsList(dvContracts); }, [dvContracts]);
 
@@ -338,25 +343,40 @@ export default function ContractsPage() {
     setMilestoneDialogOpen(true);
   }
 
-  function saveMilestone() {
-    const newMilestone = {
-      id: `ms-new-${Date.now()}`,
-      milestoneId: milestoneForm.milestoneId,
-      contractId: editingContract.id,
-      description: milestoneForm.description,
-      value: milestoneForm.value,
-      currencyCode: milestoneForm.currencyCode,
-      startDate: milestoneForm.startDate,
-      endDate: milestoneForm.endDate,
-      status: 'Pending' as MilestoneStatus,
-    };
-    setLocalMilestones(prev => [...prev, newMilestone]);
-    setMilestoneDialogOpen(false);
-    toast.success('Milestone added');
+  async function saveMilestone() {
+    try {
+      const newId = await saveMilestoneToDataverse({
+        milestoneId: milestoneForm.milestoneId,
+        contractId: editingContract.id,
+        description: milestoneForm.description,
+        value: Number(milestoneForm.value),
+        currencyCode: milestoneForm.currencyCode,
+        startDate: milestoneForm.startDate,
+        endDate: milestoneForm.endDate,
+        status: 'Pending',
+      });
+      const newMilestone = {
+        id: newId,
+        milestoneId: milestoneForm.milestoneId,
+        contractId: editingContract.id,
+        description: milestoneForm.description,
+        value: Number(milestoneForm.value),
+        currencyCode: milestoneForm.currencyCode,
+        startDate: milestoneForm.startDate,
+        endDate: milestoneForm.endDate,
+        status: 'Pending' as MilestoneStatus,
+      };
+      setLocalMilestones(prev => [...prev, newMilestone]);
+      setMilestoneDialogOpen(false);
+      toast.success('Milestone added');
+    } catch (err: any) {
+      console.error('[saveMilestone] failed:', err);
+      toast.error(err?.message || 'Failed to save milestone');
+    }
   }
 
   // ===== Related data for sheet tabs =====
-  const contractInvoices = useMemo(() => invoices.filter(i => i.contractId === editingContract.id), [editingContract.id]);
+  const contractInvoices = useMemo(() => invoices.filter(i => i.accountId === editingContract.parentAccountId), [editingContract.parentAccountId, invoices]);
   const contractTimesheets = useMemo(() => timesheets.filter(t => t.contractId === editingContract.id), [editingContract.id]);
 
   // ===== Lookup options =====

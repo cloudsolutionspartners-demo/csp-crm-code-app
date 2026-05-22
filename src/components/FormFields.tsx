@@ -256,7 +256,7 @@ interface LookupFieldProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; sublabel?: string }[];
   required?: boolean;
   placeholder?: string;
   className?: string;
@@ -321,7 +321,14 @@ export function LookupField({ label, value, onChange, options, required, placeho
                   onClick={() => { onChange(o.value); setOpen(false); setSearch(''); }}
                 >
                   <Check className={cn('csp-lookup-check', value === o.value ? 'csp-visible' : 'csp-invisible')} />
-                  <span className="csp-lookup-option-text">{o.label}</span>
+                  <span className="csp-lookup-option-text" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0 }}>
+                    <span>{o.label}</span>
+                    {o.sublabel && (
+                      <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                        {o.sublabel}
+                      </span>
+                    )}
+                  </span>
                 </button>
               ))}
             </div>

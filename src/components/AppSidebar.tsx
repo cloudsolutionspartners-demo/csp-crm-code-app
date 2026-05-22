@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { cn } from '../lib/utils';
 import {
-  LayoutDashboard, Building2, Users, FileText, Receipt, Wallet,
+  Building2, Users, FileText, Receipt, Wallet,
   Clock, CalendarDays, BadgeDollarSign, Landmark, BarChart3, Settings,
   ChevronLeft, ChevronRight, ChevronDown, FileStack, UserPlus, CalendarClock,
   Milestone, Target, MessagesSquare, KanbanSquare, Briefcase,
@@ -19,7 +19,7 @@ export type PageId =
   | 'reports' | 'settings';
 
 const standaloneTop = [
-  { title: 'Dashboard', id: 'dashboard' as PageId, icon: LayoutDashboard },
+  { title: 'Corporate Actions', id: 'dashboard' as PageId, icon: KanbanSquare },
 ];
 
 const groups = [

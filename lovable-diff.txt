@@ -1,1253 +1,2408 @@
-﻿diff --git a/Business Logic/26-corporate-actions.md b/Business Logic/26-corporate-actions.md
+﻿diff --git a/.lovable/plan.md b/.lovable/plan.md
+index d133482..e936336 100644
+--- a/.lovable/plan.md
++++ b/.lovable/plan.md
+@@ -1,100 +1,39 @@
+-## Opportunities Module ΓÇö Plan
+-
+-A new module under **Prospecting ΓåÆ Opportunities** that captures sales opportunities linked to Candidates, Contacts, Accounts, Prospects, or free-typed clients. Same UX patterns as existing modules (list view, slide-over panel, Pills, column filters, mock data only).
+-
+-### 1. Data model (`src/types/crm.ts` + `src/data/mock-data.ts`)
+-
+-New `Opportunity` entity:
+-
+-| Field | Notes |
+-|---|---|
+-| `id`, `opportunityNumber` | OPP-0001 etc. |
+-| `source` | enum: `From Prospect` \| `From Existing Client` \| `From New Client` |
+-| `clientLinkType` | enum: `Account` \| `Prospect` \| `Free Text` |
+-| `accountId?` / `prospectId?` / `freeClientName?` | one is set based on `clientLinkType` |
+-| `candidateIds[]` | linked candidates (multi) |
+-| `contactIds[]` | linked contacts (multi) |
+-| `role` | text ΓÇö role the opportunity is for |
+-| `opportunityRate`, `opportunityRateUnit` (`Day`\|`Hour`), `currencyCode` | rate offered to client |
+-| `candidateRate`, `candidateRateUnit` | snapshot of candidate rate (when single candidate from Send Profiles) |
+-| `details` | long text |
+-| `startDate`, `closingDate` | dates |
+-| `status` | `New` \| `Interview Booked` \| `Won` \| `Lost` |
+-| `outcomeComments` | long text |
+-| `materials[]` ΓåÆ new `OpportunityMaterial` (mirror of `ProspectMaterial`: fileName, sharedDate, description, document base64, mime, size) |
+-| `createdAt`, `ownerContactId` | |
+-
+-Margin (hourly + daily) is **derived** from candidate vs opportunity rate, not stored.
+-
+-### 2. Routing & Sidebar
+-
+-- Add `/prospecting/opportunities` route in `App.tsx`.
+-- Add **Opportunities** entry under Prospecting group in `AppSidebar.tsx` (icon: `Briefcase` or `Handshake`).
+-
+-### 3. `OpportunitiesPage.tsx` (list view)
+-
+-Standard list with: opportunityNumber, role, client (Account/Prospect/free), candidates count, status, opportunity rate, candidate rate, **margin/day** + **margin/hour** (computed badges), source dropdown value, closing date.
+-
+-- Pills: Search, Status, Source, Client Type, Date range on `closingDate`.
+-- Column filters using existing `ColumnFilters` helpers.
+-- Row click ΓåÆ slide-over `Sheet` for view/edit (tabs: **Details**, **Linked Records**, **Materials**, **Outcome**).
+-- Header has **Add New Opportunity** button (opens guided wizard) and **standard selection-action button** pattern (grayed out until exactly one row is selected ΓÇö the row-action will be "Open" / "Duplicate"; this matches the Send Profiles pattern requested for consistency).
+-
+-### 4. Guided Add wizard (`AddOpportunityWizard.tsx`)
+-
+-Multi-step `Dialog` with clear explanatory copy at each step:
+-
+-1. **Step 1 ΓÇö Source**: 3 large radio cards ΓÇö *From Prospect*, *From Existing Client*, *From New Client*. Each card explains the consequence (e.g. "Pick this if the client is already qualified in your pipeline ΓÇö the opportunity will be linked to a Prospect and contribute to its forecast").
+-2. **Step 2 ΓÇö Client**: based on choice:
+-   - Prospect ΓåÆ `LookupField` over prospects.
+-   - Existing Client ΓåÆ `LookupField` over accounts.
+-   - New Client ΓåÆ free-text input + helper "We'll keep this as text until you convert the client into a Prospect or Account".
+-3. **Step 3 ΓÇö Assign people**: multi-select Candidates and multi-select Contacts (Combobox-style with badges). Helper explains either or both can be added.
+-4. **Step 4 ΓÇö Role & Rates**: role text, opportunity rate + unit + currency; optional candidate rate (auto-prefilled if exactly one candidate selected).
+-5. **Step 5 ΓÇö Dates & details**: startDate, closingDate, details textarea, status (default New).
+-6. **Step 6 ΓÇö Review & Create**: summary, "Create Opportunity" button.
+-
+-Margin preview shown live from Step 4 onward.
+-
+-### 5. "Raise Opportunity" entry points (selection-bar pattern)
+-
+-Each of these pages gets a **second header button** (grayed until exactly one row selected) labeled **Raise Opportunity** (mirrors Send Profiles styling ΓÇö same disabled/enabled treatment, same position right of the primary Add button):
+-
+-- **ProspectsPage** ΓåÆ opens wizard preseeded with `source = From Prospect`, `prospectId` set, jumps to Step 3.
+-- **AccountsPage** ΓåÆ preseeded with `source = From Existing Client`, `accountId` set, jumps to Step 3.
+-- **ContactsPage** ΓåÆ preseeded with `source = From Existing Client`, `accountId` from the contact (if present, else asks at Step 2), contact pre-added to assignees, jumps to Step 3.
+-- **CandidatesPage** ΓåÆ already has Send Profiles which now also auto-creates one opportunity per recipient on send (see ┬º6). No new manual button needed here, but we will add a **Raise Opportunity** button too for the standard pattern (preseeded with the candidate, jumps to Step 1 since client is unknown).
+-
+-### 6. Send Profiles ΓåÆ auto-create Opportunities
+-
+-In `SendCandidateProfilesDialog.tsx`, on successful send:
+-- For **each selected candidate**, create one `Opportunity` with:
+-  - `source`: derived from To recipient ΓÇö if To matches a known account contact ΓåÆ `From Existing Client` + accountId; if matches a prospect contact ΓåÆ `From Prospect` + prospectId; otherwise ΓåÆ `From New Client` + `freeClientName = To address (or display name)`.
+-  - `candidateIds = [candidate]`, `role = candidate.candidateRole`, `candidateRate = candidate.hourlyRateEur` (Hour, EUR), `opportunityRate` left blank for user to fill (matches the editable-table Rate column), `status = New`.
+-- Show toast "N opportunities created" with link to Opportunities list.
+-- In list view, the linked Candidate and Role are visible in the row; opportunity rate empty until user edits.
+-
+-### 7. Materials tab
+-
+-Reuse the Prospect Materials pattern verbatim (same upload-to-base64 control, same list, same edit/delete). Implement as a small shared component `MaterialsTab` so both Prospects and Opportunities share code (light refactor of existing prospect materials UI extracted to `src/components/shared/MaterialsTab.tsx`).
+-
+-### 8. Documentation
+-
+-- New file `Business Logic/24-opportunities.md` describing entity, statuses, sources, rules, margin formula, entry points.
+-- Update `Business Logic/15-onboarding-candidates.md` Send Profiles section noting auto-creation of opportunities.
+-- Single consolidated Changelog entry for the Opportunities module.
+-
+-### Technical details
+-
+-- Margin formulas (display only):
+-  - Day: `opportunityRate(day) - candidateRate(day)` (convert HourΓåöDay at ├ù8).
+-  - Hour: same / 8.
+-- All client-side state, mock data persisted in `mock-data.ts` array `opportunities`.
+-- No backend / Supabase changes ΓÇö prototype only.
+-- "Grayed-out until single selection" pattern already exists for Send Profiles in `CandidatesPage` ΓÇö replicate that exact disabled-button treatment on Prospects/Accounts/Contacts headers.
+-
+-### Out of scope
+-
+-- Kanban for opportunities (can come later).
+-- Opportunity ΓåÆ Contract conversion.
+-- Reports / forecasts integration.
++# Plan: Business Skills ΓÇö Contracts Process MD
++
++Create a new top-level folder `Business Skills/` to host MD specs intended for Dataverse Business Skills consumed later by Copilot Studio autonomous agents. Seed it with a first skill document covering the **Contracts process**.
++
++## Folder & files
++
++- `Business Skills/README.md` ΓÇö short index explaining the purpose: each MD is a self-contained "skill" describing a Dataverse-backed business process, written so a Copilot Studio autonomous agent can reason about validation, status transitions, and discrepancies.
++- `Business Skills/01-contracts-process.md` ΓÇö the contracts skill.
++
++## Structure of `01-contracts-process.md`
++
++Written in agent-friendly, declarative language (entity names, field names, choice values, explicit rules ΓÇö no UI fluff). Sections:
++
++1. **Skill name & intent** ΓÇö "Validate and reason about Contracts." One-paragraph purpose for the agent.
++2. **In-scope Dataverse tables** ΓÇö primary `csp_Contract` plus referenced tables (`csp_BusinessEntity`, `csp_Account`, `csp_Contact`, `csp_ExchangeRate`, `csp_Invoice`, `csp_Timesheet`, `csp_ContractMilestone`). For each: logical name, role in the process, key fields the agent must read.
++3. **Contract field dictionary** ΓÇö every field with: logical name, type, required, default, allowed values (for choices), derivation formula if computed, and a plain-language meaning. Sourced from `Business Logic/04-contracts.md`.
++4. **Choice sets** ΓÇö explicit value lists for `ContractType`, `BillingType`, `ContractStatus`, `UnitOfMeasure`, `PaymentTerms`, `CurrencyCode`.
++5. **Lifecycle & status transitions** ΓÇö allowed transitions, preconditions (e.g. Terminated requires `actualEndDate`), and what each status implies downstream.
++6. **Validation rules** ΓÇö required fields, date ordering, parent Γëá child account, Fixed Price + Fixed Price ΓåÆ `hasTimesheet=false` AND `hasMilestones=true`, currency mixing allowed but flagged, etc. Each rule phrased as a check the agent can run: *Given X, assert Y, otherwise raise discrepancy of type Z.*
++7. **Derivations & formulas** ΓÇö margin, marginPercent, hourly rate from daily, FX conversion for cross-currency margin display.
++8. **Cross-entity effects & integrity** ΓÇö invoice/timesheet/milestone eligibility, deletion blockers, account/contact dependencies.
++9. **Discrepancy catalog** ΓÇö enumerated list of issues the agent should detect and write into `csp_CorporateAction` (links to the existing Corporate Actions feature). For each: title template, suggested priority (Low/Medium/High), suggested due date offset, and a recommended `actionDetails` body.
++   Examples:
++   - Active contract with `endDate` in the past and no `actualEndDate` ΓåÆ High, due +3d.
++   - Contract `hasTimesheet=true` but no timesheets generated last month ΓåÆ Medium, due end of month.
++   - Margin% < threshold (e.g. 10%) ΓåÆ Medium.
++   - Currency mismatch with stale `ExchangeRate` (>30 days) ΓåÆ Low.
++   - Permanent Employee contract missing `monthlySalary` ΓåÆ High.
++   - Fixed Price contract with `hasTimesheet=true` AND `hasMilestones=false` ΓåÆ High (config violation).
++   - `parentAccountId == childAccountId` ΓåÆ High.
++   - Contract Active past `endDate` with pending milestones ΓåÆ Medium.
++10. **Reference queries** ΓÇö example FetchXML / OData filter snippets the agent can use to pull candidate records for each discrepancy check.
++11. **Glossary** ΓÇö short definitions of domain terms (sell rate, buy rate, margin, T&M, Fixed Price, Permanent Employee, Standard Contracting).
++
++## Notes
++
++- No code or UI changes. Documentation only.
++- Logical names use the `csp_` prefix consistent with `26-corporate-actions.md`.
++- Future skills (Invoices, Timesheets, Prospects, etc.) will follow the same template; the README will note this so additional MDs can be added incrementally.
+diff --git a/Business Skills/01-contracts-process.md b/Business Skills/01-contracts-process.md
 new file mode 100644
-index 0000000..6a08fc2
+index 0000000..e8680af
 --- /dev/null
-+++ b/Business Logic/26-corporate-actions.md	
-@@ -0,0 +1,93 @@
-+# 26 ΓÇö Corporate Actions
++++ b/Business Skills/01-contracts-process.md	
+@@ -0,0 +1,215 @@
++# Skill 01 ΓÇö Contracts Process
 +
-+## Purpose
++## Skill name & intent
 +
-+Landing page (`/`). Replaces the previous KPI dashboard. A Kanban board of **Corporate Actions** ΓÇö AI-surfaced "things to do" raised autonomously by background agents that scan the system for discrepancies (overdue invoices, missing FX rates, suspected duplicate accounts, etc.). Each card is a single, trackable item that the internal admin works through to keep the operation tidy and to leave an auditable trail of what was done and how.
++**Name:** `contracts-process`
 +
-+## Primary entity: `CorporateAction` (`csp_CorporateAction`)
++**Intent:** Enable a Copilot Studio autonomous agent to understand, validate and monitor commercial **Contracts** between a `csp_BusinessEntity` and its counterparties (client accounts and contractors). The agent uses this skill to:
 +
-+Mirrors the Dataverse table `Corporate Action` in `CSPCRMSolution`.
++1. Verify that contract records are internally consistent (required fields, valid status transitions, correct derivations).
++2. Detect discrepancies against business rules and downstream artefacts (invoices, timesheets, milestones, FX rates).
++3. Raise findings as `csp_CorporateAction` records so a human admin can review and act on them via the Corporate Actions board.
 +
-+| Field | Dataverse name | Type | Required | Notes |
-+|---|---|---|---|---|
-+| `id` | `csp_CorporateActionId` | Unique identifier | yes | system |
-+| `actionSummarizedTitle` | `csp_ActionSummarizedTitle` | String | yes | short title shown on the card and in the slide-over header. Authored by the AI agent. |
-+| `actionDetails` | `csp_ActionDetails` | Multiple lines of text | yes | full AI-written analysis of the issue. **Read-only in the UI** ΓÇö never editable by end users. |
-+| `closingComments` | `csp_ClosingComments` | Multiple lines of text | conditional | user notes. Required only when transitioning to `Cancelled` (see business rules). Optional in any other status. |
-+| `priority` | `csp_Priority` | Choice (`Low` / `Medium` / `High`) | yes | drives the card icon. Choice values: `Low = 725,070,000`, `Medium = 725,070,001`, `High = 725,070,002`. |
-+| `dueDate` | `csp_Duedate` | DateOnly | no | shown on the card; drives the urgency chip. |
-+| `status` | `statuscode` | Choice | yes | **`New` ΓåÆ `In Progress` ΓåÆ `Closed`**, plus `Cancelled` from any state. Defaults to `New`. |
-+| `createdAt` | `CreatedOn` | Date and time | derived | system |
-+| `modifiedAt` | `ModifiedOn` | Date and time | derived | system; used to determine which Closed items appear on the board (see business rules). |
-+
-+Standard Dataverse fields (`OwnerId`, `OwningBusinessUnit`, `OwningTeam`, `OwningUser`, `CreatedBy`, `ModifiedBy`, `VersionNumber`, etc.) are present on the table but not surfaced in the UI for the prototype.
-+
-+## Validation rules
-+
-+- `actionSummarizedTitle`, `actionDetails`, `priority`, `status` required.
-+- `actionDetails` **cannot be edited** by the user ΓÇö the field is rendered read-only in the slide-over and there is no inline editor.
-+- `closingComments` **must be non-empty** before saving when `status = Cancelled`. In all other statuses it is optional.
-+- `dueDate` is optional and unconstrained (past/today/future all allowed). The UI colours past-due cards differently but does not block.
-+
-+## Business rules
-+
-+### Status transitions
-+
-+- Any status can move to any other status, with the single restriction above (Cancelled requires Closing Comments).
-+- Status changes are made from a **sticky pill switcher in the slide-over header**. The change is persisted only when the user clicks **Save**.
-+- Drag-and-drop on the board moves a card between lanes instantly. Dropping on the **Cancelled** lane without Closing Comments shows an error toast and opens the slide-over so the user can add the comments and Save.
-+
-+### Closed lane visibility
-+
-+- The **Closed** lane on the board only displays items whose `modifiedAt` falls in the **current calendar month**. Older Closed items remain in the database (and remain reachable via search / list views in production) but drop off the board to keep it focused on recent work.
-+- All other lanes (`New`, `In Progress`, `Cancelled`) show every record in that status.
-+
-+### Priority iconography
-+
-+The card uses an emoji glyph paired with the priority chip ΓÇö chosen so the urgency is legible at a glance from across the room:
-+
-+| Priority | Glyph | Meaning |
-+|---|---|---|
-+| Low | ≡ƒºè (cube of ice) | informational, no rush |
-+| Medium | ≡ƒÜ¿ (police siren) | needs attention this week |
-+| High | ≡ƒöÑ (fire / flame) | act now |
-+
-+### Due-date chip
-+
-+Computed dynamically against the device clock:
-+
-+- `dueDate < today` and status is `New`/`In Progress` ΓåÆ "Nd overdue" in rose, bold.
-+- `dueDate = today` ΓåÆ "Due today" in amber, bold.
-+- `dueDate within next 3 days` ΓåÆ "Due in Nd" in amber.
-+- otherwise ΓåÆ formatted date in muted grey.
-+- `Closed` / `Cancelled` cards always show the formatted date in muted grey (urgency no longer relevant).
-+
-+## UI
-+
-+### Board
-+
-+- 4 lanes, fixed order: **New ┬╖ In Progress ┬╖ Closed ┬╖ Cancelled** (matches the `statuscode` option set order). Each lane has a coloured top bar, a count chip, and a drop target.
-+- Cards show: priority glyph + chip, `actionSummarizedTitle` (clamped to 3 lines), and the due-date chip.
-+- Drag-and-drop between lanes is enabled. The hovered lane highlights with a primary ring.
-+- Clicking a card opens the slide-over editor.
-+
-+### Slide-over editor
-+
-+- Header: priority glyph, priority chip, `actionSummarizedTitle`, sub-line with due date and creation date.
-+- **Sticky status switcher** sits directly under the header (a 4-segment pill control mirroring the lane order). The currently active status is highlighted in its lane colour. Clicking `Cancelled` while Closing Comments is empty shows an error toast and refuses the change.
-+- Body:
-+  - **Action Details** ΓÇö read-only block with a lock icon and an "AI generated ┬╖ read only" annotation. The container is tall (~360px min-height, 60vh max with scroll) so long AI analyses fit without truncation.
-+  - **Closing Comments** ΓÇö editable textarea, with a hint that it is required to cancel.
-+- **Sticky footer**: `Cancel` (discards draft, closes the sheet) and `Save` (commits status + closing comments). `Save` is disabled until the form is dirty, and disabled when the draft status is `Cancelled` with empty Closing Comments.
-+
-+## Permissions
-+
-+Admin and Owner can view and edit. There is no public/anonymous access. Standard ownership semantics from Dataverse apply (`OwnerId` is set to the creating service principal for AI-raised records, can be reassigned).
-+
-+## Cross-entity effects
-+
-+None at the prototype stage. In production, closing or cancelling a Corporate Action would optionally write back to the source entity (e.g. mark the underlying invoice as "reminder sent") ΓÇö out of scope for the UX validation prototype.
-+
-+## Filters
-+
-+The current prototype renders the full board without filters. Production additions will likely include: `Search` (title, details), `Priority` (multi), `Due date` (relative pills), `Owner` (lookup).
-diff --git a/Business Logic/Changelog.md b/Business Logic/Changelog.md
-index a1f0f2f..f1702a7 100644
---- a/Business Logic/Changelog.md	
-+++ b/Business Logic/Changelog.md	
-@@ -15,7 +15,22 @@ Format:
- 
- ---
- 
--## 2026-05-13 ΓÇö New `Contact CV` entity (`csp_ContactCV`)
-+## 2026-05-15 ΓÇö Corporate Actions board replaces the Dashboard
-+**Files:** `Business Logic/26-corporate-actions.md`, `Business Logic/01-dashboard.md`, `Business Logic/README.md`, `src/types/crm.ts`, `src/data/mock-data.ts`, `src/pages/Dashboard.tsx`, `src/components/AppSidebar.tsx`
-+**Author:** Lovable AI
-+**Type:** Added
-+
-+- New Dataverse-backed entity **`csp_CorporateAction`** (`Corporate Action` in `CSPCRMSolution`) with fields: `csp_ActionSummarizedTitle`, `csp_ActionDetails` (read-only to end users), `csp_ClosingComments`, `csp_Priority` (Low / Medium / High ΓÇö Choice values 725,070,000 / 001 / 002), `csp_Duedate`, `statuscode` (New / In Progress / Closed / Cancelled). Spec lives in `Business Logic/26-corporate-actions.md`.
-+- The landing page (`/`) is renamed from **Dashboard** to **Corporate Actions** in the sidebar and is rebuilt as a 4-lane Kanban board (lanes = `statuscode` options, fixed order). The previous KPI/charts dashboard is removed.
-+- Card layout shows the summarized title, the priority paired with a glyph (≡ƒºè Low / ≡ƒÜ¿ Medium / ≡ƒöÑ High) and the due date with dynamic urgency styling (overdue, due today, due in Γëñ3 days, otherwise neutral).
-+- Drag-and-drop moves a card between lanes. The **Cancelled** lane refuses drops without Closing Comments ΓÇö the slide-over opens with a toast prompting the user to fill them in and Save.
-+- The **Closed** lane only lists items whose `ModifiedOn` is in the current calendar month so the board stays focused on recent work.
-+- Slide-over editor: read-only Action Details block (~2.5├ù taller than the default with internal scroll for long AI analyses), editable Closing Comments, **sticky 4-segment status switcher in the header** mirroring the lane order, and a sticky footer with **Cancel** (discard draft) and **Save** (commit status + comments). `Save` is disabled while the form is clean or while the draft is `Cancelled` with empty Closing Comments.
-+- Validation: end users can never edit `csp_ActionDetails`. `csp_ClosingComments` is required only when transitioning to `Cancelled`.
++This skill is **read-mostly**: the agent reads contract and related-entity data and writes only to `csp_CorporateAction`.
 +
 +---
 +
++## In-scope Dataverse tables
 +
- **Files:** `Business Logic/25-contact-cvs.md`, `Business Logic/03-contacts.md`, `Business Logic/README.md`, `src/types/crm.ts`
- **Author:** Lovable AI
- **Type:** Added
-diff --git a/Business Logic/README.md b/Business Logic/README.md
-index e311954..4c00088 100644
---- a/Business Logic/README.md	
-+++ b/Business Logic/README.md	
-@@ -19,7 +19,7 @@ This folder is the **single source of truth** for business rules and validation
- 
- | # | File | Route |
- |---|------|-------|
--| 1 | `01-dashboard.md` | `/` |
-+| 1 | `01-dashboard.md` (superseded by `26-corporate-actions.md`) | `/` |
- | 2 | `02-accounts.md` | `/accounts` |
- | 3 | `03-contacts.md` | `/contacts` |
- | 4 | `04-contracts.md` | `/contracts` |
-@@ -44,6 +44,7 @@ This folder is the **single source of truth** for business rules and validation
- | 23 | `23-prospect-interactions.md` | (sub-table / panel inside Prospects) |
- | 24 | `24-opportunities.md` | `/prospecting/opportunities` |
- | 25 | `25-contact-cvs.md` | (sub-table / panel inside Contacts) |
-+| 26 | `26-corporate-actions.md` | `/` (replaces the old Dashboard) |
- 
- ## Conventions used in every page file
- 
-diff --git a/src/components/AppSidebar.tsx b/src/components/AppSidebar.tsx
-index fe65a34..12f3806 100644
---- a/src/components/AppSidebar.tsx
-+++ b/src/components/AppSidebar.tsx
-@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
- import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
- 
- const standaloneTop = [
--  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
-+  { title: 'Corporate Actions', url: '/', icon: KanbanSquare },
- ];
- 
- const groups = [
-diff --git a/src/data/mock-data.ts b/src/data/mock-data.ts
-index d8bf09d..2b91d16 100644
---- a/src/data/mock-data.ts
-+++ b/src/data/mock-data.ts
-@@ -6,8 +6,126 @@ import {
-   ContractMilestone, JDSkill, JDPlatform,
-   Prospect, ProspectInteraction, ProspectMaterial,
-   Opportunity, OpportunityMaterial,
-+  CorporateAction,
- } from '@/types/crm';
- 
-+export const corporateActions: CorporateAction[] = [
-+  {
-+    id: 'ca-001',
-+    actionSummarizedTitle: 'Invoice INV-2025-0142 overdue by 18 days',
-+    actionDetails: 'AI scan detected that invoice INV-2025-0142 issued to Acme Holdings on 2026-04-12 for Γé¼24,500 has been in "Sent" status for 47 days, exceeding the 30-day payment terms by 18 days. No matching credit was found in the latest bank statement reconciliation. Recommended: send a payment reminder and validate banking details on file.',
-+    priority: 'High',
-+    status: 'New',
-+    dueDate: '2026-05-22',
-+    createdAt: '2026-05-14T08:12:00Z',
-+    modifiedAt: '2026-05-14T08:12:00Z',
-+  },
-+  {
-+    id: 'ca-002',
-+    actionSummarizedTitle: 'Contract CT-088 ends in 12 days, no renewal in pipeline',
-+    actionDetails: 'Contract CT-088 (Consultant: Petar Ivanov, Client: Northwind Logistics) has an end date of 2026-05-27 and no follow-on opportunity has been raised. Average margin on this contract is 27%. Recommended: contact the account manager and confirm renewal intent.',
-+    priority: 'High',
-+    status: 'In Progress',
-+    dueDate: '2026-05-20',
-+    createdAt: '2026-05-12T09:45:00Z',
-+    modifiedAt: '2026-05-13T14:02:00Z',
-+  },
-+  {
-+    id: 'ca-003',
-+    actionSummarizedTitle: '3 candidates marked Fit but no interview slot booked',
-+    actionDetails: 'Candidates Maria Stoyanova, James O\'Connor and Lucia Marin have been marked Fit for over 5 days with no Booked availability slot. Hiring velocity drops by ~40% when slots are not confirmed within 7 days of Fit decision.',
-+    priority: 'Medium',
-+    status: 'New',
-+    dueDate: '2026-05-19',
-+    createdAt: '2026-05-13T11:30:00Z',
-+    modifiedAt: '2026-05-13T11:30:00Z',
-+  },
-+  {
-+    id: 'ca-004',
-+    actionSummarizedTitle: 'Exchange rate for EURΓåÆRON missing for May 2026',
-+    actionDetails: 'No ExchangeRate record exists for EURΓåÆRON with effective date in May 2026. Reports and invoice snapshots will fall back to April 2026 rate (4.9772). Recommended: import the BNR official monthly rate.',
-+    priority: 'Low',
-+    status: 'New',
-+    dueDate: '2026-05-31',
-+    createdAt: '2026-05-10T07:00:00Z',
-+    modifiedAt: '2026-05-10T07:00:00Z',
-+  },
-+  {
-+    id: 'ca-005',
-+    actionSummarizedTitle: 'Bank statement BG-Apr-2026 has 4 unmatched credits',
-+    actionDetails: 'Smart Match for the BG entity April 2026 statement left 4 credit lines unreconciled (total Γé¼18,420). Two are within ┬▒0.01 of open invoices but outside the ┬▒30 day window. Recommended: review manually and confirm matches.',
-+    priority: 'Medium',
-+    status: 'In Progress',
-+    dueDate: '2026-05-18',
-+    createdAt: '2026-05-08T15:20:00Z',
-+    modifiedAt: '2026-05-13T09:10:00Z',
-+  },
-+  {
-+    id: 'ca-006',
-+    actionSummarizedTitle: 'Public holidays for 2026 not loaded for Bulgaria',
-+    actionDetails: 'Settings ΓåÆ Public Holidays contains 0 records with country=Bulgaria and year=2026. Working day calculations on Reports and Leave will be inaccurate.',
-+    priority: 'Medium',
-+    status: 'Closed',
-+    closingComments: 'Imported the official 2026 BG holiday calendar (12 entries) on 2026-05-09. Verified Reports working-day counts for May refreshed correctly.',
-+    dueDate: '2026-05-15',
-+    createdAt: '2026-05-05T10:00:00Z',
-+    modifiedAt: '2026-05-09T16:40:00Z',
-+  },
-+  {
-+    id: 'ca-007',
-+    actionSummarizedTitle: 'Duplicate Account suspected: "Globex" vs "Globex Corp"',
-+    actionDetails: 'Two Account records share the same VAT number (DE811234567) with slightly different names: Globex (acc-117) and Globex Corp (acc-204). Likely duplicates, with 3 contracts and 14 invoices spread across both.',
-+    priority: 'High',
-+    status: 'In Progress',
-+    dueDate: '2026-05-25',
-+    createdAt: '2026-05-11T13:15:00Z',
-+    modifiedAt: '2026-05-14T08:55:00Z',
-+  },
-+  {
-+    id: 'ca-008',
-+    actionSummarizedTitle: 'Timesheet TS-0421 submitted with 0 entries',
-+    actionDetails: 'Consultant Andrei Popescu submitted timesheet TS-0421 for week 19/2026 with 0 logged entries. Either an erroneous submission or full leave week ΓÇö flagged for verification.',
-+    priority: 'Low',
-+    status: 'Cancelled',
-+    closingComments: 'Confirmed with consultant ΓÇö full week of approved annual leave already on record. Timesheet legitimately empty. No action needed.',
-+    dueDate: '2026-05-12',
-+    createdAt: '2026-05-09T09:00:00Z',
-+    modifiedAt: '2026-05-10T11:25:00Z',
-+  },
-+  {
-+    id: 'ca-009',
-+    actionSummarizedTitle: 'Opportunity OPP-073 has no profiles sent for 21 days',
-+    actionDetails: 'Opportunity OPP-073 (Account: Stark Industries, raised 2026-04-23) is in Discussing stage with 0 candidate profiles sent. Average win rate drops below 5% when no profiles are sent within 14 days.',
-+    priority: 'Medium',
-+    status: 'New',
-+    dueDate: '2026-05-21',
-+    createdAt: '2026-05-14T07:30:00Z',
-+    modifiedAt: '2026-05-14T07:30:00Z',
-+  },
-+  {
-+    id: 'ca-010',
-+    actionSummarizedTitle: 'Dividend DIV-014 missing AGA document',
-+    actionDetails: 'Dividend payment DIV-014 (CSP-RO, Γé¼45,000, paid 2026-04-18) has no documentFile attached. Required for compliance and audit trail.',
-+    priority: 'High',
-+    status: 'New',
-+    dueDate: '2026-05-17',
-+    createdAt: '2026-05-13T16:00:00Z',
-+    modifiedAt: '2026-05-13T16:00:00Z',
-+  },
-+  {
-+    id: 'ca-011',
-+    actionSummarizedTitle: 'Contract CT-091 buy/sell currencies differ ΓÇö FX not pinned',
-+    actionDetails: 'Contract CT-091 has sellCurrency=GBP and buyCurrency=EUR with no exchange rate snapshot recorded for the active month. Profit forecast may be inaccurate.',
-+    priority: 'Low',
-+    status: 'Closed',
-+    closingComments: 'FX rate pinned manually for May 2026 (GBPΓåÆEUR 1.1732). Will revisit when monthly rate is loaded automatically.',
-+    dueDate: '2026-05-14',
-+    createdAt: '2026-05-07T08:45:00Z',
-+    modifiedAt: '2026-05-11T10:30:00Z',
-+  },
-+];
++| Logical name | Role in the process | Key fields the agent reads |
++|---|---|---|
++| `csp_Contract` | Primary entity. The commercial agreement. | All fields below. |
++| `csp_BusinessEntity` | The legal entity (CSP-RO / CSP-BG / CSP-US) issuing the contract. | `csp_name`, `csp_country`, `csp_baseCurrencyCode` |
++| `csp_Account` | Parent (client/payer) and optional child account on the contract. | `csp_accountNumber`, `csp_name`, `csp_status`, `csp_paymentTerms` |
++| `csp_Contact` | The contractor / assignee. | `csp_firstName`, `csp_lastName`, `csp_contactType`, `csp_availableForWork` |
++| `csp_ExchangeRate` | FX rates used when sell and buy currencies differ. | `csp_fromCurrencyCode`, `csp_toCurrencyCode`, `csp_rate`, `csp_effectiveDate` |
++| `csp_Invoice` | Billing artefacts referencing a contract. | `csp_invoiceNumber`, `csp_status`, `csp_periodMonth`, `csp_periodYear`, `csp_contractId` |
++| `csp_Timesheet` | Weekly time records linked to a contract. | `csp_weekStart`, `csp_status`, `csp_contractId` |
++| `csp_ContractMilestone` | Deliverable-based billing units. | `csp_status`, `csp_endDate`, `csp_contractId` |
++| `csp_CorporateAction` | **Write target.** Discrepancies are recorded here. | `csp_ActionSummarizedTitle`, `csp_ActionDetails`, `csp_Priority`, `csp_Duedate`, `statuscode` |
 +
++---
 +
- // ===== BUSINESS ENTITIES =====
- export const entities: BusinessEntity[] = [
-   {
-diff --git a/src/pages/Dashboard.tsx b/src/pages/Dashboard.tsx
-index 45f7bab..72fcbd6 100644
---- a/src/pages/Dashboard.tsx
-+++ b/src/pages/Dashboard.tsx
-@@ -1,623 +1,344 @@
--import { useMemo } from 'react';
--import { useNavigate } from 'react-router-dom';
--import {
--  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
--  PieChart, Pie, Cell, Legend,
--} from 'recharts';
--import { KpiCard, PageHeader, StatusBadge } from '@/components/shared';
--import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
--import { Badge } from '@/components/ui/badge';
-+import { useEffect, useMemo, useState } from 'react';
-+import { PageHeader } from '@/components/shared';
-+import { corporateActions as seedActions } from '@/data/mock-data';
-+import type { CorporateAction, CorporateActionPriority, CorporateActionStatus } from '@/types/crm';
-+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
- import { Button } from '@/components/ui/button';
--import { formatCurrency } from '@/lib/format';
--import {
--  Users, UserCheck, UserX, Target, TrendingUp, Receipt, AlertCircle, Calendar, Plane,
--} from 'lucide-react';
--import {
--  onboardingCandidates, prospects, invoices, expenses, contracts, leaveRequests,
--  getAccountById, getContactById,
--} from '@/data/mock-data';
--import type { ProspectStatus, CurrencyCode, LeaveType, Expense } from '@/types/crm';
--import { ExpenseFormSheet } from '@/components/expense/ExpenseFormSheet';
--import { useState } from 'react';
-+import { Textarea } from '@/components/ui/textarea';
-+import { Label } from '@/components/ui/label';
-+import { Badge } from '@/components/ui/badge';
-+import { Calendar, Sparkles, AlertTriangle, Lock } from 'lucide-react';
-+import { toast } from 'sonner';
-+import { cn } from '@/lib/utils';
-+import { formatDate } from '@/lib/format';
- 
--const PIPELINE_STAGES: ProspectStatus[] = [
--  'We Reached Out', 'Customer Reached Out', 'Discussing', 'Proposal Sent', 'Won',
--];
-+const STATUSES: CorporateActionStatus[] = ['New', 'In Progress', 'Closed', 'Cancelled'];
- 
--const STAGE_COLORS: Record<string, string> = {
--  'We Reached Out': 'hsl(220, 60%, 45%)',
--  'Customer Reached Out': 'hsl(207, 63%, 44%)',
--  'Discussing': 'hsl(38, 92%, 50%)',
--  'Proposal Sent': 'hsl(270, 60%, 50%)',
--  'Won': 'hsl(142, 76%, 36%)',
--  'Lost': 'hsl(0, 70%, 55%)',
-+const STATUS_STYLES: Record<CorporateActionStatus, { ring: string; bar: string; chip: string; glow: string }> = {
-+  'New':         { ring: 'ring-sky-200',    bar: 'from-sky-500 to-sky-400',           chip: 'bg-sky-100 text-sky-800',       glow: 'shadow-[0_0_0_1px_hsl(var(--border))]' },
-+  'In Progress': { ring: 'ring-amber-200',  bar: 'from-amber-500 to-orange-400',      chip: 'bg-amber-100 text-amber-800',   glow: 'shadow-[0_0_0_1px_hsl(var(--border))]' },
-+  'Closed':      { ring: 'ring-emerald-200',bar: 'from-emerald-500 to-emerald-400',   chip: 'bg-emerald-100 text-emerald-800', glow: 'shadow-[0_0_0_1px_hsl(var(--border))]' },
-+  'Cancelled':   { ring: 'ring-slate-200',  bar: 'from-slate-500 to-slate-400',       chip: 'bg-slate-200 text-slate-700',   glow: 'shadow-[0_0_0_1px_hsl(var(--border))]' },
- };
- 
--function inMonth(dateStr: string, year: number, month: number): boolean {
--  const d = new Date(dateStr);
--  return d.getFullYear() === year && d.getMonth() === month;
--}
-+const PRIORITY_META: Record<CorporateActionPriority, { emoji: string; label: string; ring: string; bg: string; text: string }> = {
-+  Low:    { emoji: '≡ƒºè', label: 'Low',    ring: 'ring-sky-300',     bg: 'bg-sky-50',     text: 'text-sky-700' },
-+  Medium: { emoji: '≡ƒÜ¿', label: 'Medium', ring: 'ring-amber-300',   bg: 'bg-amber-50',   text: 'text-amber-700' },
-+  High:   { emoji: '≡ƒöÑ', label: 'High',   ring: 'ring-rose-300',    bg: 'bg-rose-50',    text: 'text-rose-700' },
-+};
- 
--function startOfMonth(year: number, month: number) {
--  return new Date(year, month, 1);
-+function daysUntil(dateStr?: string): number | null {
-+  if (!dateStr) return null;
-+  const today = new Date(); today.setHours(0, 0, 0, 0);
-+  const d = new Date(dateStr); d.setHours(0, 0, 0, 0);
-+  return Math.round((d.getTime() - today.getTime()) / 86400000);
- }
--function endOfMonth(year: number, month: number) {
--  return new Date(year, month + 1, 0);
++## Contract field dictionary (`csp_Contract`)
 +
-+function dueLabel(action: CorporateAction): { text: string; tone: string } | null {
-+  if (!action.dueDate) return null;
-+  const closed = action.status === 'Closed' || action.status === 'Cancelled';
-+  const days = daysUntil(action.dueDate)!;
-+  if (closed) return { text: formatDate(action.dueDate), tone: 'text-muted-foreground' };
-+  if (days < 0) return { text: `${Math.abs(days)}d overdue`, tone: 'text-rose-700 font-semibold' };
-+  if (days === 0) return { text: 'Due today', tone: 'text-amber-700 font-semibold' };
-+  if (days <= 3) return { text: `Due in ${days}d`, tone: 'text-amber-700 font-medium' };
-+  return { text: formatDate(action.dueDate), tone: 'text-muted-foreground' };
- }
- 
- export default function Dashboard() {
--  const navigate = useNavigate();
--  const now = new Date();
--  const y = now.getFullYear();
--  const m = now.getMonth();
--
--  const prevY = m === 0 ? y - 1 : y;
--  const prevM = m === 0 ? 11 : m - 1;
--  const nextY = m === 11 ? y + 1 : y;
--  const nextM = m === 11 ? 0 : m + 1;
--
--  const [expenseDialog, setExpenseDialog] = useState<{ open: boolean; expense: Expense | null }>({
--    open: false,
--    expense: null,
--  });
--  const [refreshTick, setRefreshTick] = useState(0);
--
--  const monthLabel = (yy: number, mm: number) =>
--    new Date(yy, mm, 1).toLocaleString('en-US', { month: 'short', year: 'numeric' });
--
--  // ============ ONBOARDING ============
--  const onboardingStats = useMemo(() => {
--    const buckets = [
--      { key: 'last', y: prevY, m: prevM, label: monthLabel(prevY, prevM) },
--      { key: 'this', y, m, label: monthLabel(y, m) },
--      { key: 'next', y: nextY, m: nextM, label: monthLabel(nextY, nextM) },
--    ];
--    return buckets.map((b) => {
--      const inBucket = onboardingCandidates.filter((c) => inMonth(c.appliedDate, b.y, b.m));
--      return {
--        ...b,
--        total: inBucket.length,
--        fit: inBucket.filter((c) => c.status === 'Fit').length,
--        notFit: inBucket.filter((c) => c.status === 'Not Fit').length,
--        scheduled: inBucket.filter((c) => c.status === 'Scheduled').length,
--        applied: inBucket.filter((c) => c.status === 'Applied').length,
--      };
--    });
--  }, [y, m, prevY, prevM, nextY, nextM]);
--
--  const onboardingChartData = onboardingStats.map((b) => ({
--    month: b.label.split(' ')[0],
--    Fit: b.fit,
--    'Not Fit': b.notFit,
--    Pending: b.scheduled + b.applied,
--  }));
--
--  // ============ PROSPECTS ============
--  const prospectStats = useMemo(() => {
--    const byStage = PIPELINE_STAGES.map((s) => ({
--      stage: s,
--      count: prospects.filter((p) => p.status === s).length,
--      value: prospects
--        .filter((p) => p.status === s)
--        .reduce((sum, p) => sum + (p.estimatedValue ?? 0), 0),
--    }));
--    const lostCount = prospects.filter((p) => p.status === 'Lost').length;
--    const wonThisMonth = prospects.filter(
--      (p) => p.status === 'Won' && p.lastActivityDate && inMonth(p.lastActivityDate, y, m),
--    ).length;
--    const activePipelineValue = prospects
--      .filter((p) => !['Won', 'Lost'].includes(p.status))
--      .reduce((sum, p) => sum + (p.estimatedValue ?? 0), 0);
--    return { byStage, lostCount, wonThisMonth, activePipelineValue };
--  }, [y, m]);
--
--  const prospectChartData = prospectStats.byStage.map((s) => ({
--    name: s.stage,
--    value: s.count,
--  }));
-+  const [actions, setActions] = useState<CorporateAction[]>(() => [...seedActions]);
-+  const [openId, setOpenId] = useState<string | null>(null);
-+  const [draggedId, setDraggedId] = useState<string | null>(null);
-+  const [dragOver, setDragOver] = useState<CorporateActionStatus | null>(null);
- 
--  // ============ INVOICES ΓÇö incoming this month ============
--  const invoiceCash = useMemo(() => {
--    const monthStart = startOfMonth(y, m);
--    const monthEnd = endOfMonth(y, m);
--    const incoming = invoices.filter((inv) => {
--      if (inv.status !== 'Sent' && inv.status !== 'Overdue') return false;
--      const due = new Date(inv.dueDate);
--      return due >= monthStart && due <= monthEnd;
--    });
--
--    // Aggregate per currency
--    const byCurrency = new Map<CurrencyCode, { billing: number; profit: number; count: number }>();
--    let totalBillingEur = 0;
--    let totalProfitEur = 0;
--    // Naive FX ΓåÆ EUR for display rollup
--    const toEur: Record<CurrencyCode, number> = { EUR: 1, USD: 0.92, GBP: 1.17, RON: 0.2 };
--
--    for (const inv of incoming) {
--      const billing = inv.subtotal;
--      // Estimate cost from contract buyRate vs sellRate ratio if we can map
--      let estCost = billing * 0.78; // fallback ~22% margin
--      if (inv.contractId) {
--        const c = contracts.find((cc) => cc.id === inv.contractId);
--        if (c && c.sellRate > 0) {
--          estCost = billing * (c.buyRate / c.sellRate);
--        }
-+  const grouped = useMemo(() => {
-+    const g: Record<CorporateActionStatus, CorporateAction[]> = {
-+      'New': [], 'In Progress': [], 'Closed': [], 'Cancelled': [],
-+    };
-+    const now = new Date();
-+    const ym = (d: Date) => d.getFullYear() * 12 + d.getMonth();
-+    const currentYm = ym(now);
-+    for (const a of actions) {
-+      if (a.status === 'Closed') {
-+        const m = new Date(a.modifiedAt);
-+        if (ym(m) !== currentYm) continue;
-       }
--      const profit = billing - estCost;
--      const cur = byCurrency.get(inv.currencyCode) ?? { billing: 0, profit: 0, count: 0 };
--      cur.billing += billing;
--      cur.profit += profit;
--      cur.count += 1;
--      byCurrency.set(inv.currencyCode, cur);
--      totalBillingEur += billing * (toEur[inv.currencyCode] ?? 1);
--      totalProfitEur += profit * (toEur[inv.currencyCode] ?? 1);
-+      g[a.status].push(a);
-     }
-+    return g;
-+  }, [actions]);
- 
--    // Weekly schedule within month
--    const weeks: { label: string; billing: number; profit: number }[] = [];
--    let cursor = new Date(monthStart);
--    let weekIdx = 1;
--    while (cursor <= monthEnd) {
--      const weekEnd = new Date(cursor);
--      weekEnd.setDate(weekEnd.getDate() + 6);
--      const cap = weekEnd > monthEnd ? monthEnd : weekEnd;
--      const inWeek = incoming.filter((inv) => {
--        const d = new Date(inv.dueDate);
--        return d >= cursor && d <= cap;
--      });
--      const billing = inWeek.reduce(
--        (s, inv) => s + inv.subtotal * (toEur[inv.currencyCode] ?? 1), 0,
--      );
--      const profit = inWeek.reduce((s, inv) => {
--        let estCost = inv.subtotal * 0.78;
--        if (inv.contractId) {
--          const c = contracts.find((cc) => cc.id === inv.contractId);
--          if (c && c.sellRate > 0) estCost = inv.subtotal * (c.buyRate / c.sellRate);
--        }
--        return s + (inv.subtotal - estCost) * (toEur[inv.currencyCode] ?? 1);
--      }, 0);
--      weeks.push({
--        label: `W${weekIdx} (${cursor.getDate()}ΓÇô${cap.getDate()})`,
--        billing: Math.round(billing),
--        profit: Math.round(profit),
--      });
--      cursor = new Date(cap);
--      cursor.setDate(cursor.getDate() + 1);
--      weekIdx++;
-+  const moveTo = (id: string, status: CorporateActionStatus) => {
-+    const action = actions.find(a => a.id === id);
-+    if (!action) return;
-+    if (status === 'Cancelled' && !action.closingComments?.trim()) {
-+      toast.error('Closing Comments required before cancelling.');
-+      setOpenId(id);
-+      return;
-     }
-+    setActions(prev => prev.map(a => a.id === id ? { ...a, status, modifiedAt: new Date().toISOString() } : a));
-+    toast.success(`Moved to ${status}`);
-+  };
- 
--    return {
--      incoming,
--      byCurrency: Array.from(byCurrency.entries()),
--      totalBillingEur,
--      totalProfitEur,
--      weeks,
--    };
--  }, [y, m]);
--
--  // ============ EXPENSES ΓÇö unpaid due this month ============
--  const expenseDue = useMemo(() => {
--    const monthEnd = endOfMonth(y, m);
--    const unpaid = expenses.filter((e) => {
--      if (e.status === 'Paid') return false;
--      const due = new Date(e.dueDate);
--      return due <= monthEnd;
--    });
--    const toEur: Record<CurrencyCode, number> = { EUR: 1, USD: 0.92, GBP: 1.17, RON: 0.2 };
--    const byCurrency = new Map<CurrencyCode, { amount: number; count: number }>();
--    let totalEur = 0;
--    let overdueCount = 0;
--    for (const e of unpaid) {
--      const cur = byCurrency.get(e.currencyCode) ?? { amount: 0, count: 0 };
--      cur.amount += e.totalAmount;
--      cur.count += 1;
--      byCurrency.set(e.currencyCode, cur);
--      totalEur += e.totalAmount * (toEur[e.currencyCode] ?? 1);
--      if (new Date(e.dueDate) < now) overdueCount++;
--    }
--    // Top 5 to pay (largest first, then earliest due)
--    const top = [...unpaid]
--      .sort((a, b) => {
--        const dueDiff = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
--        if (dueDiff !== 0) return dueDiff;
--        return b.totalAmount - a.totalAmount;
--      })
--      .slice(0, 6);
--    return { unpaid, byCurrency: Array.from(byCurrency.entries()), totalEur, overdueCount, top };
--  }, [y, m, refreshTick]);
--
--  // ============ LEAVE ΓÇö last/this/next month ============
--  const leaveStats = useMemo(() => {
--    // A leave entry belongs to a bucket if it overlaps that calendar month.
--    const overlaps = (l: { startDate: string; endDate: string }, yy: number, mm: number) => {
--      const ms = startOfMonth(yy, mm);
--      const me = endOfMonth(yy, mm);
--      const ls = new Date(l.startDate);
--      const le = new Date(l.endDate);
--      return le >= ms && ls <= me;
--    };
--    const buckets = [
--      { key: 'last', y: prevY, m: prevM, label: monthLabel(prevY, prevM) },
--      { key: 'this', y, m, label: monthLabel(y, m) },
--      { key: 'next', y: nextY, m: nextM, label: monthLabel(nextY, nextM) },
--    ];
--    return buckets.map((b) => {
--      const list = leaveRequests
--        .filter((l) => l.status !== 'Rejected' && overlaps(l, b.y, b.m))
--        .sort((a, b2) => new Date(a.startDate).getTime() - new Date(b2.startDate).getTime());
--      return { ...b, list };
--    });
--  }, [y, m, prevY, prevM, nextY, nextM]);
--
--  const leaveTypeColor: Record<LeaveType, string> = {
--    'Annual Leave': 'bg-sky-100 text-sky-800',
--    'Sick Leave': 'bg-rose-100 text-rose-800',
--    'Personal Leave': 'bg-amber-100 text-amber-800',
--    'Public Holiday': 'bg-violet-100 text-violet-800',
-+  const updateAction = (id: string, patch: Partial<CorporateAction>) => {
-+    setActions(prev => prev.map(a => a.id === id ? { ...a, ...patch, modifiedAt: new Date().toISOString() } : a));
-   };
- 
-+  const open = actions.find(a => a.id === openId) || null;
++| Logical name | Type | Required | Default | Allowed values / derivation | Meaning |
++|---|---|---|---|---|---|
++| `csp_contractNumber` | String | yes | `CON-NNN` (system) | ΓÇö | Human-readable identifier. |
++| `csp_name` | String | yes | ΓÇö | ΓÇö | Descriptive title. |
++| `csp_contractType` | Choice | yes | `Standard Contracting` | `Standard Contracting`, `Permanent Employee`, `Fixed Price` | Commercial template. |
++| `csp_billingType` | Choice | yes | `Time & Material` | `Time & Material`, `Fixed Price`, `Monthly Salary`, `Standard Contracting` | How we bill the client. |
++| `csp_entityId` | Lookup ΓåÆ `csp_BusinessEntity` | yes | ΓÇö | ΓÇö | Issuing legal entity. |
++| `csp_parentAccountId` | Lookup ΓåÆ `csp_Account` | yes | ΓÇö | ΓÇö | Client / payer. |
++| `csp_childAccountId` | Lookup ΓåÆ `csp_Account` | no | ΓÇö | ΓÇö | Sub-account (e.g. end client when invoicing through a recruiter). |
++| `csp_contactId` | Lookup ΓåÆ `csp_Contact` | yes | ΓÇö | ΓÇö | Contractor / assignee. |
++| `csp_sellRate` | Decimal | yes | ΓÇö | per `csp_unitOfMeasure` | What we charge the client. |
++| `csp_sellHourlyRate` | Decimal | no | derived | `csp_sellRate / 8` if UoM = `Day` | Hourly equivalent. |
++| `csp_sellCurrency` | Choice | yes | `EUR` | `USD`, `EUR`, `RON`, `GBP` | Currency of sell rate. |
++| `csp_buyRate` | Decimal | yes | ΓÇö | per `csp_unitOfMeasure` | What we pay the contractor. |
++| `csp_buyHourlyRate` | Decimal | no | derived | `csp_buyRate / 8` if UoM = `Day` | |
++| `csp_buyCurrency` | Choice | yes | `EUR` | `USD`, `EUR`, `RON`, `GBP` | Currency of buy rate. |
++| `csp_unitOfMeasure` | Choice | yes | `Day` | `Day`, `Hour`, `Month`, `Fixed` | Billing unit. |
++| `csp_payTerms` | Choice | yes | `30 Days` | `15 Days`, `30 Days`, `45 Days`, `60 Days` | Inherited from account on create. |
++| `csp_margin` | Decimal | derived | ΓÇö | `sellRate ΓêÆ buyRate` (same UoM, FX-converted if needed) | Per-unit margin. |
++| `csp_marginPercent` | Decimal | derived | ΓÇö | `margin / sellRate ├ù 100` | Margin %. |
++| `csp_grossValue` | Decimal | no | ΓÇö | ΓÇö | Total value for Fixed Price. |
++| `csp_monthlySalary` | Decimal | no* | ΓÇö | * required when `csp_contractType = Permanent Employee` | Salary for permanent employees. |
++| `csp_monthlySalaryCurrency` | Choice | no | `EUR` | `USD`, `EUR`, `RON`, `GBP` | |
++| `csp_startDate` | DateOnly | yes | ΓÇö | ΓÇö | Effective start. |
++| `csp_endDate` | DateOnly | no | ΓÇö | `ΓëÑ csp_startDate` | Planned end. |
++| `csp_actualEndDate` | DateOnly | no | ΓÇö | `ΓëÑ csp_startDate` | Set when terminated/completed early. |
++| `csp_noticePeriod` | String | no | ΓÇö | e.g. `30 days` | Free-text notice period. |
++| `csp_hasTimesheet` | Boolean | yes | `true` | ΓÇö | Enables timesheet generation. |
++| `csp_hasMilestones` | Boolean | yes | `false` | ΓÇö | Enables milestones. |
++| `csp_calendarType` | String | no | ΓÇö | e.g. `RO holidays` | Holiday calendar applied. |
++| `statuscode` (`csp_status`) | Choice | yes | `Draft` | `Draft`, `Active`, `On Hold`, `Completed`, `Terminated` | Lifecycle state. |
 +
-   return (
--    <div className="space-y-6">
-+    <div>
-       <PageHeader
--        title="Dashboard"
--        subtitle={`Operational snapshot ΓÇö ${monthLabel(y, m)}`}
-+        title="Corporate Actions"
-+        subtitle="AI-surfaced things to do ΓÇö keep the operation tidy, leave a trail."
-       />
- 
--      {/* ============ ONBOARDING ============ */}
--      <section>
--        <div className="flex items-center justify-between mb-3">
--          <h2 className="text-lg font-semibold flex items-center gap-2">
--            <Users className="h-5 w-5 text-primary" /> Candidate Onboarding
--          </h2>
--          <Button variant="outline" size="sm" onClick={() => navigate('/onboarding/candidates')}>
--            View all
--          </Button>
--        </div>
--        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
--          {onboardingStats.map((b) => (
--            <Card key={b.key}>
--              <CardHeader className="pb-2">
--                <CardTitle className="text-sm font-medium text-muted-foreground">
--                  {b.key === 'last' ? 'Last month' : b.key === 'this' ? 'This month' : 'Next month'}
--                  <span className="ml-2 text-xs font-normal">({b.label})</span>
--                </CardTitle>
--              </CardHeader>
--              <CardContent>
--                <div className="text-3xl font-bold">{b.total}</div>
--                <div className="text-xs text-muted-foreground mb-3">candidates</div>
--                <div className="flex flex-wrap gap-2 text-xs">
--                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-100 text-emerald-800">
--                    <UserCheck className="h-3 w-3" /> {b.fit} Fit
--                  </span>
--                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-rose-100 text-rose-800">
--                    <UserX className="h-3 w-3" /> {b.notFit} Not Fit
--                  </span>
--                  {(b.scheduled + b.applied) > 0 && (
--                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-muted text-muted-foreground">
--                      {b.scheduled + b.applied} Pending
--                    </span>
--                  )}
--                </div>
--              </CardContent>
--            </Card>
--          ))}
--          <Card>
--            <CardHeader className="pb-2">
--              <CardTitle className="text-sm font-medium text-muted-foreground">3-month outcome</CardTitle>
--            </CardHeader>
--            <CardContent>
--              <ResponsiveContainer width="100%" height={120}>
--                <BarChart data={onboardingChartData}>
--                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
--                  <YAxis hide />
--                  <Tooltip />
--                  <Bar dataKey="Fit" stackId="a" fill="hsl(142, 76%, 36%)" radius={[0, 0, 0, 0]} />
--                  <Bar dataKey="Not Fit" stackId="a" fill="hsl(0, 70%, 55%)" />
--                  <Bar dataKey="Pending" stackId="a" fill="hsl(220, 14%, 75%)" radius={[4, 4, 0, 0]} />
--                </BarChart>
--              </ResponsiveContainer>
--            </CardContent>
--          </Card>
--        </div>
--      </section>
--
--      {/* ============ PROSPECTS ============ */}
--      <section>
--        <div className="flex items-center justify-between mb-3">
--          <h2 className="text-lg font-semibold flex items-center gap-2">
--            <Target className="h-5 w-5 text-primary" /> Prospects Pipeline
--          </h2>
--          <Button variant="outline" size="sm" onClick={() => navigate('/prospecting/prospects')}>
--            Open Kanban
--          </Button>
--        </div>
--        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
--          <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-3 gap-3">
--            <KpiCard
--              title="Active pipeline"
--              value={String(
--                prospects.filter((p) => !['Won', 'Lost'].includes(p.status)).length,
-+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-+        {STATUSES.map(status => {
-+          const items = grouped[status];
-+          const styles = STATUS_STYLES[status];
-+          const isDragOver = dragOver === status;
-+          return (
-+            <div
-+              key={status}
-+              onDragOver={(e) => { e.preventDefault(); setDragOver(status); }}
-+              onDragLeave={() => setDragOver(prev => prev === status ? null : prev)}
-+              onDrop={() => { if (draggedId) moveTo(draggedId, status); setDraggedId(null); setDragOver(null); }}
-+              className={cn(
-+                'flex flex-col rounded-xl border bg-muted/20 transition-all',
-+                isDragOver && 'ring-2 ring-primary/40 bg-primary/5'
-               )}
--              subtitle={`${formatCurrency(prospectStats.activePipelineValue, 'EUR')} estimated`}
--            />
--            <KpiCard
--              title="Won this month"
--              value={String(prospectStats.wonThisMonth)}
--              icon={<TrendingUp className="h-4 w-4" />}
--            />
--            <KpiCard title="Lost (all time)" value={String(prospectStats.lostCount)} />
--            {prospectStats.byStage.map((s) => (
--              <Card key={s.stage}>
--                <CardContent className="p-4">
--                  <div className="flex items-center justify-between mb-1">
--                    <span className="text-xs font-medium text-muted-foreground">{s.stage}</span>
--                    <Badge
--                      style={{ backgroundColor: STAGE_COLORS[s.stage], color: 'white' }}
--                      className="text-xs"
--                    >
--                      {s.count}
--                    </Badge>
--                  </div>
--                  <div className="text-sm font-semibold">
--                    {s.value > 0 ? formatCurrency(s.value, 'EUR') : 'ΓÇö'}
--                  </div>
--                </CardContent>
--              </Card>
--            ))}
--          </div>
--          <Card>
--            <CardHeader className="pb-2">
--              <CardTitle className="text-sm font-medium">Stage distribution</CardTitle>
--            </CardHeader>
--            <CardContent>
--              <ResponsiveContainer width="100%" height={220}>
--                <PieChart>
--                  <Pie
--                    data={prospectChartData.filter((d) => d.value > 0)}
--                    cx="50%"
--                    cy="50%"
--                    outerRadius={70}
--                    innerRadius={35}
--                    dataKey="value"
--                    label={({ name, value }) => `${value}`}
--                  >
--                    {prospectChartData.map((d, i) => (
--                      <Cell key={i} fill={STAGE_COLORS[d.name] ?? 'hsl(220, 14%, 60%)'} />
--                    ))}
--                  </Pie>
--                  <Tooltip />
--                  <Legend wrapperStyle={{ fontSize: 11 }} />
--                </PieChart>
--              </ResponsiveContainer>
--            </CardContent>
--          </Card>
--        </div>
--      </section>
--
--      {/* ============ INVOICES INCOMING ============ */}
--      <section>
--        <div className="flex items-center justify-between mb-3">
--          <h2 className="text-lg font-semibold flex items-center gap-2">
--            <Receipt className="h-5 w-5 text-primary" /> Incoming Invoice Cash ΓÇö {monthLabel(y, m)}
--          </h2>
--          <Button variant="outline" size="sm" onClick={() => navigate('/invoices')}>
--            View invoices
--          </Button>
--        </div>
--        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
--          <Card>
--            <CardHeader className="pb-2">
--              <CardTitle className="text-sm font-medium text-muted-foreground">
--                Expected this month
--              </CardTitle>
--            </CardHeader>
--            <CardContent className="space-y-3">
--              <div>
--                <div className="text-xs text-muted-foreground">Total billing (EUR equiv.)</div>
--                <div className="text-2xl font-bold">
--                  {formatCurrency(invoiceCash.totalBillingEur, 'EUR')}
--                </div>
-+            >
-+              <div className="px-3 pt-3">
-+                <div className={cn('h-1.5 w-full rounded-full bg-gradient-to-r', styles.bar)} />
-               </div>
--              <div>
--                <div className="text-xs text-muted-foreground">Estimated profit</div>
--                <div className="text-xl font-semibold text-emerald-700">
--                  {formatCurrency(invoiceCash.totalProfitEur, 'EUR')}
-+              <div className="px-3 py-2 flex items-center justify-between">
-+                <div className="flex items-center gap-2">
-+                  <span className="text-sm font-semibold">{status}</span>
-+                  <span className={cn('text-[11px] rounded-full px-2 py-0.5 font-medium', styles.chip)}>{items.length}</span>
-                 </div>
-               </div>
--              <div className="pt-2 border-t space-y-1">
--                {invoiceCash.byCurrency.length === 0 && (
--                  <div className="text-sm text-muted-foreground">No invoices due this month.</div>
--                )}
--                {invoiceCash.byCurrency.map(([cur, v]) => (
--                  <div key={cur} className="flex justify-between text-xs">
--                    <span className="text-muted-foreground">
--                      {cur} ┬╖ {v.count} invoice{v.count > 1 ? 's' : ''}
--                    </span>
--                    <span className="font-medium">
--                      {formatCurrency(v.billing, cur)} ┬╖ profit {formatCurrency(v.profit, cur)}
--                    </span>
--                  </div>
-+              <div className="flex-1 px-2 pb-2 space-y-2 min-h-[60vh]">
-+                {items.map(a => (
-+                  <ActionCard
-+                    key={a.id}
-+                    action={a}
-+                    onClick={() => setOpenId(a.id)}
-+                    onDragStart={() => setDraggedId(a.id)}
-+                    onDragEnd={() => { setDraggedId(null); setDragOver(null); }}
-+                  />
-                 ))}
-+                {items.length === 0 && (
-+                  <div className="text-[11px] text-muted-foreground/60 text-center py-6 border border-dashed rounded-md">
-+                    Drop here
-+                  </div>
-+                )}
-               </div>
--            </CardContent>
--          </Card>
-+            </div>
-+          );
-+        })}
-+      </div>
- 
--          <Card className="lg:col-span-2">
--            <CardHeader className="pb-2">
--              <CardTitle className="text-sm font-medium">When the cash lands (by week)</CardTitle>
--            </CardHeader>
--            <CardContent>
--              <ResponsiveContainer width="100%" height={220}>
--                <BarChart data={invoiceCash.weeks}>
--                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
--                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
--                  <YAxis tick={{ fontSize: 11 }} />
--                  <Tooltip
--                    formatter={(v: number) => formatCurrency(v, 'EUR')}
--                  />
--                  <Legend wrapperStyle={{ fontSize: 11 }} />
--                  <Bar dataKey="billing" fill="hsl(207, 63%, 44%)" name="Billing" radius={[4, 4, 0, 0]} />
--                  <Bar dataKey="profit" fill="hsl(142, 76%, 36%)" name="Profit" radius={[4, 4, 0, 0]} />
--                </BarChart>
--              </ResponsiveContainer>
--            </CardContent>
--          </Card>
--        </div>
--      </section>
-+      <ActionSheet
-+        action={open}
-+        onClose={() => setOpenId(null)}
-+        onSave={(patch) => {
-+          if (!open) return false;
-+          if (patch.status === 'Cancelled' && !patch.closingComments?.trim()) {
-+            toast.error('Closing Comments required before cancelling.');
-+            return false;
-+          }
-+          updateAction(open.id, patch);
-+          toast.success('Changes saved');
-+          setOpenId(null);
-+          return true;
-+        }}
-+      />
-+    </div>
-+  );
-+}
- 
--      {/* ============ EXPENSES UNPAID ============ */}
--      <section>
--        <div className="flex items-center justify-between mb-3">
--          <h2 className="text-lg font-semibold flex items-center gap-2">
--            <AlertCircle className="h-5 w-5 text-primary" /> Expenses to Pay ΓÇö {monthLabel(y, m)}
--          </h2>
--          <Button variant="outline" size="sm" onClick={() => navigate('/expenses')}>
--            View expenses
--          </Button>
--        </div>
--        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
--          <Card>
--            <CardHeader className="pb-2">
--              <CardTitle className="text-sm font-medium text-muted-foreground">
--                Unpaid &amp; due this month
--              </CardTitle>
--            </CardHeader>
--            <CardContent className="space-y-3">
--              <div>
--                <div className="text-xs text-muted-foreground">Total to pay (EUR equiv.)</div>
--                <div className="text-2xl font-bold">
--                  {formatCurrency(expenseDue.totalEur, 'EUR')}
--                </div>
--              </div>
--              {expenseDue.overdueCount > 0 && (
--                <Badge variant="destructive" className="text-xs">
--                  {expenseDue.overdueCount} already overdue
--                </Badge>
--              )}
--              <div className="pt-2 border-t space-y-1">
--                {expenseDue.byCurrency.length === 0 && (
--                  <div className="text-sm text-muted-foreground">Nothing due ΓÇö all clear!</div>
--                )}
--                {expenseDue.byCurrency.map(([cur, v]) => (
--                  <div key={cur} className="flex justify-between text-xs">
--                    <span className="text-muted-foreground">
--                      {cur} ┬╖ {v.count} item{v.count > 1 ? 's' : ''}
--                    </span>
--                    <span className="font-medium">{formatCurrency(v.amount, cur)}</span>
--                  </div>
--                ))}
--              </div>
--            </CardContent>
--          </Card>
-+function KpiPill({ icon, label, value, tone }: { icon?: React.ReactNode; label: string; value: number; tone: string }) {
-+  return (
-+    <div className="rounded-xl border bg-card p-3 flex items-center gap-3">
-+      {icon && <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center', tone)}>{icon}</div>}
-+      <div>
-+        <p className="text-xs text-muted-foreground">{label}</p>
-+        <p className="text-xl font-bold leading-tight">{value}</p>
-+      </div>
-+    </div>
-+  );
-+}
- 
--          <Card className="lg:col-span-2">
--            <CardHeader className="pb-2">
--              <CardTitle className="text-sm font-medium flex items-center gap-2">
--                <Calendar className="h-4 w-4" /> Top items to settle
--              </CardTitle>
--            </CardHeader>
--            <CardContent>
--              {expenseDue.top.length === 0 ? (
--                <div className="text-sm text-muted-foreground py-6 text-center">
--                  No unpaid expenses.
--                </div>
--              ) : (
--                <div className="divide-y">
--                  {expenseDue.top.map((e) => {
--                    const acct = getAccountById(e.accountId);
--                    const overdue = new Date(e.dueDate) < now;
--                    return (
--                      <button
--                        key={e.id}
--                        onClick={() => setExpenseDialog({ open: true, expense: e })}
--                        className="w-full flex items-center justify-between py-2 text-sm text-left hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
--                      >
--                        <div className="flex-1 min-w-0">
--                          <div className="font-medium truncate">{acct?.name ?? e.reference}</div>
--                          <div className="text-xs text-muted-foreground">
--                            {e.expenseType} ┬╖ due {new Date(e.dueDate).toLocaleDateString('en-GB')}
--                          </div>
--                        </div>
--                        <div className="flex items-center gap-3">
--                          <StatusBadge status={overdue ? 'Overdue' : e.status} />
--                          <div className="text-right font-semibold">
--                            {formatCurrency(e.totalAmount, e.currencyCode)}
--                          </div>
--                        </div>
--                      </button>
--                    );
--                  })}
--                </div>
--              )}
--            </CardContent>
--          </Card>
-+function ActionCard({
-+  action, onClick, onDragStart, onDragEnd,
-+}: {
-+  action: CorporateAction;
-+  onClick: () => void;
-+  onDragStart: () => void;
-+  onDragEnd: () => void;
-+}) {
-+  const p = PRIORITY_META[action.priority];
-+  const due = dueLabel(action);
-+  return (
-+    <div
-+      draggable
-+      onDragStart={onDragStart}
-+      onDragEnd={onDragEnd}
-+      onClick={onClick}
-+      className={cn(
-+        'group rounded-lg border bg-card p-3 cursor-grab active:cursor-grabbing',
-+        'hover:shadow-md hover:border-primary/40 transition'
-+      )}
-+    >
-+      <div className="flex items-start gap-2.5">
-+        <div className={cn(
-+          'shrink-0 h-9 w-9 rounded-lg flex items-center justify-center text-lg ring-1',
-+          p.bg, p.ring
-+        )} title={`${p.label} priority`}>
-+          {p.emoji}
-         </div>
--      </section>
-+        <div className="min-w-0 flex-1">
-+          <p className="text-sm font-medium leading-snug line-clamp-3">{action.actionSummarizedTitle}</p>
-+          <div className="mt-2 flex items-center justify-between gap-2">
-+            <span className={cn('text-[10px] rounded px-1.5 py-0.5 font-medium', p.bg, p.text)}>
-+              {p.label}
-+            </span>
-+            {due && (
-+              <span className={cn('inline-flex items-center gap-1 text-[11px]', due.tone)}>
-+                <Calendar className="h-3 w-3" />{due.text}
-+              </span>
-+            )}
-+          </div>
-+        </div>
-+      </div>
-+    </div>
-+  );
-+}
++---
 +
-+function ActionSheet({
-+  action, onClose, onSave,
-+}: {
-+  action: CorporateAction | null;
-+  onClose: () => void;
-+  onSave: (patch: { status: CorporateActionStatus; closingComments?: string }) => boolean;
-+}) {
-+  const [draftStatus, setDraftStatus] = useState<CorporateActionStatus>('New');
-+  const [draftComments, setDraftComments] = useState('');
++## Choice sets (canonical values)
 +
-+  // Reset draft when opening a different action.
-+  useEffect(() => {
-+    if (action) {
-+      setDraftStatus(action.status);
-+      setDraftComments(action.closingComments ?? '');
-+    }
-+  }, [action?.id]);
++- **ContractType:** `Standard Contracting` | `Permanent Employee` | `Fixed Price`
++- **BillingType:** `Time & Material` | `Fixed Price` | `Monthly Salary` | `Standard Contracting`
++- **ContractStatus:** `Draft` | `Active` | `On Hold` | `Completed` | `Terminated`
++- **UnitOfMeasure:** `Day` | `Hour` | `Month` | `Fixed`
++- **PaymentTerms:** `15 Days` | `30 Days` | `45 Days` | `60 Days`
++- **CurrencyCode:** `USD` | `EUR` | `RON` | `GBP`
 +
-+  if (!action) return null;
-+  const p = PRIORITY_META[action.priority];
-+  const dirty = draftStatus !== action.status || draftComments !== (action.closingComments ?? '');
-+  const cancelBlocked = draftStatus === 'Cancelled' && !draftComments.trim();
++---
 +
-+  const handleSave = () => {
-+    onSave({ status: draftStatus, closingComments: draftComments });
-+  };
-+  const handleCancel = () => {
-+    setDraftStatus(action.status);
-+    setDraftComments(action.closingComments ?? '');
-+    onClose();
-+  };
++## Lifecycle & status transitions
 +
-+  return (
-+    <Sheet open={!!action} onOpenChange={(o) => { if (!o) handleCancel(); }}>
-+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto flex flex-col p-0">
-+        <div className="px-6 pt-6">
-+          <SheetHeader>
-+            <div className="flex items-center gap-2">
-+              <span className={cn('h-9 w-9 rounded-lg flex items-center justify-center text-lg ring-1', p.bg, p.ring)}>{p.emoji}</span>
-+              <Badge variant="outline" className={cn('font-medium', p.text)}>{p.label} priority</Badge>
-+            </div>
-+            <SheetTitle className="text-left mt-2">{action.actionSummarizedTitle}</SheetTitle>
-+            <SheetDescription className="text-left">
-+              {action.dueDate ? `Due ${formatDate(action.dueDate)}` : 'No due date set'}
-+              {' ┬╖ '}Created {formatDate(action.createdAt.slice(0, 10))}
-+            </SheetDescription>
-+          </SheetHeader>
- 
--      {/* ============ LEAVE ============ */}
--      <section>
--        <div className="flex items-center justify-between mb-3">
--          <h2 className="text-lg font-semibold flex items-center gap-2">
--            <Plane className="h-5 w-5 text-primary" /> Leave Schedule
--          </h2>
--          <Button variant="outline" size="sm" onClick={() => navigate('/leave')}>
--            View all
--          </Button>
-+          {/* Sticky status switcher */}
-+          <div className="mt-4 -mx-6 px-6 py-3 sticky top-0 z-10 bg-background/95 backdrop-blur border-y">
-+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Status Reason</Label>
-+            <div className="mt-1.5 inline-flex w-full rounded-lg border bg-muted/40 p-1 gap-1">
-+              {STATUSES.map(s => {
-+                const active = draftStatus === s;
-+                const blocked = s === 'Cancelled' && !draftComments.trim();
-+                return (
-+                  <button
-+                    key={s}
-+                    type="button"
-+                    onClick={() => {
-+                      if (blocked) {
-+                        toast.error('Closing Comments required to set Cancelled.');
-+                        return;
-+                      }
-+                      setDraftStatus(s);
-+                    }}
-+                    className={cn(
-+                      'flex-1 text-xs font-medium rounded-md px-2 py-1.5 transition-all',
-+                      active
-+                        ? cn(STATUS_STYLES[s].chip, 'shadow-sm ring-1 ring-border')
-+                        : 'text-muted-foreground hover:bg-background/80',
-+                      blocked && !active && 'opacity-50 cursor-not-allowed'
++```
++Draft ΓöÇΓöÇΓû╢ Active ΓöÇΓöÇΓû╢ On Hold ΓöÇΓöÇΓû╢ Active
++                Γöé                   Γöé
++                Γö£ΓöÇΓöÇΓû╢ Completed     Γöé
++                ΓööΓöÇΓöÇΓû╢ Terminated ΓùÇΓöÇΓöÇΓöÿ
++```
++
++Allowed transitions:
++
++| From | To | Preconditions |
++|---|---|---|
++| `Draft` | `Active` | All required fields populated; counterparty accounts/contact `Active`. |
++| `Active` | `On Hold` | None. |
++| `On Hold` | `Active` | None. |
++| `Active` / `On Hold` | `Completed` | `csp_actualEndDate` set; no pending milestones in `Pending`. |
++| `Active` / `On Hold` | `Terminated` | `csp_actualEndDate` set. |
++| Anything | `Draft` | Forbidden. |
++
++Implications:
++
++- Only `Active` contracts feed timesheet generation and invoice creation.
++- `Completed` / `Terminated` contracts must not appear in current-month forecasts.
++
++---
++
++## Validation rules (agent-runnable checks)
++
++For each rule: **Given ΓåÆ Assert ΓåÆ Else raise** discrepancy `D-NN` (see catalog).
++
++1. **R1 ΓÇö Required fields.** Given a contract with `statuscode != Draft`, assert all required fields are populated. Else raise `D-01`.
++2. **R2 ΓÇö Date ordering.** Assert `csp_endDate >= csp_startDate` when `csp_endDate` is set, and `csp_actualEndDate >= csp_startDate` when set. Else raise `D-02`.
++3. **R3 ΓÇö Distinct accounts.** Assert `csp_parentAccountId != csp_childAccountId`. Else raise `D-03` (High).
++4. **R4 ΓÇö Fixed Price configuration.** Given `csp_contractType = Fixed Price` AND `csp_billingType = Fixed Price`, assert `csp_hasTimesheet = false` AND `csp_hasMilestones = true`. Else raise `D-04` (High).
++5. **R5 ΓÇö Permanent employee salary.** Given `csp_contractType = Permanent Employee`, assert `csp_monthlySalary > 0` AND `csp_monthlySalaryCurrency` set. Else raise `D-05` (High).
++6. **R6 ΓÇö Termination requires actual end date.** Given `statuscode = Terminated`, assert `csp_actualEndDate` is set. Else raise `D-06` (High).
++7. **R7 ΓÇö Active past end date.** Given `statuscode = Active` AND `csp_endDate < today`, raise `D-07` (High).
++8. **R8 ΓÇö Margin floor.** Given derived `csp_marginPercent < 10`, raise `D-08` (Medium).
++9. **R9 ΓÇö Currency mismatch with stale FX.** Given `csp_sellCurrency != csp_buyCurrency` AND latest matching `csp_ExchangeRate.csp_effectiveDate` is older than 30 days (or missing), raise `D-09` (Low).
++10. **R10 ΓÇö Counterparty status.** Given the parent account or contact is `Inactive`, raise `D-10` (Medium).
++11. **R11 ΓÇö Timesheet expected but missing.** Given `statuscode = Active` AND `csp_hasTimesheet = true` AND no `csp_Timesheet` exists for the contract for the previous calendar month, raise `D-11` (Medium).
++12. **R12 ΓÇö Milestone overdue.** Given a related `csp_ContractMilestone` with `csp_status = Pending` AND `csp_endDate < today`, raise `D-12` (Medium).
++13. **R13 ΓÇö Mutually exclusive flags.** Given `csp_hasTimesheet = true` AND `csp_hasMilestones = true`, raise `D-13` (High) ΓÇö these must not both be true.
++14. **R14 ΓÇö Account payment-terms drift.** Given `csp_payTerms` differs from the parent account's current `csp_paymentTerms`, raise `D-14` (Low).
++
++---
++
++## Derivations & formulas
++
++- **Hourly from daily:** if `csp_unitOfMeasure = Day`, then `csp_sellHourlyRate = csp_sellRate / 8` and `csp_buyHourlyRate = csp_buyRate / 8`.
++- **Same-currency margin:** `csp_margin = csp_sellRate ΓêÆ csp_buyRate`; `csp_marginPercent = csp_margin / csp_sellRate ├ù 100`.
++- **Cross-currency margin (display):** convert `csp_buyRate` from `csp_buyCurrency` ΓåÆ `csp_sellCurrency` using the most recent `csp_ExchangeRate` whose `csp_effectiveDate <= today`. Then apply the same-currency formula. Flag the result as `display-only` because the booked margin uses period-specific rates.
++- **Invoice line amount suggestion:** `quantity ├ù (csp_sellRate if UoM = invoice line UoM, else csp_sellHourlyRate when invoicing in Hours)`.
++
++---
++
++## Cross-entity effects & integrity
++
++- **Timesheet eligibility:** only contracts with `statuscode = Active` AND `csp_hasTimesheet = true` AND NOT (`csp_contractType = Fixed Price` AND `csp_billingType = Fixed Price`) appear in the timesheet generator.
++- **Milestone eligibility:** only contracts with `csp_hasMilestones = true` are eligible for milestone records.
++- **Deletion blockers:** a contract cannot be deleted if any `csp_Invoice`, `csp_Expense`, `csp_Timesheet`, or `csp_ContractMilestone` references it.
++- **Account / contact dependencies:** if the contractor (`csp_contactId`) or parent account becomes `Inactive`, surface a discrepancy (R10) but do not auto-deactivate the contract.
++
++---
++
++## Discrepancy catalog (write to `csp_CorporateAction`)
++
++For each discrepancy the agent creates one `csp_CorporateAction` row. Use the following defaults:
++
++| ID | Title template | Priority | Due-date offset | `csp_ActionDetails` body (template) |
++|---|---|---|---|---|
++| D-01 | `Contract {csp_contractNumber} missing required fields` | High | +2 days | List the missing required field logical names and the contract's current status. |
++| D-02 | `Contract {csp_contractNumber} has invalid date ordering` | Medium | +3 days | Show `csp_startDate`, `csp_endDate`, `csp_actualEndDate` and indicate which ordering rule failed. |
++| D-03 | `Contract {csp_contractNumber} has same parent and child account` | High | +1 day | Show the offending account id and its name. |
++| D-04 | `Fixed Price contract {csp_contractNumber} misconfigured` | High | +2 days | Explain that `csp_hasTimesheet` must be false and `csp_hasMilestones` must be true for Fixed Price + Fixed Price. |
++| D-05 | `Permanent Employee contract {csp_contractNumber} missing monthly salary` | High | +2 days | Show contact name and ask admin to set `csp_monthlySalary` and `csp_monthlySalaryCurrency`. |
++| D-06 | `Terminated contract {csp_contractNumber} missing actual end date` | High | +1 day | Ask admin to set `csp_actualEndDate`. |
++| D-07 | `Active contract {csp_contractNumber} past planned end date` | High | +3 days | Show `csp_endDate`, days overdue, and ask whether to extend, complete, or terminate. |
++| D-08 | `Contract {csp_contractNumber} margin below 10%` | Medium | +7 days | Show derived `csp_marginPercent`, sell/buy rates and currencies. |
++| D-09 | `Contract {csp_contractNumber} uses stale FX rate` | Low | +14 days | Show currency pair, last `csp_ExchangeRate.csp_effectiveDate`, and the staleness in days. |
++| D-10 | `Contract {csp_contractNumber} references inactive counterparty` | Medium | +7 days | Identify which of parent account / contact is inactive. |
++| D-11 | `Active contract {csp_contractNumber} has no timesheet for {previousMonth}` | Medium | end of current month | List contractor, contract period, and the missing month. |
++| D-12 | `Pending milestone overdue on contract {csp_contractNumber}` | Medium | +3 days | Show milestone description, planned end, days overdue. |
++| D-13 | `Contract {csp_contractNumber} has both timesheet and milestone flags enabled` | High | +2 days | Ask admin to choose one billing model. |
++| D-14 | `Contract {csp_contractNumber} payment terms drifted from account` | Low | +14 days | Show contract `csp_payTerms` vs account `csp_paymentTerms`. |
++
++When raising a discrepancy:
++
++- Set `csp_ActionSummarizedTitle` from the template.
++- Set `csp_ActionDetails` (read-only after creation) with the templated body. Include the contract id and discrepancy code (`D-NN`) for traceability.
++- Set `csp_Priority` and `csp_Duedate` per the table.
++- Set `statuscode = New`.
++- Do **not** create a duplicate if an open (`New` or `In Progress`) `csp_CorporateAction` already exists for the same `(contractId, discrepancy code)` pair.
++
++---
++
++## Reference queries
++
++OData examples the agent can use as starting points:
++
++```
++# R7 ΓÇö Active contracts past end date
++GET /csp_contracts?$filter=statuscode eq 1 and csp_endDate lt {today}&$select=csp_contractid,csp_contractNumber,csp_endDate
++
++# R5 ΓÇö Permanent Employee missing salary
++GET /csp_contracts?$filter=csp_contractType eq 'Permanent Employee' and (csp_monthlySalary eq null or csp_monthlySalary eq 0)
++
++# R11 ΓÇö Active T&M contracts with no timesheet last month
++GET /csp_contracts?$filter=statuscode eq 1 and csp_hasTimesheet eq true
++# Then for each, check: /csp_timesheets?$filter=_csp_contractid_value eq {id} and csp_weekStart ge {firstDayPrevMonth} and csp_weekStart le {lastDayPrevMonth}
++
++# R9 ΓÇö Stale FX
++GET /csp_exchangerates?$filter=csp_fromCurrencyCode eq '{buy}' and csp_toCurrencyCode eq '{sell}'&$orderby=csp_effectiveDate desc&$top=1
++
++# Duplicate-suppression check before writing
++GET /csp_corporateactions?$filter=statuscode in (1,2) and contains(csp_ActionDetails,'D-07') and contains(csp_ActionDetails,'{contractId}')
++```
++
++FetchXML can be substituted equivalently; choose whichever the agent runtime prefers.
++
++---
++
++## Glossary
++
++- **Sell rate** ΓÇö what the client is charged per unit of measure.
++- **Buy rate** ΓÇö what we pay the contractor per unit of measure.
++- **Margin** ΓÇö `sell ΓêÆ buy` per unit; **margin %** is margin divided by sell.
++- **Time & Material (T&M)** ΓÇö billed against actual time logged on timesheets.
++- **Fixed Price** ΓÇö billed against pre-agreed milestones (`csp_ContractMilestone`).
++- **Standard Contracting** ΓÇö generic per-day or per-hour engagement, billed via timesheets.
++- **Permanent Employee** ΓÇö internal payroll contract; `csp_monthlySalary` drives cost, no timesheets/milestones.
++- **Parent account** ΓÇö the legal counterparty we invoice (the payer).
++- **Child account** ΓÇö optional sub-account, typically the end-client when invoicing through a middleman.
++- **Business Entity** ΓÇö one of our own legal entities (e.g. CSP-RO, CSP-BG, CSP-US) issuing the contract.
++- **Discrepancy** ΓÇö a rule violation detected by the agent and recorded as a `csp_CorporateAction` for human review.
+diff --git a/Business Skills/02-accounts-process.md b/Business Skills/02-accounts-process.md
+new file mode 100644
+index 0000000..a881bd4
+--- /dev/null
++++ b/Business Skills/02-accounts-process.md	
+@@ -0,0 +1,135 @@
++# Skill 02 ΓÇö Accounts Process
++
++## Skill name & intent
++
++**Name:** `accounts-process`
++
++**Intent:** Help an autonomous agent maintain a clean **Accounts** master (clients, contractors, suppliers, recruiter agencies, legal/tax entities). The agent verifies completeness, hierarchy integrity, single-level parent rules, and downstream usability of accounts in Contracts/Invoices/Expenses. Discrepancies are written as `csp_CorporateAction` records.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_Account` | Primary entity. | All fields below. |
++| `csp_BusinessEntity` | Owning entity. | `csp_country`, `csp_baseCurrencyCode` |
++| `csp_Contact` | Account contacts; primary contact lookup. | `csp_contactType`, `csp_email` |
++| `csp_Contract` | Used to count active contracts. | `csp_parentAccountId`, `csp_childAccountId`, `statuscode` |
++| `csp_Invoice` | Bill-to references. | `csp_accountId`, `statuscode` |
++| `csp_Expense` | Vendor references. | `csp_accountId`, `statuscode` |
++| `csp_PaymentDetail` | Bank details per `(account, currency)`. | `csp_accountId`, `csp_currencyCode`, `csp_isPrimary` |
++| `csp_Prospect` | Originating prospect when account was converted. | `csp_convertedAccountId` |
++| `csp_CorporateAction` | Write target. | ΓÇö |
++
++---
++
++## Account field dictionary (`csp_Account`)
++
++| Logical name | Type | Required | Default | Allowed / derivation | Meaning |
++|---|---|---|---|---|---|
++| `csp_accountNumber` | String | yes | manual | unique per `csp_entityId` | External reference. |
++| `csp_name` | String | yes | ΓÇö | ΓÇö | Display name. |
++| `csp_accountType` | Choice | yes | `Direct Customer` | `Direct Customer`, `Recruiter Client`, `Recruiter Agency`, `Partner B2B`, `Contractor`, `Supplier`, `Legal Taxes` | Commercial role. |
++| `csp_entityId` | Lookup ΓåÆ `csp_BusinessEntity` | yes | first entity | ΓÇö | Scopes data per legal entity. |
++| `csp_country` | String | yes | from entity | ISO country name | Used for VAT/holiday logic. |
++| `csp_vatNumber` | String | no | ΓÇö | ΓÇö | Required for EU clients (warn). |
++| `csp_registrationNumber` | String | no | ΓÇö | ΓÇö | |
++| `csp_paymentTerms` | Choice | yes | `30 Days` | `15 Days`, `30 Days`, `45 Days`, `60 Days` | Drives invoice `csp_dueDate`. |
++| `csp_invoiceComments` | Multiline | no | ΓÇö | ΓÇö | Injected into invoice footer. |
++| `csp_invoicingEmail` | Email | no | ΓÇö | ΓÇö | Used by Send Invoice flow. |
++| `csp_address`, `csp_phone`, `csp_email`, `csp_website` | String | no | ΓÇö | ΓÇö | |
++| `statuscode` (`csp_status`) | Choice | yes | `Active` | `Active`, `Inactive`, `Prospect` | |
++| `csp_parentAccountId` | Lookup ΓåÆ `csp_Account` | no | ΓÇö | single-level only | Hierarchy parent. |
++| `csp_primaryContactId` | Lookup ΓåÆ `csp_Contact` | no | ΓÇö | ΓÇö | Shown in account header. |
++| `csp_sourceProspectId` | Lookup ΓåÆ `csp_Prospect` | no | ΓÇö | ΓÇö | Set when created via Convert. |
++
++---
++
++## Choice sets
++
++- **AccountType:** `Direct Customer` | `Recruiter Client` | `Recruiter Agency` | `Partner B2B` | `Contractor` | `Supplier` | `Legal Taxes`
++- **AccountStatus:** `Active` | `Inactive` | `Prospect`
++- **PaymentTerms:** `15 Days` | `30 Days` | `45 Days` | `60 Days`
++
++---
++
++## Lifecycle
++
++- New accounts default to `Active`. `Prospect` is used when imported from prospecting flows pre-conversion.
++- Deactivation (`Active ΓåÆ Inactive`) hides the account from default lookup pickers but does not delete history.
++- Hard delete is blocked when the account has any `csp_Contract`, `csp_Invoice`, `csp_Expense`, or child accounts.
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Required fields.** Assert `csp_name`, `csp_accountType`, `csp_entityId`, `csp_country`, `csp_paymentTerms`, `statuscode` populated. Else `D-01`.
++2. **R2 ΓÇö Email format.** Validate `csp_email`, `csp_invoicingEmail` against email regex when set. Else `D-02`.
++3. **R3 ΓÇö URL format.** Validate `csp_website` if set. Else `D-03`.
++4. **R4 ΓÇö Single-level hierarchy.** Assert the chosen `csp_parentAccountId` itself has no parent, and is not `self`. Assert this account is not already a parent if being moved under another. Else `D-04` (High).
++5. **R5 ΓÇö EU VAT presence.** Given `csp_country` Γêê EU and `csp_accountType Γêê {Direct Customer, Recruiter Client, Partner B2B}`, assert `csp_vatNumber` is set. Else `D-05` (Medium).
++6. **R6 ΓÇö Primary contact validity.** Assert `csp_primaryContactId` (if set) belongs to a contact whose `csp_accountId = self`. Else `D-06` (Medium).
++7. **R7 ΓÇö Active account with no usage.** Given `statuscode = Active` and the account has zero contracts/invoices/expenses for >180 days, raise `D-07` (Low) suggesting deactivation.
++8. **R8 ΓÇö Contractor account missing primary payment detail.** Given `csp_accountType = Contractor`, assert at least one `csp_PaymentDetail` with `csp_isPrimary = true` exists. Else `D-08` (High).
++9. **R9 ΓÇö Inactive account still referenced by Active contracts.** Given `statuscode = Inactive` and any related `csp_Contract.statuscode = Active`, raise `D-09` (High).
++10. **R10 ΓÇö Duplicate account number.** Within the same `csp_entityId`, account numbers must be unique. Else `D-10` (High).
++
++---
++
++## Derivations
++
++- **`activeContracts`** = `count(csp_Contract where (csp_parentAccountId = self OR csp_childAccountId = self) AND statuscode = Active)`.
++
++---
++
++## Cross-entity effects
++
++- Changing `csp_paymentTerms` applies to **future** invoices only (existing invoices keep the snapshot).
++- Convert-from-Prospect copies `companyName ΓåÆ csp_name`, `country`, `industry`, `website`, `companySize`, marks the prospect `Won`, sets `csp_sourceProspectId`.
++- Inline contact creation links contact via `csp_accountId`; primary-contact mode also sets `csp_primaryContactId`.
++
++---
++
++## Discrepancy catalog (`csp_CorporateAction`)
++
++| ID | Title template | Priority | Due offset | Action details |
++|---|---|---|---|---|
++| D-01 | `Account {csp_accountNumber} missing required fields` | High | +2d | List missing required logical names. |
++| D-02 | `Account {csp_accountNumber} has invalid email` | Medium | +5d | Show offending field + value. |
++| D-03 | `Account {csp_accountNumber} has invalid website URL` | Low | +14d | Show value. |
++| D-04 | `Account {csp_accountNumber} violates single-level hierarchy` | High | +1d | Show parent chain and the violation. |
++| D-05 | `EU client account {csp_accountNumber} missing VAT number` | Medium | +7d | Show country and ask to add `csp_vatNumber`. |
++| D-06 | `Account {csp_accountNumber} primary contact not on this account` | Medium | +5d | Show contact's current `csp_accountId`. |
++| D-07 | `Active account {csp_accountNumber} unused for >180 days` | Low | +30d | Suggest deactivation. |
++| D-08 | `Contractor account {csp_accountNumber} missing primary payment detail` | High | +3d | Ask admin to add a `csp_PaymentDetail`. |
++| D-09 | `Inactive account {csp_accountNumber} still has Active contracts` | High | +2d | List contract numbers. |
++| D-10 | `Duplicate account number {csp_accountNumber} within entity` | High | +1d | List the duplicate ids. |
++
++Duplicate-suppression: skip if an open `csp_CorporateAction` exists for the same `(accountId, D-NN)`.
++
++---
++
++## Reference queries
++
++```
++# R7 ΓÇö Active accounts with no recent activity
++GET /csp_accounts?$filter=statuscode eq 1
++# Then for each: count contracts/invoices/expenses with modifiedon ge {today-180d}
++
++# R5 ΓÇö EU client missing VAT
++GET /csp_accounts?$filter=csp_accountType eq 'Direct Customer' and (csp_vatNumber eq null) and csp_country in ({EU_COUNTRIES})
++
++# R8 ΓÇö Contractor missing primary payment detail
++GET /csp_accounts?$filter=csp_accountType eq 'Contractor'
++# For each: GET /csp_paymentdetails?$filter=_csp_accountid_value eq {id} and csp_isPrimary eq true&$top=1
++```
++
++---
++
++## Glossary
++
++- **Account** ΓÇö any company we transact with.
++- **Parent / Child** ΓÇö single-level grouping; child is e.g. an end-client when invoicing through a recruiter.
++- **Primary contact** ΓÇö the default human counterparty on the account header.
++- **Convert** ΓÇö turning a `Prospect` into an `Account` + `Contact` on win.
+diff --git a/Business Skills/03-contacts-process.md b/Business Skills/03-contacts-process.md
+new file mode 100644
+index 0000000..5d5e1e9
+--- /dev/null
++++ b/Business Skills/03-contacts-process.md	
+@@ -0,0 +1,113 @@
++# Skill 03 ΓÇö Contacts Process
++
++## Skill name & intent
++
++**Name:** `contacts-process`
++
++**Intent:** Maintain the people directory ΓÇö consultants, client contacts, middlemen, finance contacts, permanent employees, interviewers. The agent ensures records are complete, deduplicated, correctly linked to accounts, and that profile-sharing rules (no direct send from Contacts; only via Opportunities) are upheld.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_Contact` | Primary entity. | All fields below. |
++| `csp_Account` | Employer/client. | `csp_accountType`, `statuscode` |
++| `csp_ContactCV` | CV variants library. | `csp_Document`, `isPrimary` (UI flag) |
++| `csp_Contract` | Engagements. | `csp_contactId`, `statuscode` |
++| `csp_OpportunityApplicant` | Profiles sent to clients. | `csp_Contact`, `csp_Document` |
++| `csp_AvailabilitySlot` | Interviewer scheduling. | `csp_interviewerId` |
++| `csp_LeaveRequest` | Leave referencing the contact. | `csp_contactId` |
++| `csp_Timesheet` | Time records. | `csp_contactId` |
++| `csp_JDSkill` | Skill catalogue. | `csp_name` |
++
++---
++
++## Contact field dictionary (`csp_Contact`)
++
++| Logical name | Type | Required | Notes |
++|---|---|---|---|
++| `csp_firstName`, `csp_lastName` | String | yes | |
++| `csp_email` | Email | yes | Should be unique. |
++| `csp_phone` | String | no | |
++| `csp_company` | String | no | Free-text fallback when no `csp_accountId`. |
++| `csp_accountId` | Lookup ΓåÆ `csp_Account` | no | |
++| `csp_contactType` | Choice | yes | `Consultant`, `Client Contact`, `Middleman Contact`, `Finance Contact`, `Permanent Employee` |
++| `csp_nationality`, `csp_country` | String | no | |
++| `csp_skillset` | Multi-string | no | References `csp_JDSkill.csp_name`. |
++| `csp_jobRole` | String | no | |
++| `csp_summary` | Multiline | no | |
++| `csp_available` | Boolean | no | Available for any engagement. |
++| `csp_availableForWork` | Boolean | no | Actively seeking contracts. |
++| `csp_isInterviewer` | Boolean | no | Enables in interviewer picker. |
++| `csp_lastIncreaseDate` | DateOnly | no | Permanent employees. |
++| `csp_lastIncreaseAmount` | Decimal | no | |
++
++---
++
++## Choice sets
++
++- **ContactType:** `Consultant` | `Client Contact` | `Middleman Contact` | `Finance Contact` | `Permanent Employee`
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Required fields.** Assert `csp_firstName`, `csp_lastName`, `csp_email`, `csp_contactType`. Else `D-01` (High).
++2. **R2 ΓÇö Valid email.** Else `D-02` (Medium).
++3. **R3 ΓÇö Email uniqueness.** Else `D-03` (High).
++4. **R4 ΓÇö Permanent Employee employer.** Given `csp_contactType = Permanent Employee`, assert `csp_accountId` points to an account owned by a `csp_BusinessEntity`. Else `D-04` (High).
++5. **R5 ΓÇö Consultant on Active contract must be available.** Given any `csp_Contract.statuscode = Active` referencing this contact, assert `csp_available = true`. Else `D-05` (Medium).
++6. **R6 ΓÇö Skillset references known skills.** Each entry in `csp_skillset` must exist in `csp_JDSkill`. Else `D-06` (Low) ΓÇö surface unknown ones for AI curation.
++7. **R7 ΓÇö Interviewer with no email/phone.** `csp_isInterviewer = true` ΓçÆ both `csp_email` and `csp_phone` set. Else `D-07` (Medium).
++8. **R8 ΓÇö Consultant missing primary CV.** Given `csp_contactType = Consultant` with active engagements, assert at least one `csp_ContactCV` exists and one is marked primary. Else `D-08` (Medium).
++
++---
++
++## Cross-entity effects
++
++- Sharing a consultant's profile with a client is **only** allowed via `csp_OpportunityApplicant`. Direct "send profile" from Contacts is forbidden by design.
++- Soft-delete only; deactivate via `csp_available = false` when no contracts/timesheets/leave reference the contact.
++- `csp_isInterviewer = false` removes the contact from `csp_AvailabilitySlot` interviewer picker ΓÇö existing booked slots keep the historical reference.
++
++---
++
++## Discrepancy catalog
++
++| ID | Title template | Priority | Due offset | Body |
++|---|---|---|---|---|
++| D-01 | `Contact {fullName} missing required fields` | High | +2d | List missing logical names. |
++| D-02 | `Contact {fullName} has invalid email` | Medium | +5d | Show value. |
++| D-03 | `Duplicate contact email {csp_email}` | High | +1d | List duplicate contact ids. |
++| D-04 | `Permanent Employee {fullName} not linked to a BusinessEntity-owned account` | High | +2d | Show current `csp_accountId`. |
++| D-05 | `Consultant {fullName} marked unavailable but has Active contract` | Medium | +5d | List active contract numbers. |
++| D-06 | `Contact {fullName} skillset contains unknown skills` | Low | +14d | List unknown values for AI curation. |
++| D-07 | `Interviewer {fullName} missing email or phone` | Medium | +5d | Show missing fields. |
++| D-08 | `Consultant {fullName} missing primary CV` | Medium | +7d | Ask admin to upload/mark a primary CV. |
++
++---
++
++## Reference queries
++
++```
++# R3 ΓÇö Duplicate emails
++GET /csp_contacts?$apply=groupby((csp_email),aggregate($count as cnt))&$filter=cnt gt 1
++
++# R5 ΓÇö Unavailable consultants on Active contracts
++GET /csp_contracts?$filter=statuscode eq 1&$expand=csp_contactid($select=csp_available,csp_firstname,csp_lastname)
++
++# R8 ΓÇö Consultants missing primary CV
++GET /csp_contacts?$filter=csp_contactType eq 'Consultant'
++# For each: GET /csp_contactcvs?$filter=_csp_contact_value eq {id}
++```
++
++---
++
++## Glossary
++
++- **Consultant** ΓÇö external contractor billed via `csp_Contract`.
++- **Client Contact** ΓÇö counterparty at a client account.
++- **Middleman Contact** ΓÇö recruiter / agency contact.
++- **Permanent Employee** ΓÇö internal payroll contact tied to a business-entity-owned account.
++- **Interviewer** ΓÇö contact flagged to participate in onboarding interview slots.
+diff --git a/Business Skills/04-contract-milestones-process.md b/Business Skills/04-contract-milestones-process.md
+new file mode 100644
+index 0000000..eaade76
+--- /dev/null
++++ b/Business Skills/04-contract-milestones-process.md	
+@@ -0,0 +1,97 @@
++# Skill 04 ΓÇö Contract Milestones Process
++
++## Skill name & intent
++
++**Name:** `contract-milestones-process`
++
++**Intent:** Govern milestone-based revenue recognition for **Fixed Price** contracts. The agent ensures milestones are well-formed, sum sensibly to `csp_Contract.csp_grossValue`, transition status correctly, and don't sit overdue without invoicing.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_ContractMilestone` | Primary entity. | All fields below. |
++| `csp_Contract` | Parent contract ΓÇö must have `csp_hasMilestones = true`. | `csp_grossValue`, `csp_sellCurrency`, `csp_hasMilestones`, `statuscode` |
++| `csp_Invoice` / `csp_InvoiceLine` | Invoiced milestone evidence. | `csp_contractId` |
++
++---
++
++## Field dictionary (`csp_ContractMilestone`)
++
++| Logical name | Type | Required | Notes |
++|---|---|---|---|
++| `csp_milestoneId` | String | yes | `MS-NNN`. |
++| `csp_contractId` | Lookup ΓåÆ `csp_Contract` | yes | Must have `csp_hasMilestones = true`. |
++| `csp_description` | String | yes | |
++| `csp_value` | Decimal | yes | Per-milestone gross. |
++| `csp_currencyCode` | Choice | yes | Should equal contract `csp_sellCurrency`. |
++| `csp_startDate`, `csp_endDate` | DateOnly | yes | `csp_endDate ΓëÑ csp_startDate`. |
++| `statuscode` (`csp_status`) | Choice | yes | `Pending`, `Invoiced`, `Paid`. |
++
++---
++
++## Choice sets
++
++- **MilestoneStatus:** `Pending` | `Invoiced` | `Paid`
++
++---
++
++## Lifecycle
++
++```
++Pending ΓöÇΓöÇΓû╢ Invoiced ΓöÇΓöÇΓû╢ Paid
++```
++
++- `Invoiced` requires a linked `csp_InvoiceLine` (or implicit via Send Invoice flow).
++- `Paid` requires the linked `csp_Invoice.statuscode = Paid`.
++- Reversals require Admin override.
++- Delete only when `statuscode = Pending`.
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Required fields.** Else `D-01` (High).
++2. **R2 ΓÇö Date ordering.** `csp_endDate ΓëÑ csp_startDate`. Else `D-02` (Medium).
++3. **R3 ΓÇö Eligible parent.** `csp_contractId` must reference a contract with `csp_hasMilestones = true`. Else `D-03` (High).
++4. **R4 ΓÇö Currency match.** `csp_currencyCode` should equal contract `csp_sellCurrency`. Else `D-04` (Medium).
++5. **R5 ΓÇö Sum vs gross value.** `sum(csp_value)` per contract should not exceed `csp_Contract.csp_grossValue`. Else `D-05` (Medium).
++6. **R6 ΓÇö Overdue Pending.** `statuscode = Pending` and `csp_endDate < today`. Raise `D-06` (Medium).
++7. **R7 ΓÇö Invoiced not Paid after grace.** `statuscode = Invoiced` for >payment terms + 14 days and linked invoice not Paid. Raise `D-07` (Medium).
++8. **R8 ΓÇö Status drift.** `statuscode = Paid` but linked invoice `statuscode != Paid`. Raise `D-08` (High).
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Milestone {csp_milestoneId} missing required fields` | High | +2d |
++| D-02 | `Milestone {csp_milestoneId} has invalid date ordering` | Medium | +5d |
++| D-03 | `Milestone {csp_milestoneId} parent contract is not milestone-enabled` | High | +1d |
++| D-04 | `Milestone {csp_milestoneId} currency differs from contract sell currency` | Medium | +5d |
++| D-05 | `Milestones for contract {contractNumber} exceed gross value` | Medium | +7d |
++| D-06 | `Pending milestone {csp_milestoneId} overdue` | Medium | +3d |
++| D-07 | `Invoiced milestone {csp_milestoneId} not paid past grace` | Medium | +7d |
++| D-08 | `Milestone {csp_milestoneId} status conflicts with invoice status` | High | +2d |
++
++---
++
++## Reference queries
++
++```
++# R6 ΓÇö Overdue pending milestones
++GET /csp_contractmilestones?$filter=statuscode eq 1 and csp_endDate lt {today}
++
++# R5 ΓÇö Sum vs gross value
++GET /csp_contractmilestones?$apply=groupby((_csp_contractid_value),aggregate(csp_value with sum as total))
++```
++
++---
++
++## Glossary
++
++- **Milestone** ΓÇö billable deliverable on a Fixed Price contract.
++- **Gross value** ΓÇö total contract value the milestones should add up to.
+diff --git a/Business Skills/05-invoices-process.md b/Business Skills/05-invoices-process.md
+new file mode 100644
+index 0000000..05d69cd
+--- /dev/null
++++ b/Business Skills/05-invoices-process.md	
+@@ -0,0 +1,163 @@
++# Skill 05 ΓÇö Invoices Process
++
++## Skill name & intent
++
++**Name:** `invoices-process`
++
++**Intent:** Manage AR ΓÇö issued invoices and credit notes. The agent verifies header/line integrity, status transitions, FX snapshotting, due-date computation, and surfaces overdue or stalled invoices into Corporate Actions.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_Invoice` | Header. | All header fields below. |
++| `csp_InvoiceLine` | Lines. | All line fields below. |
++| `csp_BusinessEntity` | Issuing entity. | `csp_invoicePrefix`, `csp_baseCurrencyCode`, `csp_accountantEmail` |
++| `csp_Account` | Bill-to. | `csp_paymentTerms`, `csp_invoicingEmail`, `csp_invoiceComments` |
++| `csp_Contract` | Optional link for line auto-rate. | `csp_sellRate`, `csp_unitOfMeasure` |
++| `csp_ExchangeRate` | RON snapshot. | `csp_fromCurrencyCode`, `csp_toCurrencyCode`, `csp_rate`, `csp_effectiveDate` |
++| `csp_BankStatementLine` | Reconciliation. | `csp_matchedInvoiceId` |
++
++---
++
++## Header dictionary (`csp_Invoice`)
++
++| Logical name | Type | Required | Default | Notes |
++|---|---|---|---|---|
++| `csp_invoiceNumber` | String | yes | `INV-NNN` | Unique within `csp_entityId`. |
++| `csp_entityId` | Lookup | yes | ΓÇö | |
++| `csp_accountId` | Lookup ΓåÆ `csp_Account` | yes | ΓÇö | Bill-to. |
++| `csp_parentAccountId` | Lookup | no | ΓÇö | When `csp_accountId` is a child. |
++| `csp_contractId` | Lookup ΓåÆ `csp_Contract` | no | ΓÇö | Optional. |
++| `csp_currencyCode` | Choice | yes | `EUR` | |
++| `csp_invoiceDate` | DateOnly | yes | ΓÇö | |
++| `csp_dueDate` | DateOnly | yes | derived | `invoiceDate + paymentTerms days`. Editable. |
++| `csp_subtotal` | Decimal | derived | ΓÇö | ╬ú line `csp_amount`. |
++| `csp_vatRate` | Decimal | yes | 19 | RO 19, BG 20, US 0, UK 20. |
++| `csp_vatAmount` | Decimal | derived | ΓÇö | `subtotal ├ù vatRate / 100`. |
++| `csp_total` | Decimal | derived | ΓÇö | `subtotal + vatAmount`. |
++| `csp_ronConversionRate` | Decimal | no | from `csp_ExchangeRate` | Set when currency Γëá RON, immutable after Sent. |
++| `csp_ronTotal` | Decimal | no | derived | `total ├ù ronConversionRate`. |
++| `csp_comments` | Multiline | no | ΓÇö | Overrides account comments. |
++| `statuscode` (`csp_status`) | Choice | yes | `Draft` | |
++| `csp_paymentReceivedDate` | DateOnly | no | ΓÇö | Required when `statuscode = Paid`. |
++| `csp_periodMonth`, `csp_periodYear` | Number | yes | from `csp_invoiceDate` | |
++
++## Line dictionary (`csp_InvoiceLine`)
++
++| Logical name | Type | Required | Notes |
++|---|---|---|---|
++| `csp_invoiceId` | Lookup | yes | |
++| `csp_name` | String | yes | Auto `Line N` if blank. |
++| `csp_description` | String | no | |
++| `csp_quantity` | Decimal | yes | |
++| `csp_unitOfMeasure` | Choice | yes | `Day`, `Hour`, `Month`, `Fixed`. |
++| `csp_contactId` | Lookup ΓåÆ `csp_Contact` | no | |
++| `csp_contractId` | Lookup ΓåÆ `csp_Contract` | no | Inherited from header. |
++| `csp_rate` | Decimal | yes | |
++| `csp_currencyCode` | Choice | yes | Must equal header. |
++| `csp_amount` | Decimal | derived | `quantity ├ù rate`. |
++
++---
++
++## Choice sets
++
++- **InvoiceStatus:** `Draft` | `Sent` | `Paid` | `Overdue` | `Cancelled` | `Credit Note`
++- **CurrencyCode:** `USD` | `EUR` | `RON` | `GBP`
++- **UnitOfMeasure:** `Day` | `Hour` | `Month` | `Fixed`
++
++---
++
++## Lifecycle
++
++```
++Draft ΓöÇΓöÇΓû╢ Sent ΓöÇΓöÇΓû╢ Paid
++  Γöé         Γö£ΓöÇΓöÇΓû╢ Overdue (auto when dueDate < today AND statuscode = Sent)
++  Γöé         ΓööΓöÇΓöÇΓû╢ Credit Note (paired negative)
++  ΓööΓöÇΓöÇΓû╢ Cancelled
++```
++
++- Cannot leave `Draft` without ΓëÑ 1 line and required header fields.
++- `Paid` requires `csp_paymentReceivedDate ΓëÑ csp_invoiceDate`.
++- Credit notes carry negative `csp_total` semantics.
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Header completeness.** Required fields populated before leaving `Draft`. Else `D-01` (High).
++2. **R2 ΓÇö Has lines.** `Sent` requires ΓëÑ 1 line. Else `D-02` (High).
++3. **R3 ΓÇö Line currency match.** All line `csp_currencyCode` = header. Else `D-03` (High).
++4. **R4 ΓÇö Country VAT default.** Issued from RO entity ΓçÆ default 19; BG ΓçÆ 20; UK ΓçÆ 20; US ΓçÆ 0. Override allowed but `D-04` (Low) if drifts without comment.
++5. **R5 ΓÇö Payment date ordering.** `csp_paymentReceivedDate ΓëÑ csp_invoiceDate` when `Paid`. Else `D-05` (High).
++6. **R6 ΓÇö Sent without RON snapshot.** `statuscode Γêê {Sent, Paid, Overdue, Credit Note}` and `csp_currencyCode Γëá RON` ΓçÆ `csp_ronConversionRate` and `csp_ronTotal` populated. Else `D-06` (High).
++7. **R7 ΓÇö Overdue not flagged.** `statuscode = Sent` and `csp_dueDate < today` ΓçÆ should be `Overdue`. Raise `D-07` (Medium) and ask agent to flip status.
++8. **R8 ΓÇö Long overdue.** `statuscode = Overdue` for >30 days. Raise `D-08` (High).
++9. **R9 ΓÇö Period drift.** `csp_periodMonth/Year` does not match `csp_invoiceDate`. Else `D-09` (Low).
++10. **R10 ΓÇö Cancelled with payment received.** `statuscode = Cancelled` and `csp_paymentReceivedDate` set. Raise `D-10` (High).
++11. **R11 ΓÇö Sent without invoicing email.** Account has no `csp_invoicingEmail` nor `csp_email`. Raise `D-11` (Medium).
++12. **R12 ΓÇö Duplicate invoice number.** Within `csp_entityId`. Else `D-12` (High).
++
++---
++
++## Derivations
++
++- `csp_dueDate = csp_invoiceDate + days(account.csp_paymentTerms)` at create.
++- `csp_subtotal = ╬ú line.csp_amount`.
++- `csp_vatAmount = subtotal ├ù vatRate / 100`; `csp_total = subtotal + vatAmount`.
++- `csp_ronConversionRate` = latest `csp_ExchangeRate(currencyCode ΓåÆ RON)` valid for invoice month/year, snapshotted on first `Sent` and immutable thereafter.
++- Line `csp_amount = quantity ├ù rate` (or contract-driven: `qty ├ù (sellRate if UoM=Day else sellRate/8 if UoM=Hour)`).
++
++---
++
++## Cross-entity effects
++
++- `Paid` does not auto-trigger anything; bank reconciliation is separate (see Skill 10).
++- Send Invoice flow uses `account.csp_invoicingEmail` (fallback `csp_email`); subject default `Invoice <invoiceNumber> ΓÇö <entity.shortName>`.
++- Accounting Month End flow emails `entity.csp_accountantEmail` with all invoices in period (status Γêê Sent/Paid/Overdue/Credit Note); does not change statuses.
++- Comments precedence on PDF: invoice `csp_comments` ΓêÑ account `csp_invoiceComments` ΓêÑ entity `csp_invoiceFooter`.
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Invoice {csp_invoiceNumber} missing required header fields` | High | +2d |
++| D-02 | `Invoice {csp_invoiceNumber} has no lines` | High | +1d |
++| D-03 | `Invoice {csp_invoiceNumber} line currency mismatch` | High | +1d |
++| D-04 | `Invoice {csp_invoiceNumber} VAT rate drifts from country default` | Low | +14d |
++| D-05 | `Invoice {csp_invoiceNumber} payment date predates invoice date` | High | +1d |
++| D-06 | `Invoice {csp_invoiceNumber} missing RON snapshot` | High | +2d |
++| D-07 | `Invoice {csp_invoiceNumber} should be Overdue` | Medium | +1d |
++| D-08 | `Invoice {csp_invoiceNumber} overdue >30 days` | High | +3d |
++| D-09 | `Invoice {csp_invoiceNumber} period drift` | Low | +14d |
++| D-10 | `Cancelled invoice {csp_invoiceNumber} has paymentReceivedDate` | High | +1d |
++| D-11 | `Invoice {csp_invoiceNumber} cannot be sent ΓÇö no invoicing email` | Medium | +3d |
++| D-12 | `Duplicate invoice number {csp_invoiceNumber}` | High | +1d |
++
++---
++
++## Reference queries
++
++```
++# R7 ΓÇö Sent past due
++GET /csp_invoices?$filter=statuscode eq 2 and csp_dueDate lt {today}
++
++# R8 ΓÇö Long overdue
++GET /csp_invoices?$filter=statuscode eq 4 and csp_dueDate lt {today-30d}
++
++# R6 ΓÇö Sent without RON snapshot
++GET /csp_invoices?$filter=statuscode in (2,3,4,7) and csp_currencyCode ne 'RON' and csp_ronConversionRate eq null
++```
++
++---
++
++## Glossary
++
++- **AR** ΓÇö accounts receivable.
++- **Credit note** ΓÇö negative invoice issued to reverse a prior one.
++- **RON snapshot** ΓÇö frozen FX rate captured on Send for reporting in our base currency.
++- **Accounting Month End** ΓÇö packaging all month invoices and emailing the accountant.
+diff --git a/Business Skills/06-expenses-process.md b/Business Skills/06-expenses-process.md
+new file mode 100644
+index 0000000..7c6f284
+--- /dev/null
++++ b/Business Skills/06-expenses-process.md	
+@@ -0,0 +1,125 @@
++# Skill 06 ΓÇö Expenses Process
++
++## Skill name & intent
++
++**Name:** `expenses-process`
++
++**Intent:** Manage AP ΓÇö money out: contractor payments, supplier invoices, taxes, salaries, operating costs. The agent ensures correctness, links contractor payments to contracts, snapshots RON equivalents on payment, and surfaces overdue/missing-evidence cases.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_Expense` | Primary entity. | All fields below. |
++| `csp_BusinessEntity` | Paying entity. | `csp_country`, `csp_baseCurrencyCode` |
++| `csp_Account` | Vendor/payee. | `csp_accountType` |
++| `csp_Contract` | Required for `Contractor Payment`. | `csp_contactId`, `csp_buyRate` |
++| `csp_Invoice` | When rebilling. | `csp_id` |
++| `csp_ExchangeRate` | RON snapshot on payment. | `csp_rate`, `csp_effectiveDate` |
++| `csp_PaymentDetail` | Bank to pay. | `csp_isPrimary` |
++
++---
++
++## Field dictionary (`csp_Expense`)
++
++| Logical name | Type | Required | Default | Notes |
++|---|---|---|---|---|
++| `csp_reference` | String | yes | `EXP-NNN` | |
++| `csp_entityId` | Lookup | yes | ΓÇö | |
++| `csp_accountId` | Lookup ΓåÆ `csp_Account` | yes | ΓÇö | Vendor / payee. |
++| `csp_expenseType` | Choice | yes | `Supplier Invoice` | |
++| `csp_relatedInvoiceId` | Lookup ΓåÆ `csp_Invoice` | no | ΓÇö | For client rebill. |
++| `csp_contractId` | Lookup ΓåÆ `csp_Contract` | conditional | ΓÇö | Required when `Contractor Payment`. |
++| `csp_currencyCode` | Choice | yes | `EUR` | |
++| `csp_totalAmount` | Decimal | yes | ΓÇö | Gross. |
++| `csp_vatAmount` | Decimal | yes | derived | |
++| `csp_netAmount` | Decimal | derived | ΓÇö | `totalAmount ΓêÆ vatAmount`. |
++| `csp_ronEquivalent` | Decimal | derived | ΓÇö | When currency Γëá RON, on Paid. |
++| `csp_dateIssued` | DateOnly | yes | ΓÇö | |
++| `csp_dueDate` | DateOnly | yes | ΓÇö | `ΓëÑ csp_dateIssued`. |
++| `csp_paymentDate` | DateOnly | no | ΓÇö | Required when Paid. |
++| `csp_vendorInvoiceNumber` | String | no | ΓÇö | |
++| `csp_evidenceFile` | File | no | ΓÇö | PDF receipt/invoice. |
++| `statuscode` (`csp_status`) | Choice | yes | `Received` | `Received`, `Paid`, `Overdue`. |
++| `csp_periodMonth`, `csp_periodYear` | Number | yes | from `csp_dateIssued` | Admin-only edit. |
++
++---
++
++## Choice sets
++
++- **ExpenseType:** `Contractor Payment` | `Supplier Invoice` | `Tax` | `Employee Salary` | `Operating Cost` | `Software / Subscription`
++- **ExpenseStatus:** `Received` | `Paid` | `Overdue`
++
++---
++
++## Lifecycle
++
++```
++Received ΓöÇΓöÇΓû╢ Paid
++   Γöé
++   ΓööΓöÇΓöÇΓû╢ Overdue (auto when dueDate < today AND statuscode = Received)
++```
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Required fields.** Else `D-01` (High).
++2. **R2 ΓÇö Amount sanity.** `csp_totalAmount ΓëÑ 0`, `csp_vatAmount ΓëÑ 0`, `csp_vatAmount Γëñ csp_totalAmount`. Else `D-02` (High).
++3. **R3 ΓÇö Date ordering.** `csp_dueDate ΓëÑ csp_dateIssued`; `csp_paymentDate ΓëÑ csp_dateIssued` if set. Else `D-03` (Medium).
++4. **R4 ΓÇö Contractor payment requires contract.** `csp_expenseType = Contractor Payment` ΓçÆ `csp_contractId` set and account is `Contractor`-type. Else `D-04` (High).
++5. **R5 ΓÇö Net mismatch.** `csp_netAmount` Γëá `csp_totalAmount ΓêÆ csp_vatAmount`. Else `D-05` (High).
++6. **R6 ΓÇö Paid without RON snapshot.** `statuscode = Paid`, currency Γëá RON ΓçÆ `csp_ronEquivalent` populated. Else `D-06` (High).
++7. **R7 ΓÇö Overdue not flagged.** `statuscode = Received` and `csp_dueDate < today`. Raise `D-07` (Medium).
++8. **R8 ΓÇö Long overdue.** `statuscode = Overdue` >30d. Raise `D-08` (High).
++9. **R9 ΓÇö Missing evidence.** `csp_expenseType Γêê {Contractor Payment, Supplier Invoice}` and `statuscode = Paid` without `csp_evidenceFile`. Raise `D-09` (Medium).
++10. **R10 ΓÇö Period drift.** `csp_periodMonth/Year` mismatches `csp_dateIssued`. Raise `D-10` (Low).
++11. **R11 ΓÇö Vendor missing primary payment detail.** Vendor account has no primary `csp_PaymentDetail` for `csp_currencyCode`. Raise `D-11` (Medium).
++
++---
++
++## Derivations
++
++- `csp_netAmount = csp_totalAmount ΓêÆ csp_vatAmount`.
++- `csp_ronEquivalent` = `csp_totalAmount ├ù ExchangeRate(currencyCode ΓåÆ RON)` valid for payment month/year (snapshot on Paid).
++- Contractor Payments with `csp_contractId` feed margin in `ReportingSnapshot`.
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Expense {csp_reference} missing required fields` | High | +2d |
++| D-02 | `Expense {csp_reference} amount sanity fail` | High | +1d |
++| D-03 | `Expense {csp_reference} invalid date ordering` | Medium | +5d |
++| D-04 | `Contractor Payment {csp_reference} missing contract or wrong vendor type` | High | +2d |
++| D-05 | `Expense {csp_reference} net amount mismatch` | High | +1d |
++| D-06 | `Paid expense {csp_reference} missing RON snapshot` | High | +2d |
++| D-07 | `Expense {csp_reference} should be Overdue` | Medium | +1d |
++| D-08 | `Expense {csp_reference} overdue >30 days` | High | +3d |
++| D-09 | `Paid expense {csp_reference} missing evidence file` | Medium | +5d |
++| D-10 | `Expense {csp_reference} period drift` | Low | +14d |
++| D-11 | `Vendor {accountName} missing primary payment detail in {currency}` | Medium | +5d |
++
++---
++
++## Reference queries
++
++```
++# R7 ΓÇö Received past due
++GET /csp_expenses?$filter=statuscode eq 1 and csp_dueDate lt {today}
++
++# R6 ΓÇö Paid without RON snapshot
++GET /csp_expenses?$filter=statuscode eq 2 and csp_currencyCode ne 'RON' and csp_ronEquivalent eq null
++```
++
++---
++
++## Glossary
++
++- **AP** ΓÇö accounts payable.
++- **Contractor Payment** ΓÇö outflow to a contractor against a contract; affects margin reporting.
++- **RON equivalent** ΓÇö base-currency snapshot of the gross amount on payment.
+diff --git a/Business Skills/07-timesheets-process.md b/Business Skills/07-timesheets-process.md
+new file mode 100644
+index 0000000..07d9a82
+--- /dev/null
++++ b/Business Skills/07-timesheets-process.md	
+@@ -0,0 +1,137 @@
++# Skill 07 ΓÇö Timesheets Process
++
++## Skill name & intent
++
++**Name:** `timesheets-process`
++
++**Intent:** Govern weekly timesheets that drive T&M invoicing. The agent ensures weeks are well-formed (MonΓåÆSun, exactly 7 entries, valid hours), enforces uniqueness per `(contact, contract, weekStart)`, surfaces missing weeks for active T&M contracts, and watches stalled approvals.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_Timesheet` | Header. | All fields below. |
++| `csp_TimesheetEntry` | Day rows (7 per timesheet). | `csp_date`, `csp_hours` |
++| `csp_Contract` | Eligibility. | `csp_hasTimesheet`, `csp_contractType`, `csp_billingType`, `statuscode` |
++| `csp_Contact` | Consultant. | `csp_contactType`, `csp_country` |
++| `csp_PublicHoliday` | Calendar context. | `csp_date`, `csp_country` |
++| `csp_Invoice` / `csp_InvoiceLine` | Downstream billing. | `csp_quantity`, `csp_unitOfMeasure` |
++
++---
++
++## Field dictionary
++
++### `csp_Timesheet`
++
++| Logical name | Type | Required | Notes |
++|---|---|---|---|
++| `csp_reference` | String | yes | `TS-YYYY-NNN`. |
++| `csp_contactId` | Lookup ΓåÆ `csp_Contact` | yes | |
++| `csp_contractId` | Lookup ΓåÆ `csp_Contract` | yes | Must have `csp_hasTimesheet = true`. |
++| `csp_weekStart` | DateOnly | yes | Must be a Monday. |
++| `csp_totalHours` | Decimal | derived | ╬ú entry hours. |
++| `statuscode` | Choice | yes | `Draft`, `Submitted`, `Approved`, `Rejected`. |
++
++### `csp_TimesheetEntry`
++
++| Logical name | Type | Notes |
++|---|---|---|
++| `csp_timesheetId` | Lookup | parent |
++| `csp_date` | DateOnly | one per day Mon..Sun |
++| `csp_hours` | Decimal | 0ΓÇô24 |
++| `csp_comment` | String | per-day note |
++| `csp_description` | String | task description |
++
++---
++
++## Choice sets
++
++- **TimesheetStatus:** `Draft` | `Submitted` | `Approved` | `Rejected`
++
++---
++
++## Lifecycle
++
++```
++Draft ΓöÇΓöÇΓû╢ Submitted ΓöÇΓöÇΓû╢ Approved
++                Γöé
++                ΓööΓöÇΓöÇΓû╢ Rejected ΓöÇΓöÇΓû╢ Draft (consultant edits)
++```
++
++- Approved is read-only (Admin "Reopen" override).
++
++---
++
++## Hour pre-population strategy
++
++| `contractType` | `billingType` | Strategy | Default per weekday |
++|---|---|---|---|
++| Standard Contracting | Standard Contracting | `eight` | 8 |
++| Standard Contracting | Time & Material | `zero` | 0 |
++| Standard Contracting | Fixed Price | `ask` | prompt |
++| Fixed Price | Fixed Price | `exclude` | not generated |
++| any other | ΓÇö | `zero` | 0 |
++
++Sat/Sun always 0.
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Monday start.** `csp_weekStart.dayOfWeek = Monday`. Else `D-01` (High).
++2. **R2 ΓÇö Seven entries.** Exactly 7 entries with consecutive dates from `csp_weekStart`. Else `D-02` (High).
++3. **R3 ΓÇö Hour bounds.** Each entry `csp_hours Γêê [0, 24]`. Else `D-03` (High).
++4. **R4 ΓÇö Uniqueness.** Unique on `(csp_contactId, csp_contractId, csp_weekStart)`. Else `D-04` (High).
++5. **R5 ΓÇö Eligible contract.** `csp_contractId.csp_hasTimesheet = true` AND NOT (`Fixed Price + Fixed Price`) AND `statuscode = Active`. Else `D-05` (High).
++6. **R6 ΓÇö Submitted stalled.** `statuscode = Submitted` for >7 days. Raise `D-06` (Medium).
++7. **R7 ΓÇö Missing previous month.** Active eligible contract with no `csp_Timesheet` covering any week in the previous calendar month. Raise `D-07` (Medium).
++8. **R8 ΓÇö Hours on public holiday.** Entry `csp_hours > 0` on a `csp_PublicHoliday` matching contact country. Raise `D-08` (Low).
++9. **R9 ΓÇö Approved with zero total.** `statuscode = Approved` and `csp_totalHours = 0`. Raise `D-09` (Medium).
++10. **R10 ΓÇö Rejected with no comment.** `statuscode = Rejected` and no rejection note found in any entry comment. Raise `D-10` (Low).
++
++---
++
++## Cross-entity effects
++
++- Approved hours feed `csp_InvoiceLine.csp_quantity` for T&M contracts (UoM = `Hour`, qty = sum of approved hours in the period).
++- Returning a timesheet (`Rejected`) sends a notification to the consultant.
++- Excel export bulk action available; pure read.
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Timesheet {csp_reference} weekStart is not Monday` | High | +1d |
++| D-02 | `Timesheet {csp_reference} does not have 7 consecutive entries` | High | +1d |
++| D-03 | `Timesheet {csp_reference} has invalid hour values` | High | +1d |
++| D-04 | `Duplicate timesheet for {contact}/{contract}/{weekStart}` | High | +1d |
++| D-05 | `Timesheet {csp_reference} on ineligible contract` | High | +2d |
++| D-06 | `Timesheet {csp_reference} stuck Submitted >7 days` | Medium | +3d |
++| D-07 | `Active T&M contract {contractNumber} missing previous-month timesheet` | Medium | end of current month |
++| D-08 | `Timesheet {csp_reference} logs hours on a public holiday` | Low | +14d |
++| D-09 | `Approved timesheet {csp_reference} has 0 hours` | Medium | +5d |
++| D-10 | `Rejected timesheet {csp_reference} has no rejection comment` | Low | +14d |
++
++---
++
++## Reference queries
++
++```
++# R6 ΓÇö Submitted >7d
++GET /csp_timesheets?$filter=statuscode eq 2 and modifiedon lt {today-7d}
++
++# R7 ΓÇö Active eligible contracts
++GET /csp_contracts?$filter=statuscode eq 1 and csp_hasTimesheet eq true and not (csp_contractType eq 'Fixed Price' and csp_billingType eq 'Fixed Price')
++# For each contract, ensure ΓëÑ1 csp_timesheet with csp_weekStart in previous month exists.
++```
++
++---
++
++## Glossary
++
++- **T&M** ΓÇö Time & Material billing model.
++- **Eligible contract** ΓÇö Active, has timesheets, not Fixed Price + Fixed Price.
+diff --git a/Business Skills/08-leave-process.md b/Business Skills/08-leave-process.md
+new file mode 100644
+index 0000000..c35bacd
+--- /dev/null
++++ b/Business Skills/08-leave-process.md	
+@@ -0,0 +1,90 @@
++# Skill 08 ΓÇö Leave Process
++
++## Skill name & intent
++
++**Name:** `leave-process`
++
++**Intent:** Track time-off requests for consultants and permanent employees. The agent ensures requests are valid, computes working days correctly excluding weekends and public holidays, watches pending approvals, and flags upcoming approved leave that has not yet been notified to clients.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_LeaveRequest` | Primary entity. | All fields below. |
++| `csp_Contact` | Requester. | `csp_contactType`, `csp_country` |
++| `csp_PublicHoliday` | Country holidays. | `csp_date`, `csp_country` |
++| `csp_Contract` | Active engagement context (for client notification). | `csp_parentAccountId` |
++
++---
++
++## Field dictionary (`csp_LeaveRequest`)
++
++| Logical name | Type | Required | Notes |
++|---|---|---|---|
++| `csp_name` | String | yes | `LEA-NNNN`. |
++| `csp_contactId` | Lookup | yes | Must be `Consultant` or `Permanent Employee`. |
++| `csp_leaveType` | Choice | yes | |
++| `csp_startDate`, `csp_endDate` | DateOnly | yes | `endDate ΓëÑ startDate`. |
++| `csp_totalDays` | Decimal | derived | Working days between dates. |
++| `statuscode` (`csp_status`) | Choice | yes | `Pending`, `Approved`, `Rejected`. |
++| `csp_reason` | Multiline | conditional | Required when `Sick Leave` (warn). |
++| `csp_clientNotified` | Boolean | yes | Default false. |
++
++---
++
++## Choice sets
++
++- **LeaveType:** `Annual Leave` | `Sick Leave` | `Personal Leave` | `Public Holiday`
++- **LeaveStatus:** `Pending` | `Approved` | `Rejected`
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Required fields.** Else `D-01` (High).
++2. **R2 ΓÇö Date ordering.** `csp_endDate ΓëÑ csp_startDate`. Else `D-02` (High).
++3. **R3 ΓÇö Eligible contact.** `csp_Contact.csp_contactType Γêê {Consultant, Permanent Employee}`. Else `D-03` (High).
++4. **R4 ΓÇö Sick leave reason.** `Sick Leave` ΓçÆ `csp_reason` non-empty. Else `D-04` (Low).
++5. **R5 ΓÇö Pending stale.** `statuscode = Pending` for >5 days. Raise `D-05` (Medium).
++6. **R6 ΓÇö Approved upcoming, client not notified.** `statuscode = Approved`, `csp_startDate Γêê [today, today+14d]`, `csp_clientNotified = false`, contact has Active contract. Raise `D-06` (Medium).
++7. **R7 ΓÇö Public Holiday is read-only.** Manual edits to `Public Holiday` rows outside the bulk import. Raise `D-07` (Low).
++8. **R8 ΓÇö Overlapping leave.** Same `csp_contactId` with overlapping date windows. Raise `D-08` (Low).
++
++---
++
++## Derivations
++
++- **`csp_totalDays`** = count of weekdays (MonΓÇôFri) between `csp_startDate` and `csp_endDate` inclusive, minus matching `csp_PublicHoliday` records for contact country.
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Leave {csp_name} missing required fields` | High | +2d |
++| D-02 | `Leave {csp_name} invalid date ordering` | High | +1d |
++| D-03 | `Leave {csp_name} contact type not eligible` | High | +2d |
++| D-04 | `Sick leave {csp_name} missing reason` | Low | +14d |
++| D-05 | `Leave {csp_name} pending >5 days` | Medium | +3d |
++| D-06 | `Approved upcoming leave {csp_name} ΓÇö client not notified` | Medium | start date ΓêÆ 3d |
++| D-07 | `Public Holiday row {csp_name} edited manually` | Low | +14d |
++| D-08 | `Leave {csp_name} overlaps another leave for the same contact` | Low | +7d |
++
++---
++
++## Reference queries
++
++```
++# R6 ΓÇö Upcoming approved, client not notified
++GET /csp_leaverequests?$filter=statuscode eq 2 and csp_clientNotified eq false and csp_startDate ge {today} and csp_startDate le {today+14d}
++```
++
++---
++
++## Glossary
++
++- **Working day** ΓÇö MonΓÇôFri minus public holidays for the contact's country.
++- **Client notified** ΓÇö manual flag confirming we informed the client of the upcoming absence.
+diff --git a/Business Skills/09-dividends-process.md b/Business Skills/09-dividends-process.md
+new file mode 100644
+index 0000000..223c22f
+--- /dev/null
++++ b/Business Skills/09-dividends-process.md	
+@@ -0,0 +1,84 @@
++# Skill 09 ΓÇö Dividends Process
++
++## Skill name & intent
++
++**Name:** `dividends-process`
++
++**Intent:** Track dividend distributions per `csp_BusinessEntity` with tax withheld and the supporting AGA (shareholder resolution) PDF. The agent verifies amounts, tax withholding bounds, immutability past payment date, and missing evidence.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_Dividend` | Primary entity. | All fields below. |
++| `csp_BusinessEntity` | Paying entity. | `csp_baseCurrencyCode` |
++
++---
++
++## Field dictionary (`csp_Dividend`)
++
++| Logical name | Type | Required | Notes |
++|---|---|---|---|
++| `csp_name` | String | yes | `DIV-NNN`. |
++| `csp_entityId` | Lookup | yes | |
++| `csp_amount` | Decimal | yes | Gross. |
++| `csp_currencyCode` | Choice | yes | Usually entity base currency. |
++| `csp_paymentDate` | DateOnly | yes | |
++| `csp_taxWithheld` | Decimal | no | Default 0; `0 Γëñ taxWithheld Γëñ amount`. |
++| `csp_documentFile` | File | no | AGA / shareholder resolution PDF only. |
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Required fields.** Else `D-01` (High).
++2. **R2 ΓÇö Amount positive.** `csp_amount > 0`. Else `D-02` (High).
++3. **R3 ΓÇö Tax bounds.** `0 Γëñ csp_taxWithheld Γëñ csp_amount`. Else `D-03` (High).
++4. **R4 ΓÇö PDF only.** `csp_documentFile` MIME = `application/pdf`. Else `D-04` (Medium).
++5. **R5 ΓÇö Currency drift.** `csp_currencyCode Γëá entity.csp_baseCurrencyCode`. Raise `D-05` (Low).
++6. **R6 ΓÇö Past-date edits.** Modification after `csp_paymentDate < today` without Admin override. Raise `D-06` (High).
++7. **R7 ΓÇö Missing AGA.** `csp_paymentDate Γëñ today` and `csp_documentFile` empty. Raise `D-07` (Medium).
++
++---
++
++## Derivations
++
++- **Net dividend** = `csp_amount ΓêÆ csp_taxWithheld`.
++
++---
++
++## Cross-entity effects
++
++- Below the line ΓÇö does not affect P&L; affects cash position in Reports.
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Dividend {csp_name} missing required fields` | High | +2d |
++| D-02 | `Dividend {csp_name} amount must be positive` | High | +1d |
++| D-03 | `Dividend {csp_name} tax withheld out of bounds` | High | +1d |
++| D-04 | `Dividend {csp_name} document is not a PDF` | Medium | +5d |
++| D-05 | `Dividend {csp_name} currency differs from entity base` | Low | +14d |
++| D-06 | `Dividend {csp_name} edited past payment date` | High | +1d |
++| D-07 | `Dividend {csp_name} missing AGA document` | Medium | +7d |
++
++---
++
++## Reference queries
++
++```
++# R7 ΓÇö Past payment date with no AGA
++GET /csp_dividends?$filter=csp_paymentDate le {today} and csp_documentFile eq null
++```
++
++---
++
++## Glossary
++
++- **AGA** ΓÇö adunarea general─â a ac╚¢ionarilor / shareholder resolution.
++- **Net dividend** ΓÇö gross minus withholding tax.
+diff --git a/Business Skills/10-bank-reconciliation-process.md b/Business Skills/10-bank-reconciliation-process.md
+new file mode 100644
+index 0000000..228ee46
+--- /dev/null
++++ b/Business Skills/10-bank-reconciliation-process.md	
+@@ -0,0 +1,93 @@
++# Skill 10 ΓÇö Bank Reconciliation Process
++
++## Skill name & intent
++
++**Name:** `bank-reconciliation-process`
++
++**Intent:** Match imported bank statement lines to invoices (AR) and expenses (AP). The agent runs smart-match suggestions, validates that confirmed matches respect amount/currency/date heuristics, flags long-unmatched lines, and detects status drift between bank lines and the linked invoice/expense.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_BankStatement` | Statement header. | `csp_entityId`, `csp_periodStart`, `csp_periodEnd` |
++| `csp_BankStatementLine` | Line. | All fields below. |
++| `csp_Invoice` | AR match target. | `statuscode`, `csp_total`, `csp_dueDate` |
++| `csp_Expense` | AP match target. | `statuscode`, `csp_totalAmount`, `csp_dueDate` |
++
++---
++
++## Field dictionary (`csp_BankStatementLine`)
++
++| Logical name | Type | Notes |
++|---|---|---|
++| `csp_bankStatementId` | Lookup | parent |
++| `csp_transactionDate` | DateOnly | |
++| `csp_reference` | String | bank-side reference |
++| `csp_debit` | Decimal | exactly one of debit/credit non-null |
++| `csp_credit` | Decimal | |
++| `csp_matchedInvoiceId` | Lookup ΓåÆ `csp_Invoice` | only when credit |
++| `csp_matchedExpenseId` | Lookup ΓåÆ `csp_Expense` | only when debit |
++| `csp_explanation` | String | manual note |
++| `csp_reconciled` | Boolean | true when matched + confirmed |
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Exactly one of debit/credit.** Else `D-01` (High).
++2. **R2 ΓÇö Match polarity.** `csp_matchedInvoiceId` only on credit; `csp_matchedExpenseId` only on debit. Else `D-02` (High).
++3. **R3 ΓÇö Mutual exclusion.** A line cannot have both matches. Else `D-03` (High).
++4. **R4 ΓÇö Amount tolerance.** Matched invoice/expense amount within ┬▒0.01 of line value. Else `D-04` (Medium).
++5. **R5 ΓÇö Currency match.** Statement currency = matched record currency. Else `D-05` (Medium).
++6. **R6 ΓÇö Date proximity.** `csp_transactionDate` within ┬▒30 days of matched record's `csp_dueDate`. Else `D-06` (Low).
++7. **R7 ΓÇö Long unmatched.** Line `csp_reconciled = false` and `csp_transactionDate < today ΓêÆ 14d`. Raise `D-07` (Medium).
++8. **R8 ΓÇö Status drift on confirm.** Confirming a credit must set the linked invoice `statuscode = Paid` with `csp_paymentReceivedDate = csp_transactionDate`; confirming a debit sets expense `statuscode = Paid` with `csp_paymentDate`. If a confirmed line exists without that downstream update, raise `D-08` (High).
++9. **R9 ΓÇö Match percentage low.** Per statement: matched % < 80% after 7 days from `csp_periodEnd`. Raise `D-09` (Medium).
++
++---
++
++## Smart-match algorithm (suggestion only)
++
++- **Credits:** candidate invoices `statuscode Γêê {Sent, Overdue}`, currency match, total within ┬▒0.01, `dueDate ┬▒ 30d` of `transactionDate`.
++- **Debits:** candidate expenses `statuscode Γêê {Received, Overdue}`, similar heuristic.
++- Confidence > 90% may auto-link with `csp_reconciled = true`. Lower confidence requires user confirmation.
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Bank line {ref} has both/no debit and credit` | High | +1d |
++| D-02 | `Bank line {ref} match polarity invalid` | High | +1d |
++| D-03 | `Bank line {ref} matched to both invoice and expense` | High | +1d |
++| D-04 | `Bank line {ref} amount mismatch with linked record` | Medium | +5d |
++| D-05 | `Bank line {ref} currency mismatch` | Medium | +5d |
++| D-06 | `Bank line {ref} date far from linked record's due date` | Low | +14d |
++| D-07 | `Unmatched bank line {ref} >14 days old` | Medium | +3d |
++| D-08 | `Reconciled bank line {ref} did not update linked record status` | High | +1d |
++| D-09 | `Statement {periodEnd} match rate <80% after grace` | Medium | +7d |
++
++---
++
++## Reference queries
++
++```
++# R7 ΓÇö Long unmatched lines
++GET /csp_bankstatementlines?$filter=csp_reconciled eq false and csp_transactionDate lt {today-14d}
++
++# R8 ΓÇö Confirmed credit without invoice flipped to Paid
++GET /csp_bankstatementlines?$filter=csp_reconciled eq true and csp_matchedInvoiceId ne null
++# For each: GET /csp_invoices({matchedId}) and assert statuscode eq 3 (Paid)
++```
++
++---
++
++## Glossary
++
++- **AR / AP** ΓÇö accounts receivable / payable.
++- **Smart match** ΓÇö heuristic suggestion based on amount, currency and date proximity.
++- **Match rate** ΓÇö `matched lines / total lines ├ù 100` for a statement.
+diff --git a/Business Skills/11-documents-process.md b/Business Skills/11-documents-process.md
+new file mode 100644
+index 0000000..353fb86
+--- /dev/null
++++ b/Business Skills/11-documents-process.md	
+@@ -0,0 +1,83 @@
++# Skill 11 ΓÇö Documents Process
++
++## Skill name & intent
++
++**Name:** `documents-process`
++
++**Intent:** Maintain the central document repository ΓÇö contracts, certificates, NDAs, MSAs, policies, reports ΓÇö optionally linked to an account. The agent watches expirations, validates dates, and flags missing critical documents per account type.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_CompanyDocument` | Primary entity. | All fields below. |
++| `csp_Account` | Optional link. | `csp_accountType`, `statuscode` |
++
++---
++
++## Field dictionary (`csp_CompanyDocument`)
++
++| Logical name | Type | Required | Notes |
++|---|---|---|---|
++| `csp_documentName` | String | yes | |
++| `csp_documentType` | Choice | yes | `Contract`, `Certificate`, `Invoice`, `Policy`, `Report`, `Other` |
++| `csp_relatedAccountId` | Lookup ΓåÆ `csp_Account` | no | Empty = company-wide |
++| `csp_issuedDate` | DateOnly | no | |
++| `csp_expirationDate` | DateOnly | no | `ΓëÑ csp_issuedDate` if both set |
++| `csp_description` | Multiline | no | |
++| `csp_instructions` | Multiline | no | Usage notes |
++| `csp_fileName` | String | no | |
++
++---
++
++## Choice sets
++
++- **DocumentType:** `Contract` | `Certificate` | `Invoice` | `Policy` | `Report` | `Other`
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Required fields.** `csp_documentName`, `csp_documentType`. Else `D-01` (High).
++2. **R2 ΓÇö Date ordering.** `csp_expirationDate ΓëÑ csp_issuedDate` if both set. Else `D-02` (Medium).
++3. **R3 ΓÇö Expiring soon.** `csp_expirationDate Γêê [today, today+30d]`. Raise `D-03` (Medium).
++4. **R4 ΓÇö Already expired.** `csp_expirationDate < today`. Raise `D-04` (High).
++5. **R5 ΓÇö File missing.** `csp_fileName` blank. Raise `D-05` (Low).
++6. **R6 ΓÇö Active client missing MSA / NDA.** `csp_Account.csp_accountType = Direct Customer` AND no related document of type `Contract` (MSA-class). Raise `D-06` (Medium).
++7. **R7 ΓÇö Active contractor missing standard contract.** `csp_Account.csp_accountType = Contractor` AND no related document of type `Contract`. Raise `D-07` (Medium).
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Document {csp_documentName} missing required fields` | High | +2d |
++| D-02 | `Document {csp_documentName} expiration before issued date` | Medium | +5d |
++| D-03 | `Document {csp_documentName} expiring within 30 days` | Medium | expirationDate ΓêÆ 5d |
++| D-04 | `Document {csp_documentName} expired` | High | +1d |
++| D-05 | `Document {csp_documentName} has no file attached` | Low | +14d |
++| D-06 | `Direct Customer {accountName} missing contract document` | Medium | +14d |
++| D-07 | `Contractor account {accountName} missing contract document` | Medium | +14d |
++
++---
++
++## Reference queries
++
++```
++# R3 ΓÇö Expiring soon
++GET /csp_companydocuments?$filter=csp_expirationDate ge {today} and csp_expirationDate le {today+30d}
++
++# R4 ΓÇö Expired
++GET /csp_companydocuments?$filter=csp_expirationDate lt {today}
++```
++
++---
++
++## Glossary
++
++- **MSA** ΓÇö master service agreement.
++- **NDA** ΓÇö non-disclosure agreement.
++- **Perpetual** ΓÇö certificate without an expiration date.
+diff --git a/Business Skills/12-onboarding-candidates-process.md b/Business Skills/12-onboarding-candidates-process.md
+new file mode 100644
+index 0000000..54f29ce
+--- /dev/null
++++ b/Business Skills/12-onboarding-candidates-process.md	
+@@ -0,0 +1,145 @@
++# Skill 12 ΓÇö Onboarding ┬╖ Candidates Process
++
++## Skill name & intent
++
++**Name:** `onboarding-candidates-process`
++
++**Intent:** Govern the inbound pipeline of people applying to join CSP. The agent enforces required fields, source-based outreach rules (notably **Recruiter** = no direct contact), correct status auto-transitions, and downstream Contact + Account creation on `Fit`.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_OnboardingCandidate` | Primary entity. | All fields below. |
++| `csp_AvailabilitySlot` | Selected and confirmed slots. | `statuscode`, `csp_interviewerId` |
++| `csp_Contact` | Created on Fit + Approve. | `csp_contactType` |
++| `csp_Account` | Created on Fit + Approve. | `csp_accountType` |
++| `csp_OpportunityApplicant` | Created when sent via Send Profiles. | `csp_Candidate` |
++
++---
++
++## Field dictionary (`csp_OnboardingCandidate`)
++
++| Logical name | Type | Required | Notes |
++|---|---|---|---|
++| `csp_firstName`, `csp_lastName` | String | yes | |
++| `csp_email` | Email | yes | Unique. |
++| `csp_phone` | String | no | |
++| `csp_path` | Choice | yes | `CIM to B2B`, `B2B seeking Contracts`. |
++| `csp_candidateRole` | String | no | Free-text best-fit role. |
++| `csp_cvFileName` | String | yes | Display name. |
++| `csp_cvDocument` | File | yes | PDF/DOC/DOCX, Γëñ32 MB. |
++| `csp_hourlyRateEur` | Decimal | yes | `> 0`. |
++| `csp_b2bEntityName` | String | conditional | Required when `csp_path = B2B seeking Contracts`. |
++| `csp_selectedSlots` | Array of Lookup ΓåÆ `csp_AvailabilitySlot` | yes | |
++| `csp_confirmedSlotId` | Lookup ΓåÆ `csp_AvailabilitySlot` | no | Set on confirm. |
++| `csp_reviewerNotes` | Multiline | no | |
++| `statuscode` (`csp_status`) | Choice | yes | `Applied`, `Scheduled`, `Fit`, `Not Fit`. |
++| `csp_source` | Choice | yes | `Website` (725070000), `Recruiter` (725070001), `Referral` (725070002). Default `Website`. |
++| `csp_appliedDate` | DateOnly | yes | Default today. |
++| `csp_reviewedBy` | String | no | |
++| `csp_createdContactId` | Lookup ΓåÆ `csp_Contact` | no | Set on Fit + Approve. |
++| `csp_createdAccountId` | Lookup ΓåÆ `csp_Account` | no | Set on Fit + Approve. |
++
++---
++
++## Choice sets
++
++- **CandidatePath:** `CIM to B2B` | `B2B seeking Contracts`
++- **CandidateStatus:** `Applied` | `Scheduled` | `Fit` | `Not Fit`
++- **CandidateSource:** `Website` | `Recruiter` | `Referral`
++
++---
++
++## Lifecycle (auto-transitions)
++
++```
++Applied ΓöÇΓöÇΓû╢ Scheduled (when csp_confirmedSlotId set)
++        Γöé       Γöé
++        Γöé       ΓööΓöÇΓöÇΓû╢ Applied (when csp_confirmedSlotId cleared)
++        Γö£ΓöÇΓöÇΓû╢ Fit (manual, post-interview) ΓöÇΓöÇΓû╢ Approve & Create
++        ΓööΓöÇΓöÇΓû╢ Not Fit (manual, terminal)
++```
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Required fields.** Else `D-01` (High).
++2. **R2 ΓÇö Email unique + valid.** Else `D-02` (High).
++3. **R3 ΓÇö Conditional B2B entity.** `csp_path = B2B seeking Contracts` ΓçÆ `csp_b2bEntityName` non-empty. Else `D-03` (High).
++4. **R4 ΓÇö Hourly rate positive.** Else `D-04` (High).
++5. **R5 ΓÇö Recruiter outreach guard.** `csp_source = Recruiter` ΓçÆ no automation may attempt direct candidate email. Detection: any send log targeting candidate email when source = Recruiter. Raise `D-05` (High).
++6. **R6 ΓÇö Stuck Applied.** `statuscode = Applied` for >7 days with `csp_selectedSlots` populated. Raise `D-06` (Medium).
++7. **R7 ΓÇö Stuck Scheduled past slot.** `statuscode = Scheduled` and confirmed slot `csp_date + endTime < today`. Raise `D-07` (Medium).
++8. **R8 ΓÇö Fit without Approve & Create.** `statuscode = Fit` and (`csp_createdContactId` OR `csp_createdAccountId`) is null after 3 days. Raise `D-08` (Medium).
++9. **R9 ΓÇö Slot integrity.** Each entry in `csp_selectedSlots` must reference the same candidate. Else `D-09` (High).
++
++---
++
++## Approve & Create (Fit ΓåÆ records)
++
++1. Create `csp_Contact`: name, email, phone, `csp_contactType = Consultant`, `csp_skillset` (optional), `csp_available = true`.
++2. Create `csp_Account`: `csp_name = csp_b2bEntityName` (or `firstName lastName` for CIM-to-B2B), `csp_accountType = Contractor`, default entity, country, `csp_paymentTerms = 30 Days`, `statuscode = Active`.
++3. Set `csp_createdContactId`, `csp_createdAccountId` on the candidate.
++4. `Not Fit` is terminal.
++
++---
++
++## Source / outreach ownership
++
++| Source | Outreach |
++|---|---|
++| Website | CSP owns outreach. |
++| Referral | CSP owns outreach. |
++| Recruiter | CSP must NOT contact candidate directly ΓÇö all communication through originating recruiter. |
++
++The agent must enforce this on any automated email/calendar invite paths.
++
++---
++
++## Send Profiles flow
++
++- Triggered from Candidates list, multi-select.
++- Auto-creates one `csp_Opportunity` per candidate (source inferred from recipient email match) with one `csp_OpportunityApplicant` (Drafted).
++- Successful send flips applicants to `Sent`.
++- Recipients with no CV emit a warning but do not block.
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Candidate {fullName} missing required fields` | High | +2d |
++| D-02 | `Candidate {fullName} email invalid or duplicate` | High | +1d |
++| D-03 | `Candidate {fullName} B2B entity name missing` | High | +2d |
++| D-04 | `Candidate {fullName} hourly rate must be > 0` | High | +1d |
++| D-05 | `Recruiter-sourced candidate {fullName} contacted directly` | High | +0d |
++| D-06 | `Candidate {fullName} stuck Applied >7 days with slots selected` | Medium | +3d |
++| D-07 | `Candidate {fullName} Scheduled past slot end` | Medium | +1d |
++| D-08 | `Candidate {fullName} marked Fit but no Contact/Account created` | Medium | +3d |
++| D-09 | `Candidate {fullName} has slots referencing other candidates` | High | +1d |
++
++---
++
++## Reference queries
++
++```
++# R6 ΓÇö Stuck Applied with slots
++GET /csp_onboardingcandidates?$filter=statuscode eq 1 and modifiedon lt {today-7d}
++# Then ensure csp_selectedSlots has any rows.
++
++# R8 ΓÇö Fit without records
++GET /csp_onboardingcandidates?$filter=statuscode eq 3 and (_csp_createdcontactid_value eq null or _csp_createdaccountid_value eq null) and modifiedon lt {today-3d}
++```
++
++---
++
++## Glossary
++
++- **CIM-to-B2B** ΓÇö converting an individual contributor into a B2B entity for contracting.
++- **Approve & Create** ΓÇö action that materialises a Fit candidate into a Contact + Account.
++- **Source** ΓÇö declares ownership of outreach (Website/Referral = CSP; Recruiter = third party).
+diff --git a/Business Skills/13-onboarding-availability-process.md b/Business Skills/13-onboarding-availability-process.md
+new file mode 100644
+index 0000000..57abc24
+--- /dev/null
++++ b/Business Skills/13-onboarding-availability-process.md	
+@@ -0,0 +1,106 @@
++# Skill 13 ΓÇö Onboarding ┬╖ Availability & Interviewers Process
++
++## Skill name & intent
++
++**Name:** `onboarding-availability-process`
++
++**Intent:** Cover slot booking and interviewer integrity. The agent ensures candidate-proposed slots are valid, that confirmed slots have a qualified interviewer with no overlap, that the parent candidate is bumped to `Scheduled`, and that interviewer activation/deactivation respects future bookings.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_AvailabilitySlot` | Primary entity. | All fields below. |
++| `csp_OnboardingCandidate` | Parent ΓÇö bumped to `Scheduled`. | `csp_confirmedSlotId`, `statuscode` |
++| `csp_Contact` | Interviewer (`csp_isInterviewer = true`). | `csp_isInterviewer` |
++
++---
++
++## Field dictionary (`csp_AvailabilitySlot`)
++
++| Logical name | Type | Required | Notes |
++|---|---|---|---|
++| `csp_candidateId` | Lookup | yes | Parent candidate. |
++| `csp_dayOfWeek` | Choice | yes | Derived from `csp_date`. |
++| `csp_startTime`, `csp_endTime` | Time | yes | `endTime > startTime`. |
++| `csp_date` | DateOnly | yes | `ΓëÑ today` while `New`. |
++| `csp_teamsLink` | URL | no | Auto-generated on Booked (production). |
++| `csp_isActive` | Boolean | yes | Default true. |
++| `statuscode` (`csp_status`) | Choice | yes | `New` (default), `Booked`, `Cancelled`, `Completed`. |
++| `csp_interviewerId` | Lookup ΓåÆ `csp_Contact` | conditional | Required when `Booked`; must have `csp_isInterviewer = true`. |
++| `csp_confirmedAt` | DateOnly | derived | Set when status moves to `Booked`. |
++
++---
++
++## Choice sets
++
++- **SlotStatus:** `New` | `Booked` | `Cancelled` | `Completed`
++
++---
++
++## Lifecycle
++
++```
++New ΓöÇΓöÇΓû╢ Booked ΓöÇΓöÇΓû╢ Completed
++ Γöé        ΓööΓöÇΓöÇΓû╢ Cancelled (with reason)
++ ΓööΓöÇΓöÇΓû╢ Cancelled
++```
++
++- After `csp_date + csp_endTime` passes, status auto-moves to `Completed` (nightly job).
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Time ordering.** `csp_endTime > csp_startTime`. Else `D-01` (High).
++2. **R2 ΓÇö Future date for New.** `statuscode = New` ΓçÆ `csp_date ΓëÑ today`. Else `D-02` (Medium).
++3. **R3 ΓÇö Interviewer flag.** `csp_interviewerId.csp_isInterviewer = true`. Else `D-03` (High).
++4. **R4 ΓÇö Overlap.** Confirmed slots for the same `csp_interviewerId` must not overlap in `[csp_date startTime, csp_date endTime]`. Else `D-04` (High).
++5. **R5 ΓÇö Booked without interviewer.** `statuscode = Booked` and `csp_interviewerId` null. Else `D-05` (High).
++6. **R6 ΓÇö Candidate not bumped.** Slot `statuscode = Booked` but `csp_OnboardingCandidate.statuscode != Scheduled` or `csp_confirmedSlotId != self`. Raise `D-06` (Medium).
++7. **R7 ΓÇö Interviewer deactivation with future Bookings.** Setting `csp_Contact.csp_isInterviewer = false` while interviewer holds future Booked slots. Raise `D-07` (High).
++8. **R8 ΓÇö Past New slot.** `statuscode = New` and `csp_date < today`. Raise `D-08` (Low) ΓÇö should be Cancelled or expired.
++
++---
++
++## Cross-entity effects
++
++- Confirming a slot sets `csp_OnboardingCandidate.csp_confirmedSlotId = self.id` and bumps candidate to `Scheduled`.
++- Cancelling a Booked slot reverts the candidate to `Applied` if no other confirmed slot exists.
++- Production: Teams meeting created via Graph API on Booked, `csp_teamsLink` populated.
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Slot for {candidate} on {date} has invalid time order` | High | +1d |
++| D-02 | `New slot for {candidate} on past date` | Medium | +1d |
++| D-03 | `Slot interviewer {fullName} is not flagged isInterviewer` | High | +1d |
++| D-04 | `Interviewer {fullName} has overlapping Booked slots` | High | +1d |
++| D-05 | `Booked slot for {candidate} missing interviewer` | High | +1d |
++| D-06 | `Booked slot did not bump candidate {candidate} to Scheduled` | Medium | +1d |
++| D-07 | `Interviewer {fullName} deactivated while holding future bookings` | High | +1d |
++| D-08 | `Stale New slot for {candidate} on {date}` | Low | +14d |
++
++---
++
++## Reference queries
++
++```
++# R4 ΓÇö Interviewer overlap
++GET /csp_availabilityslots?$filter=statuscode eq 2 and _csp_interviewerid_value eq {id} and csp_date eq {date}
++
++# R7 ΓÇö Interviewer with future Booked when deactivating
++GET /csp_availabilityslots?$filter=statuscode eq 2 and _csp_interviewerid_value eq {id} and csp_date ge {today}
++```
++
++---
++
++## Glossary
++
++- **Slot** ΓÇö a candidate-proposed time window for the interview.
++- **Booked** ΓÇö slot has an assigned interviewer; the parent candidate is `Scheduled`.
+diff --git a/Business Skills/14-payment-details-process.md b/Business Skills/14-payment-details-process.md
+new file mode 100644
+index 0000000..48e80ad
+--- /dev/null
++++ b/Business Skills/14-payment-details-process.md	
+@@ -0,0 +1,84 @@
++# Skill 14 ΓÇö Payment Details Process
++
++## Skill name & intent
++
++**Name:** `payment-details-process`
++
++**Intent:** Maintain per-account, per-currency bank details. The agent enforces the **single primary per `(accountId, currencyCode)`** invariant, validates IBAN/SWIFT format where required, and warns when a contractor/supplier account lacks a primary detail in the currency it is being paid in.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_PaymentDetail` | Primary entity. | All fields below. |
++| `csp_Account` | Owner. | `csp_accountType` |
++| `csp_Expense` | Consumer of primary detail. | `csp_currencyCode`, `csp_accountId` |
++
++---
++
++## Field dictionary (`csp_PaymentDetail`)
++
++| Logical name | Type | Required | Notes |
++|---|---|---|---|
++| `csp_accountId` | Lookup | yes | |
++| `csp_currencyCode` | Choice | yes | |
++| `csp_iban` | String | conditional | Required for EUR/GBP/RON. |
++| `csp_swift` | String | conditional | Required for non-domestic transfers. |
++| `csp_bankName` | String | yes | |
++| `csp_isPrimary` | Boolean | yes | Default false. |
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Required fields.** `csp_accountId`, `csp_currencyCode`, `csp_bankName`. Else `D-01` (High).
++2. **R2 ΓÇö IBAN required for EUR/GBP/RON.** Else `D-02` (High).
++3. **R3 ΓÇö IBAN format.** Country-aware IBAN check. Else `D-03` (Medium).
++4. **R4 ΓÇö Single primary.** Exactly one `csp_isPrimary = true` per `(csp_accountId, csp_currencyCode)`. Else `D-04` (High).
++5. **R5 ΓÇö SWIFT for cross-border.** Currency differs from account country's domestic currency ΓçÆ `csp_swift` required. Else `D-05` (Medium).
++6. **R6 ΓÇö Contractor missing primary.** `csp_Account.csp_accountType = Contractor` and no primary detail in any currency. Raise `D-06` (High).
++7. **R7 ΓÇö Currency unused.** Payment detail in a currency the account has never been billed/paid in for >180 days. Raise `D-07` (Low).
++
++---
++
++## Business rules
++
++- Setting `csp_isPrimary = true` on a new record auto-clears the previous primary in the same scope.
++- Editing a primary record does not retroactively change historical expenses (which captured the bank details at payment time via the evidence file).
++- US accounts use routing/account numbers; not modelled in `csp_PaymentDetail` today (extension fields planned).
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Payment detail for {accountName} missing required fields` | High | +2d |
++| D-02 | `Payment detail for {accountName}/{currency} missing IBAN` | High | +2d |
++| D-03 | `Payment detail for {accountName}/{currency} IBAN format invalid` | Medium | +5d |
++| D-04 | `Multiple primary payment details for {accountName}/{currency}` | High | +1d |
++| D-05 | `Payment detail for {accountName}/{currency} missing SWIFT for cross-border` | Medium | +5d |
++| D-06 | `Contractor {accountName} has no primary payment detail` | High | +3d |
++| D-07 | `Payment detail for {accountName}/{currency} unused >180 days` | Low | +30d |
++
++---
++
++## Reference queries
++
++```
++# R4 ΓÇö Multiple primaries
++GET /csp_paymentdetails?$apply=filter(csp_isPrimary eq true)/groupby((_csp_accountid_value,csp_currencyCode),aggregate($count as cnt))&$filter=cnt gt 1
++
++# R6 ΓÇö Contractor with no primary
++GET /csp_accounts?$filter=csp_accountType eq 'Contractor'
++# Then per account: GET /csp_paymentdetails?$filter=_csp_accountid_value eq {id} and csp_isPrimary eq true&$top=1
++```
++
++---
++
++## Glossary
++
++- **Primary** ΓÇö the default bank detail used when paying this account in the given currency.
++- **Cross-border** ΓÇö currency differs from the account country's domestic currency.
+diff --git a/Business Skills/15-prospects-process.md b/Business Skills/15-prospects-process.md
+new file mode 100644
+index 0000000..06df3e3
+--- /dev/null
++++ b/Business Skills/15-prospects-process.md	
+@@ -0,0 +1,154 @@
++# Skill 15 ΓÇö Prospects Process
++
++## Skill name & intent
++
++**Name:** `prospects-process`
++
++**Intent:** Manage the sales pipeline of prospects (`New Business` or `Existing Account`) with their interactions, aging, status flow, and conversion to `Account` + `Contact` on win. The agent enforces required fields per kind/status, recomputes `csp_lastActivityDate` from interactions, watches stalled deals via aging buckets, and ensures Convert produces the right downstream records.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_Prospect` | Primary entity. | All fields below. |
++| `csp_ProspectInteraction` | Activity log. | `csp_type`, `csp_date`, `csp_durationMinutes` |
++| `csp_ProspectMaterial` | Files shared. | `csp_fileName`, `csp_document` |
++| `csp_Account` | Convert target. | `csp_sourceProspectId` |
++| `csp_Contact` | Convert target / owner / referrer / prospecting contact. | `csp_contactType` |
++| `csp_Opportunity` | Downstream opportunities sourced from a prospect. | `csp_Prospect` |
++
++---
++
++## Field dictionary (`csp_Prospect`)
++
++| Logical name | Type | Required | Notes |
++|---|---|---|---|
++| `csp_prospectNumber` | String | yes | `PRO-NNNN`. |
++| `csp_kind` | Choice | yes | `New Business` / `Existing Account`. |
++| `csp_existingAccountId` | Lookup ΓåÆ `csp_Account` | conditional | Required when `kind = Existing Account`. |
++| `csp_companyName` | String | yes | |
++| `csp_country` | String | yes | |
++| `csp_industry` | String | no | |
++| `csp_website` | URL | no | |
++| `csp_companySize` | String | no | e.g. `50-200`. |
++| `csp_ownerContactId` | Lookup ΓåÆ `csp_Contact` | yes | Internal owner (Consultant / Permanent Employee). |
++| `csp_source` | Choice | yes | `Phone`, `LinkedIn`, `Email`, `Internal Referral`. |
++| `csp_referredByContactId` | Lookup ΓåÆ `csp_Contact` | conditional | Required when `source = Internal Referral`. |
++| `csp_primaryContactName`, `csp_primaryContactEmail`, `csp_primaryContactPhone`, `csp_primaryContactRole` | String/Email | yes/no | Email required + valid. |
++| `csp_prospectingContactId` | Lookup ΓåÆ `csp_Contact` | conditional | For `kind = Existing Account`. |
++| `csp_title` | String | no | Opportunity title shown on card. |
++| `csp_needDescription`, `csp_servicesDiscussed` | Multiline | no | |
++| `csp_estimatedValue` | Decimal | no | If set ΓçÆ `csp_currencyCode` required. |
++| `csp_currencyCode` | Choice | conditional | |
++| `csp_expectedCloseDate` | DateOnly | no | |
++| `statuscode` (`csp_status`) | Choice | yes | Default `New`. |
++| `csp_firstContactDate` | DateOnly | yes | Default today. |
++| `csp_lastActivityDate` | DateOnly | derived | `max(firstContactDate, latest interaction date)`. |
++| `csp_lostReason` | Multiline | conditional | Required when `Lost`. |
++| `csp_convertedAccountId`, `csp_convertedContactId`, `csp_convertedDate` | Lookup/DateOnly | derived | Set on convert. |
++
++---
++
++## Choice sets
++
++- **ProspectKind:** `New Business` | `Existing Account`
++- **ProspectStatus:** `New` | `Contacted` | `Discussing` | `Proposal` | `Won` | `Lost` | `We Reached Out` | `Customer Reached Out` | `Proposal Sent`
++- **ProspectSource:** `Phone` | `LinkedIn` | `Email` | `Internal Referral`
++- **InteractionType:** `Call` | `Email` | `Meeting` | `LinkedIn`
++
++Modern flow: `New ΓåÆ We Reached Out / Customer Reached Out ΓåÆ Discussing ΓåÆ Proposal Sent ΓåÆ Won | Lost`. Legacy `Contacted` and `Proposal` still accepted.
++
++---
++
++## Aging colour bands
++
++Reference date = `csp_lastActivityDate ?? csp_firstContactDate`. Active prospects only (excludes Won/Lost).
++
++| Bucket | Days | Tint |
++|---|---|---|
++| Fresh | Γëñ 7 | emerald |
++| Active | 8ΓÇô14 | sky |
++| Aging | 15ΓÇô30 | amber |
++| Stalled | 31ΓÇô60 | orange |
++| Cold | > 60 | red |
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Required.** `csp_companyName`, `csp_primaryContactName`, `csp_primaryContactEmail` populated. Else `D-01` (High).
++2. **R2 ΓÇö Existing-account integrity.** `csp_kind = Existing Account` ΓçÆ `csp_existingAccountId` set; `csp_companyName` matches account name. Else `D-02` (High).
++3. **R3 ΓÇö Referral integrity.** `csp_source = Internal Referral` ΓçÆ `csp_referredByContactId` set. Else `D-03` (High).
++4. **R4 ΓÇö Lost requires reason.** `statuscode = Lost` ΓçÆ `csp_lostReason` non-empty. Else `D-04` (High).
++5. **R5 ΓÇö Value/currency parity.** Either both `csp_estimatedValue` and `csp_currencyCode` are set, or both are empty. Else `D-05` (Medium).
++6. **R6 ΓÇö Email format.** `csp_primaryContactEmail` valid. Else `D-06` (Medium).
++7. **R7 ΓÇö Stalled.** Active prospect bucket = `Stalled` (31ΓÇô60d). Raise `D-07` (Medium).
++8. **R8 ΓÇö Cold.** Active prospect bucket = `Cold` (>60d). Raise `D-08` (High).
++9. **R9 ΓÇö Won without conversion.** `statuscode = Won` and `csp_convertedAccountId` null after 3 days. Raise `D-09` (Medium).
++10. **R10 ΓÇö Owner type.** `csp_ownerContactId.csp_contactType Γêê {Consultant, Permanent Employee}`. Else `D-10` (Medium).
++11. **R11 ΓÇö Last activity drift.** `csp_lastActivityDate` does not equal `max(firstContactDate, latest interaction date)`. Else `D-11` (Low).
++
++---
++
++## Convert flow (Won)
++
++1. Create `csp_Account`: `csp_name = csp_companyName`, copy country/industry/website/companySize, default entity, `csp_accountType = Direct Customer`, `csp_paymentTerms = 30 Days`, `statuscode = Active`, `csp_sourceProspectId = self.id`.
++2. Create `csp_Contact`: prospect-side primary fields, `csp_accountId = newAccount.id`, `csp_contactType = Client Contact`.
++3. Update prospect: `statuscode = Won`, `csp_convertedAccountId`, `csp_convertedContactId`, `csp_convertedDate = today`.
++
++---
++
++## Interactions (`csp_ProspectInteraction`) and Materials (`csp_ProspectMaterial`)
++
++### Interaction validation
++
++- Required: `csp_prospectId`, `csp_type`, `csp_date`, `csp_summary`.
++- `csp_date Γëñ today`.
++- `csp_durationMinutes ΓëÑ 0`.
++- Adding/deleting an interaction recomputes parent `csp_lastActivityDate`.
++- Interactions are immutable after 24h (Admin override).
++
++### Material validation
++
++- Required: `csp_fileName`, `csp_document` (bytes/URL), `csp_sharedDate`.
++- Click opens a blob preview.
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Prospect {csp_prospectNumber} missing required fields` | High | +2d |
++| D-02 | `Existing-account prospect {csp_prospectNumber} not linked correctly` | High | +2d |
++| D-03 | `Referral prospect {csp_prospectNumber} missing referrer` | High | +2d |
++| D-04 | `Lost prospect {csp_prospectNumber} missing reason` | High | +1d |
++| D-05 | `Prospect {csp_prospectNumber} estimated value/currency parity broken` | Medium | +5d |
++| D-06 | `Prospect {csp_prospectNumber} primary email invalid` | Medium | +5d |
++| D-07 | `Prospect {csp_prospectNumber} stalled (31ΓÇô60 days)` | Medium | +5d |
++| D-08 | `Prospect {csp_prospectNumber} cold (>60 days)` | High | +3d |
++| D-09 | `Won prospect {csp_prospectNumber} not converted after 3 days` | Medium | +3d |
++| D-10 | `Prospect {csp_prospectNumber} owner contact type not eligible` | Medium | +5d |
++| D-11 | `Prospect {csp_prospectNumber} lastActivityDate out of sync` | Low | +14d |
++
++---
++
++## Reference queries
++
++```
++# R8 ΓÇö Cold prospects
++GET /csp_prospects?$filter=statuscode in (1,2,3,7,8) and csp_lastActivityDate lt {today-60d}
++
++# R9 ΓÇö Won without conversion
++GET /csp_prospects?$filter=statuscode eq 5 and _csp_convertedaccountid_value eq null and modifiedon lt {today-3d}
++```
++
++---
++
++## Glossary
++
++- **Kind** ΓÇö `New Business` (brand new company) vs `Existing Account` (new opportunity with current customer).
++- **Aging bucket** ΓÇö fresh/active/aging/stalled/cold derived from `csp_lastActivityDate`.
++- **Convert** ΓÇö turning a Won prospect into Account + Contact.
+diff --git a/Business Skills/16-opportunities-process.md b/Business Skills/16-opportunities-process.md
+new file mode 100644
+index 0000000..eaa2c18
+--- /dev/null
++++ b/Business Skills/16-opportunities-process.md	
+@@ -0,0 +1,173 @@
++# Skill 16 ΓÇö Opportunities Process
++
++## Skill name & intent
++
++**Name:** `opportunities-process`
++
++**Intent:** Track every commercial opportunity ΓÇö a candidate or existing consultant put forward to a client. The agent enforces source-driven client linkage (Account vs Prospect vs Free Text vs Contact), per-applicant rate/CV/status integrity, the "no profile shared without an Opportunity" guardrail, and lifecycle hygiene from `Drafted ΓåÆ Sent ΓåÆ Accepted/Rejected`.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role | Key fields |
++|---|---|---|
++| `csp_Opportunity` | Header. | All header fields below. |
++| `csp_OpportunityApplicant` | Per-applicant rows. | All fields below. |
++| `csp_OpportunityMaterial` | Files shared. | `csp_FileName`, `csp_Document` |
++| `csp_Account` | When `Source = From Existing Client`. | `csp_name` |
++| `csp_Prospect` | When `Source = From Prospect`. | `csp_companyName` |
++| `csp_Contact` | Existing consultant referrer / applicant. | `csp_contactType` |
++| `csp_OnboardingCandidate` | Candidate applicant. | `csp_cvDocument`, `csp_hourlyRateEur` |
++| `csp_ContactCV` | CV library for Contact applicants. | `csp_Document` |
++
++---
++
++## `csp_Opportunity` field dictionary
++
++| Field | Type | Required | Notes |
++|---|---|---|---|
++| `csp_OpportunityPrimaryID` | nvarchar | yes | Auto `OPP-####`. |
++| `csp_Source` | Picklist | yes | `From Existing Client`, `From Prospect`, `From New Client`, `From Existing Consultant`. |
++| `csp_Account` | Lookup ΓåÆ `csp_Account` | conditional | When `Source = From Existing Client`. |
++| `csp_Prospect` | Lookup ΓåÆ `csp_Prospect` | conditional | When `Source = From Prospect`. |
++| `csp_NewClientName` | nvarchar | conditional | When `Source = From New Client`. |
++| `csp_Contact` | Lookup ΓåÆ `csp_Contact` | conditional | When `Source = From Existing Consultant` (the referrer). |
++| `csp_Role` | nvarchar | yes | |
++| `csp_OpportunityRate` | int | yes | Rate offered to client. |
++| `csp_OpportunityRateUnit` | Lookup | yes | `Hour` / `Day`. |
++| `csp_OpportunityCurrency` | Lookup ΓåÆ Currency | yes | |
++| `csp_StartDate`, `csp_ClosingDate` | datetime | no | |
++| `csp_OpportunityDetails`, `csp_OutcomeComments` | ntext | no | |
++| `statuscode` | Status | yes | `New`, `Interview Booked`, `Won`, `Lost`. |
++| `OwnerId` | Owner | yes | |
++
++## `csp_OpportunityApplicant` field dictionary
++
++| Field | Type | Required | Notes |
++|---|---|---|---|
++| `csp_Opportunity` | Lookup | yes | Parent. |
++| `csp_Candidate` | Lookup ΓåÆ `csp_OnboardingCandidate` | conditional | XOR with `csp_Contact`. |
++| `csp_Contact` | Lookup ΓåÆ `csp_Contact` | conditional | XOR with `csp_Candidate`. |
++| `csp_Rate` | int | yes | Cost rate. |
++| `csp_RateUnit` | Lookup | yes | `Hour` / `Day`. |
++| `csp_RateCurrency` | Lookup ΓåÆ Currency | yes | Defaults to opportunity currency. |
++| `csp_Document` (CV) | File | yes | Snapshot of the CV used. |
++| `statuscode` | Status | yes | `Drafted` (default), `Sent`, `Accepted`, `Rejected`. |
++
++## `csp_OpportunityMaterial` field dictionary
++
++| Field | Type | Notes |
++|---|---|---|
++| `csp_Opportunity` | Lookup | parent |
++| `csp_FileName` | nvarchar | |
++| `csp_Document` | File | |
++| `csp_Description` | ntext | |
++| `csp_SharedDate` | datetime | |
++
++---
++
++## Choice sets
++
++- **OpportunityStatus:** `New` | `Interview Booked` | `Won` | `Lost`
++- **OpportunitySource:** `From Existing Client` | `From Prospect` | `From New Client` | `From Existing Consultant`
++- **ApplicantStatus:** `Drafted` | `Sent` | `Accepted` | `Rejected`
++- **RateUnit:** `Hour` | `Day`
++
++---
++
++## Lifecycle
++
++### Opportunity
++
++```
++New ΓöÇΓöÇΓû╢ Interview Booked ΓöÇΓöÇΓû╢ Won
++   ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓû╢ Lost
++```
++
++### Applicant
++
++```
++Drafted ΓöÇΓöÇΓû╢ Sent ΓöÇΓöÇΓû╢ Accepted
++                 ΓööΓöÇΓöÇΓû╢ Rejected
++```
++
++A successful **Send via Outlook** flips every applicant on the opportunity from `Drafted ΓåÆ Sent`.
++
++---
++
++## Source ΓåÆ client linkage matrix
++
++| Source | Required link |
++|---|---|
++| From Existing Client | `csp_Account` set |
++| From Prospect | `csp_Prospect` set |
++| From New Client | `csp_NewClientName` non-empty (often inferred from recipient email) |
++| From Existing Consultant | `csp_Contact` set (the consultant who referred it) |
++
++---
++
++## Validation rules
++
++1. **R1 ΓÇö Source linkage.** Exactly the field for the chosen Source is populated; others are null. Else `D-01` (High).
++2. **R2 ΓÇö At least one applicant.** Opportunity must have ΓëÑ 1 `csp_OpportunityApplicant`. Else `D-02` (High).
++3. **R3 ΓÇö Applicant XOR.** Each applicant has exactly one of `csp_Candidate`/`csp_Contact`. Else `D-03` (High).
++4. **R4 ΓÇö CV snapshot.** Each applicant has `csp_Document` populated (bytes copied from source CV). Else `D-04` (High).
++5. **R5 ΓÇö Rate sanity.** `csp_OpportunityRate > 0`, `csp_Rate > 0`. Else `D-05` (Medium).
++6. **R6 ΓÇö Currency present.** Header and per-applicant currency populated. Else `D-06` (Medium).
++7. **R7 ΓÇö Negative margin.** Per applicant: hourly margin (= header rate/h ΓêÆ applicant rate/h, with dayΓåöhour ├ù8 conversion) `< 0`. Raise `D-07` (Medium).
++8. **R8 ΓÇö Closing date past + still open.** `csp_ClosingDate < today` and `statuscode Γêê {New, Interview Booked}`. Raise `D-08` (Medium).
++9. **R9 ΓÇö Won/Lost without outcome comment.** `statuscode = Won` or `Lost` with empty `csp_OutcomeComments` after 3 days. Raise `D-09` (Low).
++10. **R10 ΓÇö Stuck Drafted.** Applicant `statuscode = Drafted` for >7 days on a non-`Lost` opportunity. Raise `D-10` (Medium).
++11. **R11 ΓÇö Sent without recipient.** Send action invoked but neither account nor prospect's primary contact email resolves and `csp_NewClientName` is not an email. Raise `D-11` (High).
++12. **R12 ΓÇö Profile shared outside an opportunity.** Any send-profile event referencing a `csp_Contact` without a corresponding `csp_OpportunityApplicant` row. Raise `D-12` (High).
++13. **R13 ΓÇö Recruiter-sourced candidate applied directly.** Applicant `csp_Candidate.csp_source = Recruiter` and Send happened to a non-recruiter recipient. Raise `D-13` (High).
++
++---
++
++## Auto-creation from Candidates ΓåÆ Send Profiles
++
++- One Opportunity per selected candidate.
++- Source inferred from recipient email: Account contact match ΓåÆ `From Existing Client`; prospect primary contact match ΓåÆ `From Prospect`; otherwise `From New Client` (email kept as `csp_NewClientName`).
++- One `csp_OpportunityApplicant`: candidate, role, hourly rate (EUR/Hour), `Drafted`.
++- Header `csp_OpportunityRate` left blank (sender enters quoted rate).
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `Opportunity {OPP} source linkage invalid` | High | +1d |
++| D-02 | `Opportunity {OPP} has no applicants` | High | +1d |
++| D-03 | `Applicant on {OPP} has both Candidate and Contact set (or none)` | High | +1d |
++| D-04 | `Applicant on {OPP} missing CV snapshot` | High | +2d |
++| D-05 | `Opportunity {OPP} has non-positive rate(s)` | Medium | +3d |
++| D-06 | `Opportunity {OPP} missing currency` | Medium | +5d |
++| D-07 | `Applicant on {OPP} has negative margin` | Medium | +5d |
++| D-08 | `Opportunity {OPP} past closing date and still open` | Medium | +3d |
++| D-09 | `Opportunity {OPP} closed without outcome comment` | Low | +14d |
++| D-10 | `Applicant on {OPP} stuck Drafted >7 days` | Medium | +3d |
++| D-11 | `Opportunity {OPP} send attempted with unresolved recipient` | High | +1d |
++| D-12 | `Profile shared for {contact} outside any Opportunity` | High | +1d |
++| D-13 | `Recruiter-sourced candidate {fullName} applied to non-recruiter recipient` | High | +1d |
++
++---
++
++## Reference queries
++
++```
++# R8 ΓÇö Past closing, still open
++GET /csp_opportunities?$filter=statuscode in (1,2) and csp_ClosingDate lt {today}
++
++# R10 ΓÇö Stuck Drafted applicants
++GET /csp_opportunityapplicants?$filter=statuscode eq 1 and modifiedon lt {today-7d}
++```
++
++---
++
++## Glossary
++
++- **Applicant** ΓÇö a candidate or existing consultant put forward to the client on this opportunity.
++- **CV snapshot** ΓÇö the bytes of the CV at apply time, copied into `csp_OpportunityApplicant.csp_Document` so historical evidence survives later edits.
++- **Margin / hour** = header rate per hour ΓêÆ applicant rate per hour (with DayΓåöHour ├ù8 conversion).
+diff --git a/Business Skills/17-reports-process.md b/Business Skills/17-reports-process.md
+new file mode 100644
+index 0000000..54ee0fe
+--- /dev/null
++++ b/Business Skills/17-reports-process.md	
+@@ -0,0 +1,97 @@
++# Skill 17 ΓÇö Reports (Billing & Profit) Process
++
++## Skill name & intent
++
++**Name:** `reports-process`
++
++**Intent:** Govern the forward-looking financial dashboard: actuals for last/this month and forecast for next 2 months, broken down by country and currency. The agent does **not write** to financial tables; it validates inputs are present and consistent so the report renders correctly, and raises Corporate Actions when forecast inputs (FX, holidays, contract dates, milestones) are missing.
++
++---
++
++## In-scope Dataverse tables
++
++| Logical name | Role |
++|---|---|
++| `csp_Contract` | Forecast input. |
++| `csp_ContractMilestone` | Fixed-Price month allocation. |
++| `csp_Invoice` / `csp_InvoiceLine` | Last-month profit override. |
++| `csp_Expense` | Last-month profit override (Contractor Payments). |
++| `csp_ExchangeRate` | Cross-currency normalisation. |
++| `csp_PublicHoliday` | Working-day calculation per entity country. |
++| `csp_ReportingSnapshot` | Optional persisted snapshots. |
++
++---
++
++## Computed columns (per month bucket: `last`, `this`, `next`, `inTwoMonths`)
++
++- **Billing forecast (per contract):**
++  - `Time & Material` / `Standard Contracting` (Day): `sellRate ├ù workingDaysInMonth ├ù allocation`.
++  - `Time & Material` (Hour): `sellHourlyRate ├ù workingDaysInMonth ├ù 8`.
++  - `Monthly Salary`: `sellRate` (treated as monthly).
++  - `Fixed Price`: pro-rate `csp_grossValue` over duration months OR include a milestone falling in that month.
++- **Profit forecast (per contract):** `billing ΓêÆ cost`, cost via `csp_buyRate`. Cross-currency uses latest `csp_ExchangeRate`.
++- **Working days** = weekdays in month minus matching `csp_PublicHoliday` for the contract's entity country.
++
++### Last-month override
++
++For the `last` bucket, **profit** is replaced with actual profit derived from `csp_InvoiceLine` linked to the contract minus matched `csp_Expense` (`Contractor Payment`) linked to the contract.
++
++---
++
++## Aggregation
++
++- Headline grouping: `(country, currency)`, 4 months ├ù `(billing, profit)`.
++- Drill-down: per-contract rows under each headline group.
++- Single chart: 4 months ├ù `(billing, profit)`, summed in display currency (FX warning when mixing).
++
++---
++
++## Validation rules (read-only ΓÇö emits discrepancies, no writes to financials)
++
++1. **R1 ΓÇö Missing FX rate for forecast period.** Contract has `csp_sellCurrency Γëá csp_buyCurrency` and no `csp_ExchangeRate` for the forecast month. Raise `D-01` (Medium).
++2. **R2 ΓÇö Stale FX rate.** Latest matching rate older than 30 days. Raise `D-02` (Low).
++3. **R3 ΓÇö Missing public holidays.** Entity country has < 1 `csp_PublicHoliday` for the forecast year. Raise `D-03` (Medium).
++4. **R4 ΓÇö Active contract missing dates.** `csp_startDate` null or invalid. Raise `D-04` (High).
++5. **R5 ΓÇö Fixed Price without gross value or milestones.** Contract `Fixed Price` with `csp_grossValue = 0` and no milestones in any forecast month. Raise `D-05` (Medium).
++6. **R6 ΓÇö Last-month profit anomaly.** Override profit deviates from forecast by >50%. Raise `D-06` (Low) ΓÇö informational variance.
++7. **R7 ΓÇö Snapshot drift.** Persisted `csp_ReportingSnapshot` differs from recomputed value by more than tolerance. Raise `D-07` (Low).
++
++---
++
++## Permissions
++
++Admin and Owner only.
++
++---
++
++## Discrepancy catalog
++
++| ID | Title | Priority | Due |
++|---|---|---|---|
++| D-01 | `FX rate missing for {currencyPair} in {month}` | Medium | +5d |
++| D-02 | `Stale FX rate for {currencyPair} (>30 days)` | Low | +14d |
++| D-03 | `Public holidays missing for {country} in {year}` | Medium | +14d |
++| D-04 | `Active contract {contractNumber} missing valid dates` | High | +2d |
++| D-05 | `Fixed Price contract {contractNumber} has no gross value or milestones` | Medium | +7d |
++| D-06 | `Last-month profit variance >50% on contract {contractNumber}` | Low | +14d |
++| D-07 | `Reporting snapshot drift on {entity}/{month}` | Low | +14d |
++
++---
++
++## Reference queries
++
++```
++# R1 ΓÇö Missing FX for next month
++GET /csp_exchangerates?$filter=csp_fromCurrencyCode eq '{from}' and csp_toCurrencyCode eq '{to}' and csp_month eq {nextMonth} and csp_year eq {nextYear}
++
++# R3 ΓÇö Holidays for country/year
++GET /csp_publicholidays?$filter=csp_country eq '{country}' and csp_year eq {year}
++```
++
++---
++
++## Glossary
++
++- **Bucket** ΓÇö one of the four months on the report (`last`, `this`, `next`, `inTwoMonths`).
++- **Allocation** ΓÇö fraction of the month a contract is active (1.0 for full month, lower for partial).
++- **Working day** ΓÇö weekday minus matching public holiday.
+diff --git a/Business Skills/README.md b/Business Skills/README.md
+new file mode 100644
+index 0000000..37a916f
+--- /dev/null
++++ b/Business Skills/README.md	
+@@ -0,0 +1,46 @@
++# Business Skills
++
++This folder contains **Dataverse Business Skills** ΓÇö declarative process specifications written for **Copilot Studio autonomous agents**.
++
++Each MD file describes one end-to-end business process backed by Dataverse tables, including:
++
++- The tables and fields involved (logical names, types, choice values).
++- Validation rules expressed as agent-runnable checks.
++- Lifecycle / status transitions and preconditions.
++- Derivations and formulas.
++- Cross-entity integrity rules.
++- A **discrepancy catalog** ΓÇö the issues an autonomous agent should detect and report as `csp_CorporateAction` records (see `Business Logic/26-corporate-actions.md`).
++- Example FetchXML / OData queries the agent can run to find candidate records.
++- A glossary of domain terms.
++
++## Authoring conventions
++
++- Use Dataverse logical names with the `csp_` prefix.
++- Phrase rules as: *Given X, assert Y, otherwise raise discrepancy Z (priority, due-date offset, suggested action details).*
++- Keep skills self-contained: an agent should be able to load **one** MD and act on it without reading the rest of the codebase.
++- Suppress duplicates: skip writing a `csp_CorporateAction` when an open one already exists for the same `(record id, discrepancy code)`.
++- One process per file. New skills are added incrementally.
++
++## Skills
++
++| # | Skill | Purpose |
++|---|---|---|
++| 01 | [Contracts process](./01-contracts-process.md) | Validate `csp_Contract` lifecycle, margins, and downstream effects. |
++| 02 | [Accounts process](./02-accounts-process.md) | Master-data hygiene for client/contractor/supplier accounts and hierarchy. |
++| 03 | [Contacts process](./03-contacts-process.md) | People directory integrity; profile-sharing guardrails. |
++| 04 | [Contract Milestones process](./04-contract-milestones-process.md) | Fixed-Price milestone integrity and status drift. |
++| 05 | [Invoices process](./05-invoices-process.md) | AR header/line integrity, FX snapshots, overdue management. |
++| 06 | [Expenses process](./06-expenses-process.md) | AP integrity, contractor-payment linkage, RON snapshot on payment. |
++| 07 | [Timesheets process](./07-timesheets-process.md) | Weekly time tracking validity, missing weeks, stalled approvals. |
++| 08 | [Leave process](./08-leave-process.md) | Time-off request integrity, working-day calculation, client notification. |
++| 09 | [Dividends process](./09-dividends-process.md) | Distribution integrity, AGA evidence, immutability past payment date. |
++| 10 | [Bank Reconciliation process](./10-bank-reconciliation-process.md) | Smart-match heuristics, polarity rules, status drift on confirm. |
++| 11 | [Documents process](./11-documents-process.md) | Document expiration tracking and missing-document detection per account. |
++| 12 | [Onboarding ┬╖ Candidates process](./12-onboarding-candidates-process.md) | Inbound pipeline, source-based outreach rules, Approve & Create. |
++| 13 | [Onboarding ┬╖ Availability & Interviewers process](./13-onboarding-availability-process.md) | Slot validity, interviewer overlap, candidate auto-bumps. |
++| 14 | [Payment Details process](./14-payment-details-process.md) | Single-primary-per-currency invariant, IBAN/SWIFT validity. |
++| 15 | [Prospects process](./15-prospects-process.md) | Sales pipeline integrity, aging buckets, conversion to Account + Contact. |
++| 16 | [Opportunities process](./16-opportunities-process.md) | Source linkage, applicant lifecycle, no-profile-without-opportunity guard. |
++| 17 | [Reports (Billing & Profit) process](./17-reports-process.md) | Forecast input validation (FX, holidays, dates) ΓÇö read-only. |
++
++Future skills (Settings, JD Skills/Platforms curation, Realtime alerts, AI suggestion review, etc.) will follow the same template.
+diff --git a/src/pages/OpportunitiesPage.tsx b/src/pages/OpportunitiesPage.tsx
+index d47d249..375d06c 100644
+--- a/src/pages/OpportunitiesPage.tsx
++++ b/src/pages/OpportunitiesPage.tsx
+@@ -647,6 +647,11 @@ function CandidatesEditor({ form, updateField }: { form: any; updateField: (k: s
+                 <div className="flex items-center justify-between text-sm">
+                   <span className="font-medium">{c.firstName} {c.lastName} <span className="text-muted-foreground font-normal">┬╖ {c.candidateRole || 'ΓÇö'}</span></span>
+                   <div className="flex items-center gap-2">
++                    {line.rate != null && (
++                      <span className="text-xs text-muted-foreground">
++                        Rate <strong className="text-foreground">{(line.unit === 'Hour' ? line.rate : line.rate / 8).toFixed(2)}</strong>/h ┬╖ <strong className="text-foreground">{(line.unit === 'Day' ? line.rate : line.rate * 8).toFixed(2)}</strong>/d
++                      </span>
 +                    )}
-+                    title={blocked ? 'Add Closing Comments to enable' : `Set status to ${s}`}
-+                  >
-+                    {s}
-+                  </button>
-+                );
-+              })}
-+            </div>
-+            {cancelBlocked && (
-+              <p className="mt-1.5 text-[11px] text-amber-700">
-+                Add Closing Comments below to confirm Cancelled.
-+              </p>
-+            )}
-+          </div>
-         </div>
--        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
--          {leaveStats.map((b) => {
--            const totalDays = b.list.reduce((s, l) => s + l.totalDays, 0);
--            return (
--              <Card key={b.key}>
--                <CardHeader className="pb-2">
--                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
--                    <span>
--                      {b.key === 'last' ? 'Last month' : b.key === 'this' ? 'This month' : 'Next month'}
--                      <span className="ml-2 text-xs font-normal">({b.label})</span>
--                    </span>
--                    <span className="text-xs font-semibold text-foreground">
--                      {b.list.length} ┬╖ {totalDays}d
--                    </span>
--                  </CardTitle>
--                </CardHeader>
--                <CardContent>
--                  {b.list.length === 0 ? (
--                    <div className="text-xs text-muted-foreground py-4 text-center">
--                      No leave scheduled.
--                    </div>
--                  ) : (
--                    <div className="divide-y">
--                      {b.list.map((l) => {
--                        const c = getContactById(l.contactId);
--                        const name = c ? `${c.firstName} ${c.lastName}` : 'Unknown';
--                        const start = new Date(l.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
--                        const end = new Date(l.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
--                        return (
--                          <div key={l.id} className="py-2 text-sm">
--                            <div className="font-medium truncate">{name}</div>
--                            <div className="text-xs text-muted-foreground">
--                              {start === end ? start : `${start} ΓÇô ${end}`} ┬╖ {l.totalDays}d
--                            </div>
--                          </div>
--                        );
--                      })}
--                    </div>
--                  )}
--                </CardContent>
--              </Card>
--            );
--          })}
-+
-+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-+          <div>
-+            <Label className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
-+              <Lock className="h-3 w-3" />
-+              Action Details
-+              <span className="text-[10px] font-normal normal-case ml-auto text-muted-foreground/70">AI generated ┬╖ read only</span>
-+            </Label>
-+            <div className="mt-1.5 rounded-md border bg-muted/30 p-3 text-sm whitespace-pre-wrap leading-relaxed min-h-[360px] max-h-[60vh] overflow-y-auto">
-+              {action.actionDetails}
-+            </div>
-+          </div>
-+
-+          <div>
-+            <Label htmlFor="closing" className="text-xs uppercase tracking-wide text-muted-foreground">
-+              Closing Comments
-+              <span className="text-[10px] font-normal normal-case ml-2 text-muted-foreground/70">
-+                Required to cancel
-+              </span>
-+            </Label>
-+            <Textarea
-+              id="closing"
-+              className="mt-1.5 min-h-[140px]"
-+              placeholder="Notes on what was done, why this was cancelled, or context for the next personΓÇª"
-+              value={draftComments}
-+              onChange={(e) => setDraftComments(e.target.value)}
-+            />
-+          </div>
-         </div>
--      </section>
- 
--      <ExpenseFormSheet
--        expense={expenseDialog.expense}
--        open={expenseDialog.open}
--        onOpenChange={(o) => {
--          setExpenseDialog((s) => ({ ...s, open: o }));
--          if (!o) setRefreshTick((t) => t + 1);
--        }}
--      />
--    </div>
-+        {/* Sticky footer actions */}
-+        <div className="border-t bg-background px-6 py-3 flex items-center justify-end gap-2">
-+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-+          <Button onClick={handleSave} disabled={!dirty || cancelBlocked}>Save</Button>
-+        </div>
-+      </SheetContent>
-+    </Sheet>
-   );
- }
-diff --git a/src/types/crm.ts b/src/types/crm.ts
-index d099357..18e7c62 100644
---- a/src/types/crm.ts
-+++ b/src/types/crm.ts
-@@ -559,6 +559,22 @@ export interface Opportunity {
-   createdAt: string;
- }
- 
-+// ===== CORPORATE ACTIONS =====
-+export type CorporateActionStatus = 'New' | 'In Progress' | 'Closed' | 'Cancelled';
-+export type CorporateActionPriority = 'Low' | 'Medium' | 'High';
-+
-+export interface CorporateAction {
-+  id: string;
-+  actionSummarizedTitle: string;
-+  actionDetails: string;
-+  closingComments?: string;
-+  priority: CorporateActionPriority;
-+  status: CorporateActionStatus;
-+  dueDate?: string;
-+  createdAt: string;
-+  modifiedAt: string;
-+}
-+
- // ===== CURRENCY MAP =====
- export const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = {
-   USD: '$',
+                     {m.hour != null ? (
+                       <span className={`text-xs ${m.hour < 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                         Margin <strong>{m.hour.toFixed(2)}</strong>/h ┬╖ <strong>{m.day!.toFixed(2)}</strong>/d

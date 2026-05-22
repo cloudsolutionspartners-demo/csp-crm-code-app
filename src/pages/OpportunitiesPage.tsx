@@ -1533,12 +1533,17 @@ function ApplicantCard({ applicant, opportunity, candidates, contacts, contactCv
     <div style={{ border: '1px solid hsl(var(--border))', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', rowGap: 4 }}>
           <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: 14 }}>📄</span>
           <span style={{ fontWeight: 600 }}>{name}</span>
           <span style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>· {kind}</span>
+          {applicant.rate != null && (
+            <span style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap' }}>
+              Rate <strong style={{ color: 'hsl(var(--foreground))' }}>{((applicant.rateUnit || 'Hour') === 'Hour' ? applicant.rate : applicant.rate / 8).toFixed(2)}</strong>/h · <strong style={{ color: 'hsl(var(--foreground))' }}>{((applicant.rateUnit || 'Hour') === 'Day' ? applicant.rate : applicant.rate * 8).toFixed(2)}</strong>/d
+            </span>
+          )}
           {hasMargin && (
-            <span style={{ fontSize: 11, color: margin.hourlyMargin < 0 ? '#dc2626' : '#059669' }}>
+            <span style={{ fontSize: 11, color: margin.hourlyMargin < 0 ? '#dc2626' : '#059669', whiteSpace: 'nowrap' }}>
               Margin {margin.hourlyMargin.toFixed(2)}/h · {margin.dailyMargin.toFixed(2)}/d
             </span>
           )}

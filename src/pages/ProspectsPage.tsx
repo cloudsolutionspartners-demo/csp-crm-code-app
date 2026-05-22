@@ -160,10 +160,12 @@ export default function ProspectsPage() {
 
   // Interaction form
   const [intForm, setIntForm] = useState({ type: 'Call' as InteractionType, date: '', summary: '' });
+  const [isAddingInteraction, setIsAddingInteraction] = useState(false);
   // Material form
   const [matForm, setMatForm] = useState({ fileName: '', sharedDate: '', description: '' });
   const [matFile, setMatFile] = useState<File | null>(null);
   const matFileRef = React.useRef<HTMLInputElement>(null);
+  const [isAddingMaterial, setIsAddingMaterial] = useState(false);
   // Convert dialog
   const [showConvert, setShowConvert] = useState(false);
 
@@ -375,8 +377,10 @@ export default function ProspectsPage() {
     : [];
 
   const addInteraction = async () => {
+    if (isAddingInteraction) return;
     if (!intForm.summary) { toast.error('Summary is required'); return; }
     if (!selectedProspect) return;
+    setIsAddingInteraction(true);
     try {
       await saveInteraction({
         prospectId: selectedProspect.id,
@@ -389,12 +393,16 @@ export default function ProspectsPage() {
       toast.success('Interaction logged');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to log interaction');
+    } finally {
+      setIsAddingInteraction(false);
     }
   };
 
   const addMaterial = async () => {
+    if (isAddingMaterial) return;
     if (!matForm.fileName) { toast.error('File Name is required'); return; }
     if (!selectedProspect) return;
+    setIsAddingMaterial(true);
     try {
       const materialId = await saveMaterial({
         prospectId: selectedProspect.id,
@@ -418,6 +426,8 @@ export default function ProspectsPage() {
       toast.success('Material added');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to add material');
+    } finally {
+      setIsAddingMaterial(false);
     }
   };
 
@@ -845,13 +855,61 @@ export default function ProspectsPage() {
 
               {activeTab === 'timeline' && (
                 <div>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '1rem' }}>
-                    <SelectField label="Type" value={intForm.type} onChange={v => setIntForm(prev => ({ ...prev, type: v as InteractionType }))} options={INTERACTION_TYPES.map(t => ({ value: t, label: t }))} />
-                    <DateField label="Date" value={intForm.date} onChange={v => setIntForm(prev => ({ ...prev, date: v }))} />
-                    <div style={{ flex: 1 }}>
-                      <TextAreaField label="Summary" value={intForm.summary} onChange={v => setIntForm(prev => ({ ...prev, summary: v }))} rows={1} />
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.75rem' }}>
+                      <h4 style={{ fontSize: '0.875rem', fontWeight: 600, margin: 0 }}>Add a new interaction</h4>
+                      <span className="csp-text-muted" style={{ fontSize: '0.75rem' }}>Track every touchpoint with the prospect</span>
                     </div>
-                    <button className="csp-btn csp-btn-primary" onClick={addInteraction}>Add</button>
+
+                    <div className="csp-form-grid-2" style={{ marginBottom: '0.75rem' }}>
+                      <SelectField
+                        label="Type"
+                        value={intForm.type}
+                        onChange={v => setIntForm(prev => ({ ...prev, type: v as InteractionType }))}
+                        options={INTERACTION_TYPES.map(t => ({ value: t, label: t }))}
+                      />
+                      <DateField
+                        label="Date"
+                        value={intForm.date}
+                        onChange={v => setIntForm(prev => ({ ...prev, date: v }))}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <TextAreaField
+                        label="Summary"
+                        value={intForm.summary}
+                        onChange={v => setIntForm(prev => ({ ...prev, summary: v }))}
+                        rows={3}
+                        placeholder="What happened? Notes, takeaways, next steps..."
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        className="csp-btn csp-btn-primary"
+                        onClick={addInteraction}
+                        disabled={isAddingInteraction}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: '110px', justifyContent: 'center' }}
+                      >
+                        {isAddingInteraction ? (
+                          <>
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                width: '12px',
+                                height: '12px',
+                                border: '2px solid currentColor',
+                                borderTopColor: 'transparent',
+                                borderRadius: '50%',
+                                animation: 'csp-spin 0.6s linear infinite',
+                              }}
+                            />
+                            Saving...
+                          </>
+                        ) : 'Add Interaction'}
+                      </button>
+                    </div>
                   </div>
 
                   {prospectInteractions.length === 0 ? (
@@ -903,8 +961,32 @@ export default function ProspectsPage() {
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
                       <button className="csp-btn csp-btn-outline" onClick={() => { setMatForm({ fileName: '', sharedDate: new Date().toISOString().substring(0, 10), description: '' }); setMatFile(null); if (matFileRef.current) matFileRef.current.value = ''; }}>Clear</button>
-                      <button className="csp-btn csp-btn-primary" onClick={addMaterial}>
-                        <Plus className="csp-icon-inline" /> Add material
+                      <button
+                        className="csp-btn csp-btn-primary"
+                        onClick={addMaterial}
+                        disabled={isAddingMaterial}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: '110px', justifyContent: 'center' }}
+                      >
+                        {isAddingMaterial ? (
+                          <>
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                width: '12px',
+                                height: '12px',
+                                border: '2px solid currentColor',
+                                borderTopColor: 'transparent',
+                                borderRadius: '50%',
+                                animation: 'csp-spin 0.6s linear infinite',
+                              }}
+                            />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="csp-icon-inline" /> Add material
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
