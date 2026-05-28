@@ -19,7 +19,7 @@ import {
 import { fetchContracts, saveContract as saveContractToDataverse } from '../services/contractService';
 import { fetchInvoices } from '../services/invoiceService';
 import { fetchTimesheets } from '../services/timesheetService';
-import { saveMilestone as saveMilestoneToDataverse } from '../services/milestoneService';
+import { saveMilestone as saveMilestoneToDataverse, fetchMilestones } from '../services/milestoneService';
 import { fetchAccounts } from '../services/accountService';
 import { fetchContacts } from '../services/contactService';
 import { fetchBusinessUnits } from '../services/businessUnitService';
@@ -28,6 +28,7 @@ import { useDataverse } from '../services/useDataverse';
 import type { Account, Contact } from '../types/crm';
 import { cn, formatCurrency, formatDate, formatPercent } from '../lib/utils';
 import type { Contract, ContractStatus, ContractType, BillingType, CurrencyCode, MilestoneStatus } from '../types/crm';
+import { ByAccountView, ByChildAccountView, ByContractorView } from '../components/contract/ContractAlternativeViews';
 
 // ===== Constants =====
 const CONTRACT_STATUSES: ContractStatus[] = ['Draft', 'Active', 'Inactive' as ContractStatus, 'On Hold', 'Completed', 'Terminated'];
@@ -115,6 +116,7 @@ export default function ContractsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [startDateRel, setStartDateRel] = useState<RelativeDateValue>(ALL_DATES);
   const [endDateRel, setEndDateRel] = useState<RelativeDateValue>(ALL_DATES);
+  const [viewMode, setViewMode] = useState<'table' | 'account' | 'childaccount' | 'contractor'>('table');
 
   // Column filters
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({});
@@ -135,7 +137,7 @@ export default function ContractsPage() {
   const [milestoneForm, setMilestoneForm] = useState({
     milestoneId: '',
     description: '',
-    value: 0,
+    value: '0',
     currencyCode: 'EUR' as CurrencyCode,
     startDate: '',
     endDate: '',
@@ -273,7 +275,16 @@ export default function ContractsPage() {
     const margin = sell - buy;
     const marginPct = sell > 0 ? Math.round(((sell - buy) / sell) * 10000) / 100 : 0;
     setEditingContract({ ...contract, margin, marginPercent: marginPct });
-    setLocalMilestones(getMilestonesByContractId(contract.id));
+    setLocalMilestones([]);
+    fetchMilestones()
+      .then(all => {
+        const contractIdLower = (contract.id || '').toLowerCase();
+        const filtered = all.filter(m => (m.contractId || '').toLowerCase() === contractIdLower);
+        setLocalMilestones(filtered as typeof contractMilestones);
+      })
+      .catch(err => {
+        console.error('[ContractsPage] Failed to load milestones for contract', contract.id, err);
+      });
     setIsNew(false);
     setOriginalEntityId(contract.entityId || '');
     setActiveTab('parties');
@@ -335,7 +346,7 @@ export default function ContractsPage() {
     setMilestoneForm({
       milestoneId: `MS-${String(nextId).padStart(3, '0')}`,
       description: '',
-      value: 0,
+      value: '0',
       currencyCode: editingContract.sellCurrency,
       startDate: '',
       endDate: '',
@@ -554,6 +565,21 @@ export default function ContractsPage() {
           <div style={{ marginLeft: 'auto' }}>
             <ClearColumnFiltersButton filters={columnFilters} setFilters={setColumnFilters} />
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+            <span style={{ fontSize: '11px', fontWeight: 500, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>View</span>
+            {[
+              { value: 'table', label: 'Table' },
+              { value: 'account', label: 'By Account' },
+              { value: 'childaccount', label: 'By Child Account' },
+              { value: 'contractor', label: 'By Contractor' },
+            ].map(v => (
+              <button key={v.value} onClick={() => setViewMode(v.value as any)}
+                className={viewMode === v.value ? 'csp-btn csp-btn-sm csp-btn-primary' : 'csp-btn csp-btn-sm csp-btn-outline'}
+                style={{ padding: '4px 10px', fontSize: '11px' }}>
+                {v.label}
+              </button>
+            ))}
+          </div>
         </div>
         {hasActiveFilters && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11 }}>
@@ -569,6 +595,18 @@ export default function ContractsPage() {
         )}
       </div>
 
+      {viewMode === 'account' && (
+        <ByAccountView contracts={filtered} onOpen={openEdit} accounts={dvAccounts} contacts={dvContacts} />
+      )}
+      {viewMode === 'childaccount' && (
+        <ByChildAccountView contracts={filtered} onOpen={openEdit} accounts={dvAccounts} contacts={dvContacts} />
+      )}
+      {viewMode === 'contractor' && (
+        <ByContractorView contracts={filtered} onOpen={openEdit} accounts={dvAccounts} contacts={dvContacts} />
+      )}
+
+      {viewMode === 'table' && (
+      <>
       {/* ===== Table ===== */}
       <div className="csp-table-wrap">
         <table className="csp-table">
@@ -657,6 +695,8 @@ export default function ContractsPage() {
           </tbody>
         </table>
       </div>
+      </>
+      )}
 
       {/* ===== Sheet ===== */}
       <Sheet open={sheetOpen} onClose={closeSheet} title={isNew ? 'New Contract' : `Edit ${[editingContract.contractNumber || editingContract.name, editingContract.parentAccountName, editingContract.assignedToName].filter(Boolean).join(' — ')}`} width="720px">
@@ -960,8 +1000,8 @@ export default function ContractsPage() {
           />
           <TextField
             label="Value"
-            value={String(milestoneForm.value)}
-            onChange={v => setMilestoneForm(prev => ({ ...prev, value: Number(v) || 0 }))}
+            value={milestoneForm.value}
+            onChange={v => setMilestoneForm(prev => ({ ...prev, value: v }))}
             type="number"
           />
           <SelectField

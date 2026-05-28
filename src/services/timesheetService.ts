@@ -10,10 +10,10 @@ function isGuid(id: string): boolean {
 }
 
 const STATUS_REVERSE: Record<number, TimesheetStatus> = {
-  1: 'Draft', 725070001: 'Approved',
+  1: 'Draft', 725070002: 'Submitted', 725070001: 'Approved',
 };
 const STATUS_FORWARD: Record<string, number> = {
-  Draft: 1, Approved: 725070001,
+  Draft: 1, Submitted: 725070002, Approved: 725070001,
 };
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;

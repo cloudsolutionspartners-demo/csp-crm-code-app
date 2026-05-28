@@ -60,7 +60,7 @@ export async function fetchMilestones(): Promise<MilestoneRecord[]> {
 function safeNum(val: any): number | null {
   if (val === undefined || val === null || val === '') return null;
   const n = Number(val);
-  return (!isNaN(n) && n >= 0) ? n : null;
+  return !isNaN(n) ? n : null;
 }
 
 export async function saveMilestone(data: Record<string, any>, existingId?: string): Promise<string> {

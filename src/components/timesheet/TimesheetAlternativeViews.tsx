@@ -224,7 +224,7 @@ export function GroupedByAccountView({ timesheets, onOpen, contracts = [], accou
 // ============================================================
 export function MonthlyTimelineView({ timesheets, onOpen }: Props) {
   const { months, statuses, matrix, monthTotals } = useMemo(() => {
-    const sts = ['Draft', 'Submitted', 'Approved', 'Rejected'] as const;
+    const sts = ['Draft', 'Submitted', 'Approved'] as const;
     const monthsSet = new Set<string>();
     timesheets.forEach(t => {
       if (t.weekStart) {

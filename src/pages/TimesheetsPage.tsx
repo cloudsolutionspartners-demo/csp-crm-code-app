@@ -24,7 +24,7 @@ import type { Timesheet, TimesheetStatus, TimesheetEntry, Contract, Contact, Acc
 import { GroupedByAccountView, MonthlyTimelineView, ByConsultantView, hoursInRange } from '../components/timesheet/TimesheetAlternativeViews';
 import { SendTimesheetReportFlow } from '../components/timesheet/SendTimesheetReportFlow';
 
-const tsStatuses: TimesheetStatus[] = ['Draft', 'Submitted', 'Approved', 'Rejected'];
+const tsStatuses: TimesheetStatus[] = ['Draft', 'Submitted', 'Approved'];
 const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -236,7 +236,7 @@ export default function TimesheetsPage() {
     const con = getContactById(selected.contactId);
     const ctr = getContractById(selected.contractId);
     try {
-      await saveTimesheet({ status: 'Rejected' }, selected.id);
+      await saveTimesheet({ status: 'Draft' }, selected.id);
       toast.success(`Return notification sent to ${con ? `${con.firstName} ${con.lastName}` : 'consultant'} for ${selected.reference} (${ctr?.contractNumber})`);
       setReturnDialog(false);
       setReturnComment('');

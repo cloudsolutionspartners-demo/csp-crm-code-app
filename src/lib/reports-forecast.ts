@@ -3,6 +3,7 @@
 
 import type { Contract, Invoice, Expense, Timesheet, CurrencyCode } from '../types/crm';
 import type { BusinessUnit } from '../services/businessUnitService';
+import type { MilestoneRecord } from '../services/milestoneService';
 
 export type MonthKey = { year: number; month: number; label: string }; // month 1-12
 
@@ -110,7 +111,7 @@ export interface ContractMonthLine {
   sellCurrency: CurrencyCode;
   buyAmount: number;
   buyCurrency: CurrencyCode;
-  source: 'invoice' | 'timesheet-actual' | 'timesheet-forecast' | 'fixed-monthly';
+  source: 'invoice' | 'timesheet-actual' | 'timesheet-forecast' | 'fixed-monthly' | 'milestone';
 }
 
 function monthsBetween(start: string, end?: string): number {
@@ -133,6 +134,9 @@ export function computeContractMonth(
   accounts: { id: string; entityId: string }[],
   now = new Date(),
 ): ContractMonthLine | null {
+  // Contracts billed via milestones produce their revenue from milestone records, not from sellRate or timesheets.
+  // They are emitted as separate lines in buildBillingForMonth's milestone loop.
+  if (c.hasMilestones) return null;
   if (!contractActiveInMonth(c, m)) return null;
   const contractor = c.assignedToName || '—';
   const parentAccount = accounts.find(a => a.id === c.parentAccountId);
@@ -205,6 +209,7 @@ export function buildBillingForMonth(
   timesheets: Timesheet[],
   businessUnits: BusinessUnit[],
   accounts: { id: string; entityId: string }[],
+  milestones: MilestoneRecord[],
   now = new Date(),
 ): MonthBuckets {
   const lines: ContractMonthLine[] = [];
@@ -212,6 +217,37 @@ export function buildBillingForMonth(
     const line = computeContractMonth(c, m, timesheets, businessUnits, accounts, now);
     if (line) lines.push(line);
   }
+
+  // Milestone-driven revenue lines: contracts billed via milestones produce one line per milestone,
+  // counted in the month of csp_startdate (all statuses count).
+  for (const ms of milestones) {
+    if (!ms.startDate) continue;
+    const d = new Date(ms.startDate);
+    if (d.getFullYear() !== m.year || d.getMonth() + 1 !== m.month) continue;
+    const msContractIdLower = (ms.contractId || '').toLowerCase();
+    const parent = contracts.find(c => (c.id || '').toLowerCase() === msContractIdLower);
+    if (!parent) continue;
+    const parentAccount = accounts.find(a => a.id === parent.parentAccountId);
+    const country = buCountry(parentAccount?.entityId || parent.entityId, businessUnits);
+    lines.push({
+      contractId: parent.id,
+      contractNumber: parent.contractNumber,
+      contractName: parent.name,
+      contractor: parent.assignedToName || '—',
+      parentAccountId: parent.parentAccountId,
+      parentAccountName: parent.parentAccountName || '',
+      country,
+      hours: 0,
+      daysOrUnits: 0,
+      unitOfMeasure: parent.unitOfMeasure,
+      sellAmount: ms.value,
+      sellCurrency: ms.currencyCode as CurrencyCode,
+      buyAmount: 0,
+      buyCurrency: ms.currencyCode as CurrencyCode,
+      source: 'milestone',
+    });
+  }
+
   const byCurrencyCountry = new Map<string, { country: string; currency: CurrencyCode; billing: number; cost: number; profit: number }>();
   for (const l of lines) {
     // Billing always goes to sell-currency bucket

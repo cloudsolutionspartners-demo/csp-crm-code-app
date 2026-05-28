@@ -18,6 +18,8 @@ import { fetchTimesheets } from '../services/timesheetService';
 import { fetchBusinessUnits } from '../services/businessUnitService';
 import type { BusinessUnit } from '../services/businessUnitService';
 import { fetchAccounts } from '../services/accountService';
+import { fetchMilestones } from '../services/milestoneService';
+import type { MilestoneRecord } from '../services/milestoneService';
 import type { Contract, Invoice, Expense, Timesheet, CurrencyCode, Account } from '../types/crm';
 
 type MonthCol = { key: 'last' | 'this' | 'next' | 'in2'; m: MonthKey; isActual: boolean; isForecast: boolean };
@@ -181,6 +183,7 @@ function AccountDetailTable({ groups }: { groups: AccountGroup[] }) {
                         {l.source === 'timesheet-actual' && 'Actual TS'}
                         {l.source === 'timesheet-forecast' && 'Avg 2mo'}
                         {l.source === 'fixed-monthly' && 'Fixed'}
+                        {l.source === 'milestone' && 'Milestone'}
                       </span>
                     </td>
                   </tr>
@@ -201,6 +204,7 @@ export default function ReportsPage() {
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
   const [dvAccounts, setDvAccounts] = useState<Account[]>([]);
+  const [milestones, setMilestones] = useState<MilestoneRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('billing');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ this: true });
@@ -209,13 +213,14 @@ export default function ReportsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [ctrs, invs, exps, tss, bus, accs] = await Promise.all([
+        const [ctrs, invs, exps, tss, bus, accs, mls] = await Promise.all([
           fetchContracts().catch(() => [] as Contract[]),
           fetchInvoices().catch(() => [] as Invoice[]),
           fetchExpenses().catch(() => [] as Expense[]),
           fetchTimesheets().catch(() => [] as Timesheet[]),
           fetchBusinessUnits().catch(() => [] as BusinessUnit[]),
           fetchAccounts().catch(() => [] as Account[]),
+          fetchMilestones().catch(() => [] as MilestoneRecord[]),
         ]);
         if (cancelled) return;
         setContracts(ctrs);
@@ -224,6 +229,7 @@ export default function ReportsPage() {
         setTimesheets(tss);
         setBusinessUnits(bus);
         setDvAccounts(accs);
+        setMilestones(mls);
       } catch (err) {
         console.error('[Reports] Load failed:', err);
       } finally {
@@ -243,8 +249,8 @@ export default function ReportsPage() {
 
   const monthData = useMemo(() => {
     // All months (last, current, forecast) use the same timesheet × rate calculation
-    return months.map(c => buildBillingForMonth(c.m, contracts, timesheets, businessUnits, dvAccounts));
-  }, [months, contracts, timesheets, businessUnits, dvAccounts]);
+    return months.map(c => buildBillingForMonth(c.m, contracts, timesheets, businessUnits, dvAccounts, milestones));
+  }, [months, contracts, timesheets, businessUnits, dvAccounts, milestones]);
 
   const headlineRows = useMemo(() => {
     const allKeys = new Set<string>();
