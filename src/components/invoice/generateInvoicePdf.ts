@@ -29,6 +29,7 @@ export interface PdfAccount {
   name: string;
   address?: string;
   vatNumber?: string;
+  invoiceFooter?: string;
 }
 
 export interface PdfLine {
@@ -300,6 +301,35 @@ export async function generateInvoicePdf(
     });
     payY += 2;
   });
+
+  // Account-level Notes (formerly "Invoice Footer" — per-account text rendered on every invoice for that account)
+  const noteText = (account.invoiceFooter || '').trim();
+  if (noteText) {
+    // Find the lower of the two columns (Payment Details on left, Comments on right) to anchor below both.
+    // payY is the running Y of the left column after all payment sections.
+    // For the right column, compute how far comments extended down from `bottomY + 6` (the initial value of payY).
+    let rightColumnBottomY = bottomY + 6;
+    if (hasComments) {
+      const commentLines = doc.splitTextToSize(invoice.comments!.trim(), 80) as string[];
+      rightColumnBottomY = bottomY + 6 + commentLines.length * 5;
+    }
+    let notesY = Math.max(payY, rightColumnBottomY) + 10;
+
+    // Heading
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text('Notes', 14, notesY);
+    notesY += 6;
+
+    // Body
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    const noteLines = doc.splitTextToSize(noteText, pageW - 28) as string[];
+    noteLines.forEach((ln, i) => {
+      doc.text(ln, 14, notesY + i * 5);
+    });
+  }
 
   return doc.output('blob');
 }

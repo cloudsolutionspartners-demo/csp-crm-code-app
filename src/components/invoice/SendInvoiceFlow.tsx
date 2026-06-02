@@ -263,6 +263,7 @@ export function SendInvoiceFlow({ account, open, onClose }: SendInvoiceFlowProps
         name: account?.name || 'Unknown',
         address: account?.address || '',
         vatNumber: account?.vatNumber || '',
+        invoiceFooter: account?.invoiceFooter || '',
       };
       const pdfLines = buildPdfLines(inv, lines);
       const pdfBlob = await generateInvoicePdf({ ...inv, lines }, pdfEntity, pdfAccount, pdfLines);
@@ -323,6 +324,7 @@ export function SendInvoiceFlow({ account, open, onClose }: SendInvoiceFlowProps
         name: account?.name || 'Unknown',
         address: account?.address || '',
         vatNumber: account?.vatNumber || '',
+        invoiceFooter: account?.invoiceFooter || '',
       };
 
       const attachments: { name: string; contentBytes: string }[] = [];

@@ -259,6 +259,7 @@ export function AccountingMonthEndFlow({ open, onClose }: AccountingMonthEndFlow
           name: acc?.name || 'Unknown',
           address: acc?.address || '',
           vatNumber: acc?.vatNumber || '',
+          invoiceFooter: acc?.invoiceFooter || '',
         };
 
         const lines = await fetchLinesByInvoiceId(inv.id);
