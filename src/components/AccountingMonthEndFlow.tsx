@@ -257,7 +257,13 @@ export function AccountingMonthEndFlow({ open, onClose }: AccountingMonthEndFlow
         const acc = dvAccounts.find(a => a.id === inv.accountId);
         const pdfAccount: PdfAccount = {
           name: acc?.name || 'Unknown',
-          address: acc?.address || '',
+          street1: acc?.street1 || '',
+          street2: acc?.street2 || '',
+          street3: acc?.street3 || '',
+          city: acc?.city || '',
+          stateProvince: acc?.stateProvince || '',
+          postalCode: acc?.postalCode || '',
+          country: acc?.country || '',
           vatNumber: acc?.vatNumber || '',
           invoiceFooter: acc?.invoiceFooter || '',
         };

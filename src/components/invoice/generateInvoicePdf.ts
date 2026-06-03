@@ -27,7 +27,13 @@ export interface PdfEntity {
 
 export interface PdfAccount {
   name: string;
-  address?: string;
+  street1?: string;
+  street2?: string;
+  street3?: string;
+  city?: string;
+  stateProvince?: string;
+  postalCode?: string;
+  country?: string;
   vatNumber?: string;
   invoiceFooter?: string;
 }
@@ -167,12 +173,22 @@ export async function generateInvoicePdf(
   doc.setTextColor(0, 0, 0);
   doc.text(formatDate(invoice.dueDate), pageW - 14, metaY, { align: 'right' });
 
-  // Account address lines
+  // Account address lines (structured fields → multi-line)
   let billY = y + 6;
-  if (account.address) {
+  const cityLine = [
+    [account.postalCode, account.city].filter(Boolean).join(' '),
+    account.stateProvince
+  ].filter(Boolean).join(', ');
+  const addrLines = [
+    account.street1,
+    account.street2,
+    account.street3,
+    cityLine,
+    account.country,
+  ].filter((l): l is string => !!l && l.trim().length > 0);
+  if (addrLines.length > 0) {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(0, 0, 0);
-    const addrLines = doc.splitTextToSize(account.address, 80) as string[];
     addrLines.forEach((l) => {
       doc.text(l, 42, billY);
       billY += 5;

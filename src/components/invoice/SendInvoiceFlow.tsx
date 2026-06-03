@@ -261,7 +261,13 @@ export function SendInvoiceFlow({ account, open, onClose }: SendInvoiceFlowProps
       const pdfEntity = buildPdfEntity(inv.entityId);
       const pdfAccount: PdfAccount = {
         name: account?.name || 'Unknown',
-        address: account?.address || '',
+        street1: account?.street1 || '',
+        street2: account?.street2 || '',
+        street3: account?.street3 || '',
+        city: account?.city || '',
+        stateProvince: account?.stateProvince || '',
+        postalCode: account?.postalCode || '',
+        country: account?.country || '',
         vatNumber: account?.vatNumber || '',
         invoiceFooter: account?.invoiceFooter || '',
       };
@@ -322,7 +328,13 @@ export function SendInvoiceFlow({ account, open, onClose }: SendInvoiceFlowProps
 
       const pdfAccount: PdfAccount = {
         name: account?.name || 'Unknown',
-        address: account?.address || '',
+        street1: account?.street1 || '',
+        street2: account?.street2 || '',
+        street3: account?.street3 || '',
+        city: account?.city || '',
+        stateProvince: account?.stateProvince || '',
+        postalCode: account?.postalCode || '',
+        country: account?.country || '',
         vatNumber: account?.vatNumber || '',
         invoiceFooter: account?.invoiceFooter || '',
       };
