@@ -269,6 +269,7 @@ export function SendInvoiceFlow({ account, open, onClose }: SendInvoiceFlowProps
         postalCode: account?.postalCode || '',
         country: account?.country || '',
         vatNumber: account?.vatNumber || '',
+        registrationNumber: account?.registrationNumber || '',
         invoiceFooter: account?.invoiceFooter || '',
       };
       const pdfLines = buildPdfLines(inv, lines);
@@ -336,6 +337,7 @@ export function SendInvoiceFlow({ account, open, onClose }: SendInvoiceFlowProps
         postalCode: account?.postalCode || '',
         country: account?.country || '',
         vatNumber: account?.vatNumber || '',
+        registrationNumber: account?.registrationNumber || '',
         invoiceFooter: account?.invoiceFooter || '',
       };
 

@@ -265,6 +265,7 @@ export function AccountingMonthEndFlow({ open, onClose }: AccountingMonthEndFlow
           postalCode: acc?.postalCode || '',
           country: acc?.country || '',
           vatNumber: acc?.vatNumber || '',
+          registrationNumber: acc?.registrationNumber || '',
           invoiceFooter: acc?.invoiceFooter || '',
         };
 

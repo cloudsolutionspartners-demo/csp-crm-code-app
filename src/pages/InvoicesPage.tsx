@@ -12,7 +12,7 @@ import {
   matchDateRange,
 } from '../components/ColumnFilters';
 import { SearchPill, SinglePill, FilterChip, DatePill, dateRangeFor, relativeDateLabel, ALL_DATES, type RelativeDateValue } from '../components/FilterPills';
-import { Plus, Trash2, CalendarDays } from '../components/Icons';
+import { Plus, Trash2, CalendarDays, Download } from '../components/Icons';
 import { TutorialVideoButton } from '../components/TutorialVideoDialog';
 import { AccountingMonthEndFlow } from '../components/AccountingMonthEndFlow';
 import { useDataverse } from '../services/useDataverse';
@@ -28,6 +28,7 @@ import { invoices as mockInvoices, accounts as mockAccounts, contracts as mockCo
 import { cn, formatCurrency, formatDate } from '../lib/utils';
 import type { Invoice, InvoiceStatus, CurrencyCode, UnitOfMeasure, Account, Contract, Contact } from '../types/crm';
 import { GroupedByAccountView, MonthlyTimelineView, ByConsultantView } from '../components/invoice/InvoiceAlternativeViews';
+import { downloadInvoicePdf } from '../components/invoice/downloadInvoicePdf';
 
 const ALL_STATUSES: InvoiceStatus[] = ['Draft', 'Sent', 'Paid', 'Overdue', 'Cancelled', 'Credit Note'];
 const ALL_CURRENCIES: CurrencyCode[] = ['USD', 'EUR', 'RON', 'GBP'];
@@ -39,14 +40,18 @@ function isGuid(id: string): boolean {
 }
 
 const ROMANIA_BU_ID = 'def7a310-aa3a-f111-88b4-7c1e52764159';
-function invoicePrefixForEntity(entityId: string): 'CSP' | 'INV' {
-  return (entityId || '').toLowerCase() === ROMANIA_BU_ID ? 'CSP' : 'INV';
+interface InvoiceSeriesFormat { prefix: string; separator: string; pad: number; }
+
+function invoiceSeriesForEntity(entityId: string): InvoiceSeriesFormat {
+  return (entityId || '').toLowerCase() === ROMANIA_BU_ID
+    ? { prefix: 'CSP', separator: '', pad: 4 }
+    : { prefix: 'INV', separator: '-', pad: 10 };
 }
-// Next consecutive number for the SERIES of that entity's prefix.
-// Strictly matches PREFIX-<digits> only (ignores TEST-..., INV-20260526-xxxx, etc.).
+
 function nextInvoiceNumber(entityId: string, allInvoices: Array<{ invoiceNumber?: string }>): string {
-  const prefix = invoicePrefixForEntity(entityId);
-  const re = new RegExp('^' + prefix + '-(\\d+)$', 'i');
+  const { prefix, separator, pad } = invoiceSeriesForEntity(entityId);
+  const sep = separator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('^' + prefix + sep + '(\\d+)$', 'i');
   let max = 0;
   for (const inv of allInvoices) {
     const m = re.exec((inv.invoiceNumber || '').trim());
@@ -55,7 +60,7 @@ function nextInvoiceNumber(entityId: string, allInvoices: Array<{ invoiceNumber?
       if (Number.isFinite(n) && n > max) max = n;
     }
   }
-  return prefix + '-' + String(max + 1).padStart(10, '0');
+  return prefix + separator + String(max + 1).padStart(pad, '0');
 }
 
 interface FormLine {
@@ -484,6 +489,22 @@ export default function InvoicesPage() {
     }
   };
 
+  const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
+
+  const handleDownloadPdf = async (e: React.MouseEvent, inv: Invoice) => {
+    e.stopPropagation();
+    setDownloadingId(inv.id);
+    try {
+      const acc = dvAccounts.find(a => a.id === inv.accountId);
+      await downloadInvoicePdf(inv, acc, businessUnits, dvContacts);
+    } catch (err) {
+      console.error('[Invoices] Download failed:', err);
+      toast.error('Failed to download invoice PDF');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   // --- Form helpers ---
   const updateForm = (patch: Partial<FormState>) => setForm(prev => ({ ...prev, ...patch }));
 
@@ -749,6 +770,7 @@ export default function InvoicesPage() {
                 <NumberRangeFilterPopover label="Total" {...getNumberFilter(columnFilters, 'total')} onChange={(min, max) => setNumberFilter(setColumnFilters, 'total', min, max)} />
               </th>
               <th className="csp-th">Status</th>
+              <th className="csp-th">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -768,6 +790,17 @@ export default function InvoicesPage() {
                   <td className="csp-td">{inv.currencyCode}</td>
                   <td className="csp-td csp-text-right">{formatCurrency(inv.total, inv.currencyCode)}</td>
                   <td className="csp-td"><StatusBadge status={inv.status} /></td>
+                  <td className="csp-td">
+                    <button
+                      className="csp-btn csp-btn-ghost csp-btn-sm"
+                      onClick={(e) => handleDownloadPdf(e, inv)}
+                      disabled={downloadingId === inv.id}
+                      title="Download PDF"
+                    >
+                      <Download className="csp-icon-inline" />
+                      {downloadingId === inv.id ? 'Downloading…' : 'Download'}
+                    </button>
+                  </td>
                 </tr>
               );
             })}

@@ -35,6 +35,7 @@ export interface PdfAccount {
   postalCode?: string;
   country?: string;
   vatNumber?: string;
+  registrationNumber?: string;
   invoiceFooter?: string;
 }
 
@@ -204,6 +205,15 @@ export async function generateInvoicePdf(
     doc.text('VAT Number', 14, y);
     doc.setTextColor(0, 0, 0);
     doc.text(account.vatNumber, 42, y);
+  }
+
+  // Registration Number
+  if (account.registrationNumber) {
+    y += 6;
+    doc.setTextColor(100, 100, 100);
+    doc.text('REG. Number', 14, y);
+    doc.setTextColor(0, 0, 0);
+    doc.text(account.registrationNumber, 42, y);
   }
 
   // Lines table
