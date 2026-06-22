@@ -38,6 +38,26 @@ function isGuid(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || '');
 }
 
+const ROMANIA_BU_ID = 'def7a310-aa3a-f111-88b4-7c1e52764159';
+function invoicePrefixForEntity(entityId: string): 'CSP' | 'INV' {
+  return (entityId || '').toLowerCase() === ROMANIA_BU_ID ? 'CSP' : 'INV';
+}
+// Next consecutive number for the SERIES of that entity's prefix.
+// Strictly matches PREFIX-<digits> only (ignores TEST-..., INV-20260526-xxxx, etc.).
+function nextInvoiceNumber(entityId: string, allInvoices: Array<{ invoiceNumber?: string }>): string {
+  const prefix = invoicePrefixForEntity(entityId);
+  const re = new RegExp('^' + prefix + '-(\\d+)$', 'i');
+  let max = 0;
+  for (const inv of allInvoices) {
+    const m = re.exec((inv.invoiceNumber || '').trim());
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+  }
+  return prefix + '-' + String(max + 1).padStart(10, '0');
+}
+
 interface FormLine {
   id: string;
   name: string;
@@ -466,6 +486,15 @@ export default function InvoicesPage() {
 
   // --- Form helpers ---
   const updateForm = (patch: Partial<FormState>) => setForm(prev => ({ ...prev, ...patch }));
+
+  // Auto-fill consecutive per-entity invoice number on NEW invoices
+  React.useEffect(() => {
+    if (!isNew) return;
+    if (!form.entityId) return;
+    const next = nextInvoiceNumber(form.entityId, invoices);
+    if (form.invoiceNumber !== next) updateForm({ invoiceNumber: next });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew, form.entityId, invoices]);
 
   // Auto-calculate subtotal / VAT amount / total from lines + VAT rate
   React.useEffect(() => {
